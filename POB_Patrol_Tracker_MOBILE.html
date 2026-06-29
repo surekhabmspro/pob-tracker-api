@@ -1,0 +1,1710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- PWA / App meta -->
+<meta name="theme-color" content="#1a3a2a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Patrol">
+<meta name="application-name" content="POB Patrol Tracker">
+<meta name="description" content="POB Mobaye Patrol Tracker — Military patrol logging and command dashboard">
+<!-- Icons (inline SVG data URI for portability — replace paths for production) -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='108' fill='%230a1f0f'/%3E%3Cpath d='M256 60L420 110L420 290Q420 380 256 460Q92 380 92 290L92 110Z' fill='%231a3d28' stroke='%23c8a840' stroke-width='5'/%3E%3Cpolygon points='256,143 268,230 256,218 244,230' fill='%23e8c96a'/%3E%3Ccircle cx='256' cy='235' r='12' fill='%23c8a840'/%3E%3Ccircle cx='256' cy='235' r='5' fill='%230a1f0f'/%3E%3Cpolyline points='138,390 180,330 256,310 320,330 374,370' fill='none' stroke='%23e8c96a' stroke-width='7' stroke-dasharray='14,10'/%3E%3C/svg%3E">
+<link rel="manifest" href="site.webmanifest">
+<title>POB Mobaye — Patrol Tracker</title>
+<style>
+:root{
+  --green:#1a3a2a;--green-mid:#2d5a3d;--green-light:#3d7a52;
+  --tan:#c8b87a;--tan-dark:#8a7a42;--red:#8b1a1a;--red-light:#cc2222;
+  --white:#f4f0e8;--bg:#0d1f12;--surface:#162518;--surface2:#1e3322;
+  --text:#e8f0e8;--text-muted:#7a9a7a;--border:#3d5a3d;
+  --orange:#c87a2a;--blue:#2a4a8a;
+  --nav-h:58px;--header-h:52px;
+  --sidebar-w:220px;
+}
+body.light-mode{
+  --bg:#f0f4f0;--surface:#ffffff;--surface2:#e8f0e8;--text:#1a2a1a;
+  --text-muted:#5a7a5a;--border:#b0c8b0;--green-light:#3d7a52;--tan:#6a5a1a;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;overflow:hidden;}
+body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);font-size:14px;transition:background 0.3s,color 0.3s;}
+
+/* ── HEADER ── */
+#app-header{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  height:var(--header-h);
+  background:var(--surface);
+  border-bottom:2px solid var(--green-light);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 12px;gap:8px;
+}
+.logo{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.logo-hex{width:32px;height:32px;background:var(--green-light);border:2px solid var(--tan);
+  display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;
+  color:var(--tan);clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);}
+.logo-text h1{font-size:12px;font-weight:700;color:var(--tan);letter-spacing:1.5px;text-transform:uppercase;line-height:1.1;}
+.logo-text p{font-size:9px;color:var(--text-muted);letter-spacing:0.5px;}
+.header-center{flex:1;display:flex;align-items:center;gap:6px;min-width:0;}
+.search-wrap{flex:1;position:relative;min-width:0;}
+.search-wrap input{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);
+  padding:7px 10px 7px 28px;border-radius:20px;font-size:12px;outline:none;}
+.search-wrap input:focus{border-color:var(--green-light);}
+.search-icon{position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--text-muted);pointer-events:none;}
+.global-results{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--surface);
+  border:1px solid var(--green-light);border-radius:8px;z-index:200;max-height:260px;overflow-y:auto;
+  box-shadow:0 8px 24px rgba(0,0,0,0.5);}
+.gr-item{padding:10px 12px;cursor:pointer;border-bottom:1px solid rgba(61,90,61,0.3);font-size:13px;}
+.gr-item:hover,.gr-item:active{background:var(--surface2);}
+.gr-cat{font-size:9px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;font-family:'Courier New',monospace;margin-right:6px;}
+.header-right{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.sync-pill{display:flex;align-items:center;gap:4px;cursor:pointer;padding:4px 8px;border-radius:12px;
+  font-size:10px;font-weight:700;letter-spacing:1px;font-family:'Courier New',monospace;
+  border:1px solid var(--border);background:var(--surface2);transition:all 0.3s;user-select:none;white-space:nowrap;}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--text-muted);display:inline-block;transition:background 0.3s;}
+.icon-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text-muted);
+  width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:15px;cursor:pointer;transition:all 0.2s;flex-shrink:0;}
+.icon-btn:hover,.icon-btn:active{border-color:var(--green-light);color:var(--text);}
+
+/* ── DESKTOP SIDEBAR NAV (≥768px) ── */
+#sidebar-nav{
+  display:none;
+  position:fixed;top:var(--header-h);left:0;bottom:0;
+  width:var(--sidebar-w);
+  background:var(--surface);
+  border-right:1px solid var(--border);
+  overflow-y:auto;z-index:90;
+  padding:12px 0;
+}
+.sidebar-item{display:flex;align-items:center;gap:10px;padding:11px 18px;cursor:pointer;
+  color:var(--text-muted);font-size:13px;font-weight:600;letter-spacing:0.5px;
+  border-left:3px solid transparent;transition:all 0.18s;}
+.sidebar-item:hover{background:rgba(128,128,128,0.08);color:var(--text);}
+.sidebar-item.active{color:var(--tan);border-left-color:var(--tan);background:rgba(200,184,122,0.07);}
+.sidebar-item .si-icon{font-size:17px;width:22px;text-align:center;}
+.sidebar-sep{height:1px;background:var(--border);margin:8px 16px;}
+.sidebar-label{font-size:9px;color:var(--text-muted);letter-spacing:2px;text-transform:uppercase;
+  padding:10px 18px 4px;font-family:'Courier New',monospace;}
+
+/* ── BOTTOM NAV (mobile <768px) ── */
+#bottom-nav{
+  position:fixed;bottom:0;left:0;right:0;z-index:100;
+  height:var(--nav-h);
+  background:var(--surface);
+  border-top:1px solid var(--border);
+  display:flex;align-items:stretch;
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:2px;cursor:pointer;color:var(--text-muted);transition:all 0.2s;border:none;background:none;
+  font-family:'Segoe UI',Arial,sans-serif;padding:6px 2px;}
+.nav-item .nav-icon{font-size:18px;line-height:1;}
+.nav-item .nav-label{font-size:9px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;}
+.nav-item.active{color:var(--tan);}
+/* More menu */
+#more-menu{position:fixed;bottom:var(--nav-h);left:0;right:0;z-index:99;
+  background:var(--surface);border-top:1px solid var(--border);display:none;padding:8px 0;}
+#more-menu.open{display:block;}
+.more-item{display:flex;align-items:center;gap:10px;padding:13px 20px;cursor:pointer;
+  font-size:14px;border-bottom:1px solid rgba(100,130,100,0.15);}
+.more-item:last-child{border-bottom:none;}
+.more-item:hover,.more-item:active{background:var(--surface2);}
+.more-item .mi-icon{font-size:18px;width:24px;text-align:center;}
+.more-item .mi-label{color:var(--text);}
+.more-item.active .mi-label{color:var(--tan);}
+#more-overlay{position:fixed;inset:0;z-index:98;display:none;}
+#more-overlay.open{display:block;}
+
+/* ── MAIN SCROLL AREA ── */
+#app-main{
+  position:fixed;
+  top:var(--header-h);
+  bottom:var(--nav-h);
+  left:0;right:0;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+}
+.section{display:none;padding:16px;padding-bottom:20px;max-width:1000px;margin:0 auto;}
+.section.active{display:block;}
+
+/* ── DESKTOP LAYOUT OVERRIDES (≥768px) ── */
+@media (min-width:768px){
+  #sidebar-nav{display:block;}
+  #bottom-nav,#more-menu,#more-overlay{display:none!important;}
+  #app-main{left:var(--sidebar-w);}
+  html,body{overflow:hidden;}
+  .section{padding:20px 24px;}
+  .search-wrap{max-width:360px;}
+  /* Desktop: logo shows full title */
+  .logo-text h1{font-size:14px;letter-spacing:2px;}
+  .logo-text p{display:block;}
+}
+
+/* ── DESKTOP DASHBOARD GRID ── */
+@media (min-width:768px){
+  .dash-row2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
+  .stat-grid{grid-template-columns:repeat(7,1fr);}
+}
+@media (min-width:1024px){
+  .stat-grid{grid-template-columns:repeat(7,1fr);}
+}
+
+/* ── CARDS ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;}
+.card-title{font-size:10px;font-weight:700;color:var(--tan);letter-spacing:2px;text-transform:uppercase;
+  margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);
+  font-family:'Courier New',monospace;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;}
+
+/* ── STAT GRID ── */
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;}
+.stat{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 6px;text-align:center;}
+.stat.clickable{cursor:pointer;}
+.stat.clickable:active{border-color:var(--tan);}
+.stat-num{font-size:22px;font-weight:700;color:var(--tan);font-family:'Courier New',monospace;line-height:1;}
+.stat-label{font-size:9px;color:var(--text-muted);letter-spacing:0.5px;text-transform:uppercase;margin-top:2px;}
+
+/* ── FORMS ── */
+label.field-label{display:block;font-size:10px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;font-family:'Courier New',monospace;}
+input,select,textarea{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);
+  padding:11px 12px;border-radius:8px;font-family:'Segoe UI',Arial,sans-serif;font-size:15px;
+  -webkit-appearance:none;appearance:none;transition:border-color 0.2s;}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--green-light);}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237a9a7a' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;padding-right:32px;}
+.fg{margin-bottom:12px;position:relative;}
+.fr{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+select option{background:var(--bg);color:var(--text);}
+
+/* ── BUTTONS ── */
+.btn{padding:11px 16px;border:none;border-radius:8px;font-family:'Segoe UI',Arial,sans-serif;
+  font-size:13px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;cursor:pointer;
+  transition:all 0.2s;display:inline-flex;align-items:center;justify-content:center;gap:5px;
+  min-height:44px;}
+.btn-primary{background:var(--green-light);color:var(--white);}
+.btn-primary:active{background:var(--green-mid);}
+.btn-danger{background:var(--red);color:var(--white);}
+.btn-warning{background:var(--orange);color:var(--white);}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text-muted);}
+.btn-ghost:active{border-color:var(--green-light);color:var(--text);}
+.btn-sm{padding:7px 12px;font-size:11px;min-height:34px;}
+.btn-full{width:100%;}
+
+/* ── BADGES ── */
+.badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;font-family:'Courier New',monospace;}
+.b-green{background:rgba(61,122,82,0.3);color:#5ddd88;border:1px solid rgba(61,122,82,0.5);}
+.b-tan{background:rgba(200,184,122,0.2);color:var(--tan);border:1px solid rgba(200,184,122,0.4);}
+.b-red{background:rgba(139,26,26,0.3);color:#ff6666;border:1px solid rgba(139,26,26,0.5);}
+.b-gray{background:rgba(107,124,107,0.2);color:var(--text-muted);border:1px solid rgba(107,124,107,0.4);}
+.b-patrol{background:rgba(29,158,117,0.2);color:#4dd4a0;border:1px solid rgba(29,158,117,0.4);}
+.b-escort{background:rgba(200,184,122,0.2);color:var(--tan);border:1px solid rgba(200,184,122,0.4);}
+.b-checkpoint{background:rgba(200,100,50,0.2);color:#ffaa66;border:1px solid rgba(200,100,50,0.4);}
+.b-recon{background:rgba(100,100,200,0.2);color:#aaaaff;border:1px solid rgba(100,100,200,0.4);}
+.b-qrf{background:rgba(200,50,50,0.2);color:#ff8888;border:1px solid rgba(200,50,50,0.4);}
+.b-orange{background:rgba(200,122,42,0.2);color:#ffb466;border:1px solid rgba(200,122,42,0.4);}
+.b-archived{background:rgba(80,80,80,0.3);color:#aaa;border:1px solid rgba(80,80,80,0.5);}
+.b-available{background:rgba(29,158,117,0.2);color:#4dd4a0;border:1px solid rgba(29,158,117,0.4);}
+.b-leave{background:rgba(200,122,42,0.2);color:#ffb466;border:1px solid rgba(200,122,42,0.4);}
+.b-sick{background:rgba(200,50,50,0.2);color:#ff8888;border:1px solid rgba(200,50,50,0.4);}
+.b-detached{background:rgba(100,100,200,0.2);color:#aaaaff;border:1px solid rgba(100,100,200,0.4);}
+
+/* ── ALERTS ── */
+.alert{padding:10px 12px;border-radius:8px;margin-bottom:12px;font-size:13px;border-left:4px solid;}
+.al-success{background:rgba(29,158,117,0.15);border-color:#1d9e75;color:#5ddd9a;}
+.al-danger{background:rgba(139,26,26,0.2);border-color:var(--red-light);color:#ff9999;}
+.al-info{background:rgba(61,122,82,0.15);border-color:var(--green-light);color:#88ccaa;}
+.al-warn{background:rgba(200,122,42,0.15);border-color:var(--orange);color:#ffb466;}
+
+/* ── RECENT LIST ── */
+.recent-list{list-style:none;}
+.recent-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(100,130,100,0.2);gap:8px;}
+.recent-item:last-child{border-bottom:none;}
+
+/* ── PATROL CARDS (replaces table on mobile) ── */
+.patrol-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;}
+.patrol-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;}
+.patrol-card-id{font-family:'Courier New',monospace;font-size:11px;color:var(--tan);font-weight:700;}
+.patrol-card-meta{font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;}
+.patrol-card-actions{display:flex;gap:6px;align-items:center;flex-shrink:0;}
+
+/* ── TROOP CARDS ── */
+.troop-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;}
+.troop-card-name{font-size:15px;font-weight:700;margin-bottom:2px;}
+.troop-card-sub{font-size:11px;color:var(--text-muted);margin-bottom:8px;}
+.troop-card-stats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
+.troop-card-stat{font-size:11px;color:var(--text-muted);}
+.troop-card-stat strong{color:var(--tan);font-family:'Courier New',monospace;}
+.troop-card-btns{display:flex;gap:6px;flex-wrap:wrap;}
+
+/* ── INACTIVE CARDS ── */
+.inactive-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.inactive-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;cursor:pointer;}
+.inactive-card:active{border-color:var(--tan);}
+.ic-days{font-family:'Courier New',monospace;font-size:24px;font-weight:700;line-height:1;margin-bottom:4px;}
+.ic-name{font-size:13px;font-weight:700;margin-bottom:2px;}
+.ic-unit{font-size:10px;color:var(--text-muted);margin-bottom:6px;}
+.ic-meta{font-size:10px;color:var(--text-muted);}
+
+/* ── FAIRNESS ── */
+.fairness-bar{height:6px;border-radius:3px;background:var(--surface);overflow:hidden;margin-top:3px;}
+.fairness-fill{height:100%;border-radius:3px;}
+
+/* ── REPORT ── */
+.rep-summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;}
+.lh-block{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;}
+.lh-title{font-size:11px;font-weight:700;color:var(--tan);letter-spacing:1px;text-transform:uppercase;font-family:'Courier New',monospace;margin-bottom:8px;}
+.troop-row{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;}
+
+/* ── PROGRESS BAR ── */
+.pbar{background:var(--surface);border-radius:2px;height:5px;overflow:hidden;margin-top:3px;}
+.pbar-fill{height:100%;border-radius:2px;}
+
+/* ── MODALS ── */
+.modal-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:300;
+  align-items:flex-end;justify-content:center;padding:0;}
+.modal-ov.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--green-light);border-radius:16px 16px 0 0;
+  padding:20px;width:100%;max-height:88vh;overflow-y:auto;}
+.modal-title{font-size:12px;font-weight:700;color:var(--tan);letter-spacing:2px;text-transform:uppercase;
+  margin-bottom:14px;font-family:'Courier New',monospace;}
+.modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px;}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap;}
+
+/* ── CONFIRM MODAL ── */
+.confirm-modal-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:400;
+  align-items:center;justify-content:center;padding:16px;}
+.confirm-modal-ov.open{display:flex;}
+.confirm-modal{background:var(--surface);border:1px solid var(--orange);border-radius:16px;
+  padding:24px;width:100%;max-width:360px;}
+.confirm-modal-title{font-size:12px;font-weight:700;color:var(--tan);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;font-family:'Courier New',monospace;}
+.confirm-modal-msg{font-size:14px;color:var(--text);margin-bottom:18px;line-height:1.5;}
+
+/* ── SUGGEST BOX ── */
+.suggest-box{position:absolute;top:100%;left:0;right:0;background:var(--surface);
+  border:1px solid var(--green-light);border-radius:0 0 8px 8px;z-index:50;
+  max-height:200px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,0.4);}
+.suggest-item{padding:12px;cursor:pointer;font-size:13px;border-bottom:1px solid rgba(61,90,61,0.3);}
+.suggest-item:active{background:var(--surface2);color:var(--tan);}
+
+/* ── COUNT PILL ── */
+.count-pill{background:var(--green-mid);color:var(--white);padding:3px 9px;border-radius:10px;
+  font-size:11px;font-weight:700;cursor:pointer;font-family:'Courier New',monospace;border:none;}
+.count-pill:active{background:var(--tan-dark);}
+
+/* ── TAGS ── */
+.tag-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+.tag{display:flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);
+  border-radius:6px;padding:5px 10px;font-size:12px;}
+.tag-del{background:none;border:none;color:var(--red-light);cursor:pointer;font-size:16px;padding:0 2px;line-height:1;}
+
+/* ── SECTION HDR ── */
+.section-hdr{font-family:'Courier New',monospace;font-size:10px;color:var(--tan);letter-spacing:2px;
+  text-transform:uppercase;margin:14px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--border);}
+
+/* ── CAL PICKER ── */
+.cal-wrap{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:9999;background:var(--surface);
+  border:1px solid var(--green-light);border-radius:12px;padding:12px;
+  box-shadow:0 8px 32px rgba(0,0,0,0.6);display:none;}
+.cal-wrap.open{display:block;}
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.cal-nav{background:none;border:none;color:var(--tan);font-size:22px;cursor:pointer;
+  padding:4px 8px;line-height:1;border-radius:6px;min-width:40px;min-height:40px;display:flex;align-items:center;justify-content:center;}
+.cal-nav:active{background:var(--surface2);}
+.cal-month-lbl{font-family:'Courier New',monospace;font-size:12px;font-weight:700;color:var(--tan);letter-spacing:1px;text-transform:uppercase;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+.cal-dow{font-family:'Courier New',monospace;font-size:9px;color:var(--text-muted);text-align:center;padding:3px 0;letter-spacing:0.5px;text-transform:uppercase;}
+.cal-day{font-size:13px;text-align:center;padding:8px 2px;border-radius:6px;cursor:pointer;color:var(--text);line-height:1.2;}
+.cal-day:active{background:var(--surface2);color:var(--tan);}
+.cal-day.today{border:1px solid var(--green-light);color:var(--green-light);}
+.cal-day.selected{background:var(--green-light);color:var(--white);font-weight:700;}
+.cal-day.empty{cursor:default;}
+.cal-icon{position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--text-muted);
+  font-size:16px;cursor:pointer;line-height:1;user-select:none;padding:4px;}
+.fg.cal-field{position:relative;}
+
+/* ── NOTES ── */
+.notes-field{background:var(--surface2);border:1px solid var(--border);border-radius:6px;
+  padding:8px 10px;font-size:12px;color:var(--text-muted);margin-top:6px;font-style:italic;}
+
+/* ── AUDIT ── */
+.audit-row{display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid rgba(100,130,100,0.15);font-size:12px;}
+.audit-time{font-family:'Courier New',monospace;font-size:10px;color:var(--text-muted);white-space:nowrap;min-width:100px;}
+.audit-msg{color:var(--text);}
+
+/* ── EMPTY ── */
+.empty{text-align:center;padding:28px 20px;color:var(--text-muted);font-size:13px;}
+
+/* ── DELETE BTN ── */
+.del-btn{color:rgba(255,100,100,0.5);cursor:pointer;font-size:20px;background:none;border:none;padding:4px 6px;min-width:36px;min-height:36px;display:flex;align-items:center;justify-content:center;}
+.del-btn:active{color:var(--red-light);}
+
+/* ── INACTIVE BADGE ── */
+.inactive-badge{background:rgba(200,50,50,0.2);color:#ff8888;border:1px solid rgba(200,50,50,0.4);
+  border-radius:4px;padding:2px 6px;font-size:10px;font-family:'Courier New',monospace;}
+
+/* ── FILTER ROW ── */
+.filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+.filter-row input,.filter-row select{flex:1;min-width:100px;}
+
+/* ── SELECTED TROOPS AREA ── */
+#selected-troops{display:flex;flex-wrap:wrap;gap:6px;min-height:32px;padding:4px 0;}
+
+/* ── PRINT ── */
+.watermark{display:none;}
+@media print{
+  #app-header,#bottom-nav,#more-menu,#more-overlay,#sidebar-nav,.btn,.filter-row,
+  .no-print{display:none!important;}
+  body{background:white!important;color:black!important;overflow:auto!important;}
+  #app-main{position:static!important;overflow:visible!important;top:0!important;
+    bottom:0!important;left:0!important;}
+  .card{background:white!important;border:1px solid #ccc!important;}
+  .troop-row,.troop-card,.patrol-card{background:#f9f9f9!important;border:1px solid #ccc!important;}
+  .stat{background:#f5f5f5!important;border:1px solid #ccc!important;}
+  .stat-num,.stat-label,.card-title{color:#333!important;}
+  .badge{border:1px solid #999!important;color:#333!important;background:#eee!important;}
+  .pbar{background:#ddd!important;}
+  .watermark{display:block;text-align:center;font-size:10px;color:#999;
+    margin-bottom:8px;letter-spacing:2px;text-transform:uppercase;}
+}
+.print-header{display:none;}
+@media print{.print-header{display:block!important;text-align:center;
+  margin-bottom:16px;border-bottom:2px solid #333;padding-bottom:10px;}}
+
+/* ── SCROLL HELPER ── */
+::-webkit-scrollbar{width:3px;height:3px;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+/* ── SECTION TRANSITIONS ── */
+.section{animation:fadein 0.15s ease;}
+@keyframes fadein{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header id="app-header">
+  <div class="logo">
+    <div class="logo-hex">POB</div>
+    <div class="logo-text">
+      <h1 id="pob-title">POB Mobaye</h1>
+      <p id="clock-disp">--:--:--</p>
+    </div>
+  </div>
+  <div class="header-center">
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="global-search" placeholder="Search everything..." oninput="globalSearch(this.value)" autocomplete="off">
+      <div class="global-results" id="global-results" style="display:none;"></div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="sync-pill" id="sync-pill" onclick="manualSync()" title="Click to sync">
+      <span class="sync-dot" id="sync-dot"></span>
+      <span id="sync-label">CONN</span>
+    </div>
+    <button class="icon-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle Theme">☀</button>
+  </div>
+</header>
+
+<!-- DESKTOP SIDEBAR NAV -->
+<nav id="sidebar-nav">
+  <div class="sidebar-label">Main</div>
+  <div class="sidebar-item active" onclick="showTab('dashboard')" data-tab="dashboard"><span class="si-icon">📊</span> Dashboard</div>
+  <div class="sidebar-item" onclick="showTab('log-patrol')" data-tab="log-patrol"><span class="si-icon">➕</span> Log Patrol</div>
+  <div class="sidebar-item" onclick="showTab('patrol-log')" data-tab="patrol-log"><span class="si-icon">📋</span> Patrol Log</div>
+  <div class="sidebar-item" onclick="showTab('troops')" data-tab="troops"><span class="si-icon">👥</span> Troops</div>
+  <div class="sidebar-sep"></div>
+  <div class="sidebar-label">Reports</div>
+  <div class="sidebar-item" onclick="showTab('inactive')" data-tab="inactive"><span class="si-icon">⚠️</span> Inactive</div>
+  <div class="sidebar-item" onclick="showTab('report')" data-tab="report"><span class="si-icon">📈</span> Report</div>
+  <div class="sidebar-item" onclick="showTab('handover')" data-tab="handover"><span class="si-icon">📄</span> Handover</div>
+  <div class="sidebar-sep"></div>
+  <div class="sidebar-label">System</div>
+  <div class="sidebar-item" onclick="showTab('audit')" data-tab="audit"><span class="si-icon">📝</span> Audit Log</div>
+  <div class="sidebar-item" onclick="showTab('backup')" data-tab="backup"><span class="si-icon">💾</span> Backup</div>
+  <div class="sidebar-item" onclick="showTab('settings')" data-tab="settings"><span class="si-icon">⚙️</span> Settings</div>
+</nav>
+
+<!-- MAIN CONTENT -->
+<main id="app-main">
+
+<!-- API STATUS -->
+<div id="api-status" style="padding:0 12px;"></div>
+
+<!-- PRINT HEADER -->
+<div class="print-header" id="print-header">
+  <div class="watermark" id="watermark-text">CONFIDENTIAL</div>
+  <div style="font-size:18px;font-weight:700;" id="print-org-name">POB Mobaye</div>
+  <div style="font-size:13px;" id="print-mission">Patrol Tracker Report</div>
+  <div style="font-size:11px;color:#666;" id="print-date-line"></div>
+</div>
+
+<!-- ===== DASHBOARD ===== -->
+<div id="dashboard" class="section active">
+  <div id="dash-alerts"></div>
+
+  <!-- Stats Bar -->
+  <div class="stat-grid" id="dash-stats"></div>
+
+  <!-- Monthly Stats + Inactive in 2-col -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+    <div class="card" style="margin-bottom:0;">
+      <div class="card-title" style="font-size:9px;letter-spacing:1px;">Monthly</div>
+      <div id="monthly-stats"></div>
+    </div>
+    <div class="card" style="margin-bottom:0;">
+      <div class="card-title" style="font-size:9px;letter-spacing:1px;">
+        <span>🔴 Inactive</span>
+        <button class="btn btn-ghost btn-sm" onclick="showTab('inactive')" style="font-size:8px;padding:2px 6px;min-height:24px;">All →</button>
+      </div>
+      <div id="dash-inactive"></div>
+    </div>
+  </div>
+
+  <!-- Deployment Fairness -->
+  <div class="card">
+    <div class="card-title">
+      Deployment Fairness
+      <span style="font-size:9px;color:var(--text-muted);font-weight:400;">(This Month)</span>
+    </div>
+    <div id="fairness-view"></div>
+  </div>
+
+  <!-- Recent Patrols -->
+  <div class="card" style="margin-bottom:0;">
+    <div class="card-title">
+      <span>Recent Patrols</span>
+      <button class="btn btn-ghost btn-sm" onclick="showTab('patrol-log')" style="font-size:9px;padding:3px 8px;min-height:28px;">View All</button>
+    </div>
+    <ul class="recent-list" id="recent-list"></ul>
+  </div>
+
+  <!-- Credit -->
+  <div style="text-align:center;padding:14px 0 4px;border-top:1px solid var(--border);margin-top:10px;">
+    <span style="font-family:'Courier New',monospace;font-size:9px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;line-height:1.8;">
+      Designed &amp; Created by <strong style="color:var(--tan);">Major Shrawan Mallik</strong><br>POB Mobaye · NEP-LIB-IV, MINUSCA
+    </span>
+  </div>
+</div>
+
+<!-- ===== LOG PATROL ===== -->
+<div id="log-patrol" class="section">
+  <div class="card">
+    <div class="card-title">Log New Patrol</div>
+    <div id="log-alert"></div>
+    <div class="fr">
+      <div class="fg cal-field">
+        <label class="field-label">Date (DD/MM/YYYY)</label>
+        <input type="text" id="p-date" placeholder="DD/MM/YYYY" maxlength="10" oninput="fmtDateInp(this)" autocomplete="off" readonly onclick="toggleCal('cal-p-date',this)" style="padding-right:36px;">
+        <span class="cal-icon" onclick="toggleCal('cal-p-date',document.getElementById('p-date'))">📅</span>
+        <div class="cal-wrap" id="cal-p-date"></div>
+      </div>
+      <div class="fg">
+        <label class="field-label">Patrol Type</label>
+        <select id="p-type"></select>
+      </div>
+    </div>
+    <div class="fr">
+      <div class="fg">
+        <label class="field-label">Area / Sector</label>
+        <select id="p-area"><option value="">-- Sector --</option></select>
+      </div>
+      <div class="fg">
+        <label class="field-label">Duration (h)</label>
+        <input type="number" id="p-dur" min="0.5" max="24" step="0.5" placeholder="e.g. 2.5">
+      </div>
+    </div>
+    <div class="fg">
+      <label class="field-label">Route / Waypoints (optional)</label>
+      <input type="text" id="p-route" placeholder="e.g. Main Gate - Market - Base">
+    </div>
+    <div class="fg" style="position:relative;">
+      <label class="field-label">Search &amp; Add Troops</label>
+      <input type="text" id="troop-search" placeholder="Type name or rank..." oninput="troopSuggest(this.value)" autocomplete="off">
+      <div class="suggest-box" id="troop-suggest" style="display:none;"></div>
+    </div>
+    <div class="fg">
+      <label class="field-label">Selected Troops</label>
+      <div id="selected-troops"></div>
+    </div>
+    <div class="fg">
+      <label class="field-label">Remarks (optional)</label>
+      <textarea id="p-rem" rows="2" placeholder="Any notes..."></textarea>
+    </div>
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-family:'Courier New',monospace;font-size:12px;color:var(--tan);margin-bottom:12px;" id="ptl-preview">Next Patrol ID: --</div>
+    <button class="btn btn-primary btn-full" onclick="logPatrol()">⚡ Log Patrol</button>
+  </div>
+</div>
+
+<!-- ===== PATROL LOG ===== -->
+<div id="patrol-log" class="section">
+  <div class="card">
+    <div class="card-title">
+      <span>Patrols <span id="patrol-count-lbl" style="color:var(--text-muted);font-size:10px;font-weight:400;"></span></span>
+      <button class="btn btn-ghost btn-sm" onclick="printPatrolSummary()" style="font-size:9px;padding:3px 8px;min-height:28px;">🖨 Print</button>
+    </div>
+    <!-- Filters -->
+    <div class="fg">
+      <input type="text" id="fs" placeholder="🔍 Search patrols..." oninput="renderTable()">
+    </div>
+    <div class="fr" style="margin-bottom:10px;">
+      <select id="ft" onchange="renderTable()"><option value="">All Types</option></select>
+      <select id="fa" onchange="renderTable()"><option value="">All Sectors</option></select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;margin-bottom:10px;">
+      <div style="position:relative;grid-column:1/2;">
+        <input type="text" id="ff" placeholder="From" maxlength="10" oninput="fmtDateInp(this);renderTable();" autocomplete="off" readonly onclick="toggleCal('cal-ff',this)" style="padding-right:28px;font-size:12px;padding:9px 28px 9px 10px;">
+        <span class="cal-icon" onclick="toggleCal('cal-ff',document.getElementById('ff'))" style="font-size:13px;">📅</span>
+        <div class="cal-wrap" id="cal-ff"></div>
+      </div>
+      <div style="position:relative;grid-column:2/3;">
+        <input type="text" id="fto" placeholder="To" maxlength="10" oninput="fmtDateInp(this);renderTable();" autocomplete="off" readonly onclick="toggleCal('cal-fto',this)" style="padding-right:28px;font-size:12px;padding:9px 28px 9px 10px;">
+        <span class="cal-icon" onclick="toggleCal('cal-fto',document.getElementById('fto'))" style="font-size:13px;">📅</span>
+        <div class="cal-wrap" id="cal-fto"></div>
+      </div>
+      <select id="fsort" onchange="renderTable()" style="grid-column:3/4;font-size:12px;padding:9px 28px 9px 10px;">
+        <option value="date-desc">Newest</option>
+        <option value="date-asc">Oldest</option>
+        <option value="name-asc">Name A-Z</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" onclick="clearFilters()" style="grid-column:4/5;padding:0 10px;">✕</button>
+    </div>
+    <div id="filter-summary" style="display:none;" class="alert al-info"></div>
+    <div id="patrol-cards"></div>
+    <div id="pempty" class="empty" style="display:none;">No records found.</div>
+  </div>
+</div>
+
+<!-- ===== TROOPS ===== -->
+<div id="troops" class="section">
+  <!-- Add/Edit Form -->
+  <div class="card">
+    <div class="card-title" id="t-form-title">Add Troop</div>
+    <div id="t-alert"></div>
+    <input type="hidden" id="t-edit-id">
+    <div class="fg"><label class="field-label">Full Name</label><input type="text" id="t-name" placeholder="Surname, Firstname"></div>
+    <div class="fr">
+      <div class="fg"><label class="field-label">Rank</label><select id="t-rank"></select></div>
+      <div class="fg"><label class="field-label">Unit / Section</label><input type="text" id="t-unit" placeholder="e.g. Alpha"></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="field-label">Service Number</label><input type="text" id="t-sn" placeholder="e.g. SN-0042"></div>
+      <div class="fg"><label class="field-label">Status</label>
+        <select id="t-status">
+          <option value="available">Available</option>
+          <option value="leave">On Leave</option>
+          <option value="sick">Sick</option>
+          <option value="detached">Detached</option>
+        </select>
+      </div>
+    </div>
+    <div class="fg"><label class="field-label">Notes / Skills / Restrictions</label><textarea id="t-notes" rows="2" placeholder="e.g. Medic trained, No night ops..."></textarea></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-primary" id="t-submit-btn" onclick="saveTroop()" style="flex:1;">Add Troop</button>
+      <button class="btn btn-ghost" id="t-cancel-btn" onclick="cancelEdit()" style="display:none;">Cancel</button>
+    </div>
+  </div>
+  <!-- Roster -->
+  <div class="card">
+    <div class="card-title">
+      <span>Roster (<span id="troop-count">0</span>)</span>
+      <label style="display:flex;align-items:center;gap:5px;font-size:10px;text-transform:none;cursor:pointer;color:var(--text-muted);letter-spacing:0;margin:0;font-family:'Segoe UI',Arial,sans-serif;font-weight:400;">
+        <input type="checkbox" id="show-arch" onchange="renderRoster()" style="width:auto;accent-color:var(--green-light);">
+        Archived
+      </label>
+    </div>
+    <div id="roster"></div>
+  </div>
+</div>
+
+<!-- ===== INACTIVE ===== -->
+<div id="inactive" class="section">
+  <div class="card">
+    <div class="card-title">
+      <span>Inactive Monitoring</span>
+      <button class="btn btn-ghost btn-sm" onclick="printInactive()" style="font-size:9px;padding:3px 8px;min-height:28px;">🖨</button>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+      <button class="btn btn-ghost btn-sm" onclick="setInactiveFilter(3,this)">3d</button>
+      <button class="btn btn-ghost btn-sm" onclick="setInactiveFilter(7,this)">7d</button>
+      <button class="btn btn-ghost btn-sm" onclick="setInactiveFilter(14,this)">14d</button>
+      <select id="inactive-rolling-sel" onchange="setInactiveRollingFilter(this.value)" style="flex:1;min-width:120px;font-size:12px;padding:7px 28px 7px 10px;">
+        <option value="">Last N Months</option>
+        <option value="1">Last 1 Month</option>
+        <option value="2">Last 2 Months</option>
+        <option value="3">Last 3 Months</option>
+        <option value="6">Last 6 Months</option>
+        <option value="9">Last 9 Months</option>
+        <option value="12">Last 12 Months</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" onclick="setInactiveFilter(0,this)">All</button>
+    </div>
+    <div id="inactive-filter-label" style="font-size:10px;color:var(--text-muted);margin-bottom:10px;font-family:'Courier New',monospace;letter-spacing:1px;"></div>
+    <div id="inactive-list" class="inactive-grid"></div>
+  </div>
+</div>
+
+<!-- ===== REPORT ===== -->
+<div id="report" class="section">
+  <div class="card">
+    <div class="card-title">
+      <span>Patrol Report</span>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;">
+        <button class="btn btn-ghost btn-sm" onclick="exportCSV()" style="font-size:9px;padding:3px 7px;min-height:28px;">CSV</button>
+        <button class="btn btn-ghost btn-sm" onclick="window.print()" style="font-size:9px;padding:3px 7px;min-height:28px;">PDF</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+      <select id="report-mode" onchange="onReportModeChange()" style="flex:1;min-width:100px;font-size:13px;">
+        <option value="weekly">Weekly</option>
+        <option value="monthly">Monthly</option>
+        <option value="total">All Time</option>
+      </select>
+    </div>
+    <div id="report-week-wrap" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+      <div style="position:relative;flex:1;">
+        <input type="text" id="week-start" placeholder="DD/MM/YYYY" maxlength="10" oninput="fmtDateInp(this);genReport();" autocomplete="off" readonly onclick="toggleCal('cal-week-start',this)" style="padding-right:36px;">
+        <span class="cal-icon" onclick="toggleCal('cal-week-start',document.getElementById('week-start'))">📅</span>
+        <div class="cal-wrap" id="cal-week-start"></div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="thisWeek()">This Week</button>
+    </div>
+    <div id="report-month-wrap" style="display:none;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+      <select id="report-month-sel" onchange="genReport()" style="flex:1;font-size:13px;">
+        <option value="1">January</option><option value="2">February</option>
+        <option value="3">March</option><option value="4">April</option>
+        <option value="5">May</option><option value="6">June</option>
+        <option value="7">July</option><option value="8">August</option>
+        <option value="9">September</option><option value="10">October</option>
+        <option value="11">November</option><option value="12">December</option>
+      </select>
+      <select id="report-year-sel" onchange="genReport()" style="flex:1;font-size:13px;"></select>
+    </div>
+    <div class="fg">
+      <label class="field-label">Commander's Remarks</label>
+      <textarea id="cmd-remarks" rows="2" placeholder="Operational summary..." oninput="genReport();"></textarea>
+    </div>
+    <div class="rep-summary-grid" id="rep-summary"></div>
+    <div id="rep-content"></div>
+  </div>
+</div>
+
+<!-- ===== HANDOVER ===== -->
+<div id="handover" class="section">
+  <div class="card">
+    <div class="card-title">
+      <span>Command Handover</span>
+      <button class="btn btn-ghost btn-sm" onclick="window.print()" style="font-size:9px;padding:3px 8px;min-height:28px;">🖨</button>
+    </div>
+    <div id="handover-content"></div>
+  </div>
+</div>
+
+<!-- ===== AUDIT LOG ===== -->
+<div id="audit" class="section">
+  <div class="card">
+    <div class="card-title">
+      <span>Audit Log</span>
+      <button class="btn btn-ghost btn-sm" onclick="clearAudit()" style="font-size:9px;padding:3px 8px;min-height:28px;">Clear</button>
+    </div>
+    <div id="audit-list"></div>
+  </div>
+</div>
+
+<!-- ===== BACKUP ===== -->
+<div id="backup" class="section">
+  <div class="card">
+    <div class="card-title">Export Backup</div>
+    <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">Full JSON backup of all troops, patrols, and settings.</p>
+    <button class="btn btn-primary btn-full" onclick="doExport()">📥 Download Backup (.json)</button>
+    <button class="btn btn-ghost btn-full" style="margin-top:8px;" onclick="exportCSVFull()">📊 Export All Patrols (.csv)</button>
+  </div>
+  <div class="card">
+    <div class="card-title">Restore Backup</div>
+    <div id="restore-alert"></div>
+    <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">Select a .json backup file to restore all data.</p>
+    <div class="fg"><label class="field-label">Select Backup File</label><input type="file" id="restore-file" accept=".json" onchange="previewRestore(this)"></div>
+    <div id="restore-preview" style="display:none;" class="alert al-info"></div>
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <button class="btn btn-warning" id="restore-btn" style="display:none;" onclick="doRestore()">Confirm Restore</button>
+      <button class="btn btn-ghost" id="restore-cancel" style="display:none;" onclick="cancelRestore()">Cancel</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">System Info</div>
+    <div id="sys-info" style="font-family:'Courier New',monospace;font-size:12px;color:var(--text-muted);line-height:2;"></div>
+  </div>
+</div>
+
+<!-- ===== SETTINGS ===== -->
+<div id="settings" class="section">
+  <div class="card">
+    <div class="card-title">Unit Identity</div>
+    <div class="fg"><label class="field-label">POB / Unit Name</label><input type="text" id="cfg-pob" placeholder="e.g. POB Mobaye"></div>
+    <div class="fg"><label class="field-label">Mission / Operation</label><input type="text" id="cfg-mission" placeholder="e.g. Operation Sangaris"></div>
+    <div class="fg"><label class="field-label">Commander Name &amp; Rank</label><input type="text" id="cfg-cmd" placeholder="e.g. Major J. Doe"></div>
+    <div class="fg"><label class="field-label">Report Classification</label>
+      <select id="cfg-class">
+        <option value="">None</option>
+        <option value="UNCLASSIFIED">UNCLASSIFIED</option>
+        <option value="CONFIDENTIAL">CONFIDENTIAL</option>
+        <option value="RESTRICTED">RESTRICTED</option>
+        <option value="SECRET">SECRET</option>
+      </select>
+    </div>
+    <button class="btn btn-primary btn-full" onclick="saveSettings()">Save Settings</button>
+    <div id="cfg-alert" style="margin-top:8px;"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Patrol Types</div>
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <input type="text" id="new-type" placeholder="Add patrol type..." style="flex:1;">
+      <button class="btn btn-ghost btn-sm" onclick="addItem('types','new-type','type-tags')">Add</button>
+    </div>
+    <div class="tag-list" id="type-tags"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Sectors / Areas</div>
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <input type="text" id="new-sector" placeholder="Add sector..." style="flex:1;">
+      <button class="btn btn-ghost btn-sm" onclick="addItem('sectors','new-sector','sector-tags')">Add</button>
+    </div>
+    <div class="tag-list" id="sector-tags"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Route Presets</div>
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <input type="text" id="new-route" placeholder="Add route preset..." style="flex:1;">
+      <button class="btn btn-ghost btn-sm" onclick="addItem('routes','new-route','route-tags')">Add</button>
+    </div>
+    <div class="tag-list" id="route-tags"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Personnel Ranks <span style="font-size:10px;font-weight:400;color:var(--text-muted);">Top = Highest Seniority</span></div>
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <input type="text" id="new-rank" placeholder="Add rank..." style="flex:1;">
+      <button class="btn btn-ghost btn-sm" onclick="addRank()">Add</button>
+    </div>
+    <div id="rank-alert" style="margin-top:6px;"></div>
+    <div class="tag-list" id="rank-tags"></div>
+  </div>
+</div>
+
+</main>
+
+<!-- BOTTOM NAV -->
+<nav id="bottom-nav">
+  <button class="nav-item active" onclick="showTab('dashboard')" data-tab="dashboard">
+    <span class="nav-icon">📊</span>
+    <span class="nav-label">Dash</span>
+  </button>
+  <button class="nav-item" onclick="showTab('log-patrol')" data-tab="log-patrol">
+    <span class="nav-icon">➕</span>
+    <span class="nav-label">Log</span>
+  </button>
+  <button class="nav-item" onclick="showTab('patrol-log')" data-tab="patrol-log">
+    <span class="nav-icon">📋</span>
+    <span class="nav-label">Patrols</span>
+  </button>
+  <button class="nav-item" onclick="showTab('troops')" data-tab="troops">
+    <span class="nav-icon">👥</span>
+    <span class="nav-label">Troops</span>
+  </button>
+  <button class="nav-item" id="more-btn" onclick="toggleMoreMenu()">
+    <span class="nav-icon">⋯</span>
+    <span class="nav-label">More</span>
+  </button>
+</nav>
+
+<!-- MORE MENU -->
+<div id="more-overlay" onclick="closeMoreMenu()"></div>
+<div id="more-menu">
+  <div class="more-item" onclick="showTabFromMore('inactive')"><span class="mi-icon">⚠️</span><span class="mi-label">Inactive Troops</span></div>
+  <div class="more-item" onclick="showTabFromMore('report')"><span class="mi-icon">📈</span><span class="mi-label">Report</span></div>
+  <div class="more-item" onclick="showTabFromMore('handover')"><span class="mi-icon">📄</span><span class="mi-label">Handover</span></div>
+  <div class="more-item" onclick="showTabFromMore('audit')"><span class="mi-icon">📝</span><span class="mi-label">Audit Log</span></div>
+  <div class="more-item" onclick="showTabFromMore('backup')"><span class="mi-icon">💾</span><span class="mi-label">Backup</span></div>
+  <div class="more-item" onclick="showTabFromMore('settings')"><span class="mi-icon">⚙️</span><span class="mi-label">Settings</span></div>
+</div>
+
+<!-- MODALS -->
+<div class="modal-ov" id="del-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Confirm Delete</div>
+    <p style="font-size:14px;color:var(--text-muted);">Delete this record? This cannot be undone.</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('del-modal')">Cancel</button>
+      <button class="btn btn-danger" id="del-confirm">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="confirm-modal-ov" id="edit-confirm-modal">
+  <div class="confirm-modal">
+    <div class="confirm-modal-title">✎ Confirm Edit</div>
+    <div class="confirm-modal-msg">Are you sure you want to edit this record?</div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeConfirmEdit()">Cancel</button>
+      <button class="btn btn-warning" id="edit-confirm-btn">Yes, Edit</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-ov" id="troops-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="troops-modal-title">Troops</div>
+    <div id="troops-modal-body"></div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('troops-modal')">Close</button></div>
+  </div>
+</div>
+
+<div class="modal-ov" id="profile-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="profile-title">Troop Profile</div>
+    <div id="profile-body"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" onclick="viewFullRecord()">📄 Full Record</button>
+      <button class="btn btn-ghost btn-sm" onclick="printProfile()">Print</button>
+      <button class="btn btn-ghost" onclick="closeModal('profile-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-ov" id="inactive-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Inactive Troops</div>
+    <div id="inactive-modal-body"></div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('inactive-modal')">Close</button></div>
+  </div>
+</div>
+
+<script>
+// =====================================================================
+// DATA & CONSTANTS
+// =====================================================================
+var API_URL = 'https://pob-tracker-api.onrender.com';
+var SK = 'pob_v4';
+var DEFAULT_RANKS = ['POB Commander','Major','Captain','WO1','WO2','CSM','Sergeant','Corporal','Lance Corporal','Private','NCE'];
+var RANKS = DEFAULT_RANKS.slice();
+var DEFAULT_TYPES = ['Escort','Link-up','FET','Airport Security','FACA Ration Delivery','Security Meeting','Joint Patrol with FACA','SDP','MDP','LDP','Water Distribution','QRF','Recce'];
+var DEFAULT_SECTORS = ['Kongbo Linkup','Bangui-Kette Ferry Point','Boulangba','Langandji','Mobaye Center','Prefect Office','Mobaye Airport','Outer Perimeter','Others'];
+var DEFAULT_ROUTES = ['Main Gate - Market - Base','River Crossing - Perimeter','Airport Road - Town Center','North Perimeter - South Gate'];
+
+var D = {
+  troops:[], patrols:[], archived:[], counter:1, audit:[],
+  settings:{pob:'POB Mobaye',mission:'',commander:'',classification:'CONFIDENTIAL'},
+  config:{types:DEFAULT_TYPES.slice(),sectors:DEFAULT_SECTORS.slice(),routes:DEFAULT_ROUTES.slice(),ranks:DEFAULT_RANKS.slice()}
+};
+
+// ── API helpers ────────────────────────────────────────────────────────
+function apiFetch(path, opts) {
+  return fetch(API_URL + path, Object.assign({headers:{'Content-Type':'application/json'}}, opts||{}))
+    .then(function(r){ return r.json(); });
+}
+function dbToTroop(r) {
+  return {id:r.id,name:r.name,rank:r.rank,unit:r.unit,sn:r.sn||'',status:r.status||'available',notes:r.notes||''};
+}
+function dbToPatrol(r) {
+  return {id:r.id,ptlId:r.ptl_id,date:(r.date||'').slice(0,10),type:r.type,
+    troops:r.troops||[],area:r.area||'',duration:r.duration||'',route:r.route||'',remarks:r.remarks||''};
+}
+function loadLocalFallback() {
+  try {
+    var r = localStorage.getItem(SK);
+    if (r) { Object.assign(D, JSON.parse(r)); }
+  } catch(e) {}
+  if (!D.archived) D.archived=[];
+  if (!D.counter) D.counter=D.patrols.length+1;
+  if (!D.audit) D.audit=[];
+  if (!D.settings) D.settings={pob:'POB Mobaye',mission:'',commander:'',classification:'CONFIDENTIAL'};
+  if (!D.config) D.config={types:DEFAULT_TYPES.slice(),sectors:DEFAULT_SECTORS.slice(),routes:DEFAULT_ROUTES.slice(),ranks:DEFAULT_RANKS.slice()};
+  if (!D.config.ranks) D.config.ranks=DEFAULT_RANKS.slice();
+}
+
+// ── Sync pill ────────────────────────────────────────────────────────
+var _syncState = 'connecting';
+var _lastSyncTime = null;
+var _autoSyncSeconds = 60;
+var _syncCountdown = _autoSyncSeconds;
+var _countdownTimer = null;
+
+function setSyncState(state) {
+  _syncState = state;
+  var dot = document.getElementById('sync-dot');
+  var label = document.getElementById('sync-label');
+  var pill = document.getElementById('sync-pill');
+  if (!dot||!label||!pill) return;
+  if (state==='online') {
+    dot.style.background='#5ddd88';dot.style.boxShadow='0 0 5px #5ddd88';
+    var t=_lastSyncTime?_lastSyncTime.getHours().toString().padStart(2,'0')+':'+_lastSyncTime.getMinutes().toString().padStart(2,'0'):'';
+    label.textContent='ONLINE'+(t?' ·'+t:'');
+    pill.style.borderColor='rgba(93,221,136,0.4)';
+  } else if (state==='syncing') {
+    dot.style.background='#ffb466';dot.style.boxShadow='0 0 5px #ffb466';
+    label.textContent='SYNC…';pill.style.borderColor='rgba(255,180,102,0.4)';
+  } else if (state==='offline') {
+    dot.style.background='#ff6666';dot.style.boxShadow='0 0 5px #ff6666';
+    label.textContent='OFFLINE';pill.style.borderColor='rgba(255,100,100,0.4)';
+  } else {
+    dot.style.background='var(--text-muted)';dot.style.boxShadow='none';
+    label.textContent='CONN';pill.style.borderColor='var(--border)';
+  }
+}
+
+function startCountdown() {
+  _syncCountdown = _autoSyncSeconds;
+  if (_countdownTimer) clearInterval(_countdownTimer);
+  _countdownTimer = setInterval(function() {
+    if (_syncState!=='online'&&_syncState!=='offline') return;
+    _syncCountdown--;
+    if (_syncState==='online') {
+      var t=_lastSyncTime?_lastSyncTime.getHours().toString().padStart(2,'0')+':'+_lastSyncTime.getMinutes().toString().padStart(2,'0'):'';
+      var lbl=document.getElementById('sync-label');
+      if(lbl) lbl.textContent=_syncCountdown>0?'ONLINE·'+_syncCountdown+'s':'ONLINE'+(t?' ·'+t:'');
+    }
+    if (_syncCountdown<=0) { _syncCountdown=_autoSyncSeconds; backgroundSync(); }
+  }, 1000);
+}
+
+function backgroundSync() {
+  if (_syncState==='syncing') return;
+  setSyncState('syncing');
+  return Promise.all([
+    apiFetch('/troops'),apiFetch('/archived'),apiFetch('/patrols'),apiFetch('/audit'),apiFetch('/config')
+  ]).then(function(results){
+    D.troops=results[0].map(dbToTroop);
+    D.archived=results[1].map(dbToTroop);
+    D.patrols=results[2].map(dbToPatrol);
+    D.audit=results[3].map(function(a){return{ts:a.ts,msg:a.msg};});
+    var config=results[4];
+    if(config.settings) D.settings=config.settings;
+    if(config.config) D.config=config.config;
+    if(config.counter) D.counter=parseInt(config.counter)||1;
+    if(!D.config.ranks) D.config.ranks=DEFAULT_RANKS.slice();
+    RANKS=D.config.ranks;
+    D.troops.forEach(function(t){if(!t.status)t.status='available';if(!t.notes)t.notes='';});
+    localStorage.setItem(SK,JSON.stringify(D));
+    _lastSyncTime=new Date(); setSyncState('online'); _syncCountdown=_autoSyncSeconds;
+    try {
+      var active=document.querySelector('.section.active');
+      if(active){var aid=active.id;
+        if(aid==='dashboard') renderDash();
+        if(aid==='patrol-log') renderTable();
+        if(aid==='troops') renderRoster();
+        if(aid==='inactive') renderInactive();
+        if(aid==='report') genReport();
+        if(aid==='audit') renderAudit();
+        if(aid==='handover') renderHandover();
+        populateReportYears();
+      }
+    } catch(e){}
+    return true;
+  }).catch(function(err){
+    console.warn('Sync failed:',err); setSyncState('offline'); _syncCountdown=_autoSyncSeconds; return false;
+  });
+}
+function manualSync(){ _syncCountdown=_autoSyncSeconds; backgroundSync(); }
+function loadData(){ setSyncState('connecting'); return backgroundSync().then(function(ok){ if(!ok) loadLocalFallback(); return ok; }); }
+function saveData(){ localStorage.setItem(SK,JSON.stringify(D)); }
+
+// ── Remote write helpers ───────────────────────────────────────────────
+function remoteSaveTroop(t){ saveData(); return apiFetch('/troops',{method:'POST',body:JSON.stringify(t)}).catch(function(e){console.error('saveTroop failed',e);}); }
+function remoteDeleteTroop(id){ saveData(); return apiFetch('/troops/'+id,{method:'DELETE'}).catch(function(e){console.error(e);}); }
+function remoteArchiveTroop(id,archived){ saveData(); return apiFetch('/troops/'+id+'/archive',{method:'PATCH',body:JSON.stringify({archived:archived})}).catch(function(e){console.error(e);}); }
+function remoteSavePatrol(p){ saveData(); return apiFetch('/patrols',{method:'POST',body:JSON.stringify({id:p.id,ptl_id:p.ptlId,date:p.date,type:p.type,troops:p.troops,area:p.area,duration:p.duration,route:p.route,remarks:p.remarks})}).catch(function(e){console.error(e);}); }
+function remoteDeletePatrol(id){ saveData(); return apiFetch('/patrols/'+id,{method:'DELETE'}).catch(function(e){console.error(e);}); }
+function remoteSaveAudit(entry){ return apiFetch('/audit',{method:'POST',body:JSON.stringify(entry)}).catch(function(e){console.error(e);}); }
+function remoteSaveConfig(){ saveData(); return Promise.all([apiFetch('/config',{method:'POST',body:JSON.stringify({key:'settings',value:D.settings})}),apiFetch('/config',{method:'POST',body:JSON.stringify({key:'config',value:D.config})}),apiFetch('/config',{method:'POST',body:JSON.stringify({key:'counter',value:D.counter})})]).catch(function(e){console.error(e);}); }
+
+// =====================================================================
+// HELPERS
+// =====================================================================
+function uid(p){ return p+Date.now()+Math.random().toString(36).slice(2,5); }
+function nextPtlId(){ var yr=new Date().getFullYear(),n=String(D.counter).padStart(3,'0'); D.counter++; return 'PTL-'+yr+'-'+n; }
+function parseDate(s){ if(!s) return ''; s=s.trim(); if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; var p=s.split('/'); if(p.length===3&&p[2]&&p[2].length===4) return p[2]+'-'+p[1].padStart(2,'0')+'-'+p[0].padStart(2,'0'); return ''; }
+function fmtDate(d){ if(!d) return ''; try{ var dt=new Date(d+'T12:00:00'); return String(dt.getDate()).padStart(2,'0')+'/'+String(dt.getMonth()+1).padStart(2,'0')+'/'+dt.getFullYear(); } catch(e){ return d; } }
+function fmtDateLong(d){ if(!d) return ''; try{ var dt=new Date(d+'T12:00:00'); var mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return String(dt.getDate()).padStart(2,'0')+' '+mo[dt.getMonth()]+' '+dt.getFullYear(); } catch(e){ return d; } }
+function fmtDateInp(inp){ var v=inp.value.replace(/[^0-9]/g,''); if(v.length>2) v=v.slice(0,2)+'/'+v.slice(2); if(v.length>5) v=v.slice(0,5)+'/'+v.slice(5); if(v.length>10) v=v.slice(0,10); inp.value=v; }
+function nowStr(){ var n=new Date(); return String(n.getDate()).padStart(2,'0')+'/'+String(n.getMonth()+1).padStart(2,'0')+'/'+n.getFullYear()+' '+String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0'); }
+function troopById(id){ return D.troops.find(function(x){return x.id===id;})||D.archived.find(function(x){return x.id===id;}); }
+function troopLabel(id){ var t=troopById(id); return t?t.rank+' '+t.name:'?'; }
+function troopNames(p){ return (p.troops||[]).map(troopLabel).join(', '); }
+function typeBadge(type){ var m={'Escort':'b-escort','Link-up':'b-patrol','FET':'b-recon','Airport Security':'b-checkpoint','FACA Ration Delivery':'b-tan','Security Meeting':'b-gray','Joint Patrol with FACA':'b-qrf','SDP':'b-patrol','MDP':'b-patrol','LDP':'b-patrol','Water Distribution':'b-green','QRF':'b-qrf','Recce':'b-recon'}; return 'badge '+(m[type]||'b-gray'); }
+function statusBadge(s){ var m={available:'b-available',leave:'b-leave',sick:'b-sick',detached:'b-detached'}; var l={available:'Available',leave:'On Leave',sick:'Sick',detached:'Detached'}; return '<span class="badge '+(m[s]||'b-gray')+'">'+(l[s]||s)+'</span>'; }
+function showAlert(elId,msg,type){ var el=document.getElementById(elId); if(!el) return; el.innerHTML='<div class="alert al-'+type+'">'+msg+'</div>'; setTimeout(function(){if(el) el.innerHTML='';},5000); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+function rankOrder(rank){ var i=RANKS.indexOf(rank); return i===-1?99:i; }
+function sortTroops(arr){ return arr.slice().sort(function(a,b){ var r=rankOrder(a.rank)-rankOrder(b.rank); return r!==0?r:a.name.localeCompare(b.name); }); }
+function daysSince(dateStr){ if(!dateStr) return 9999; return Math.floor((new Date()-new Date(dateStr+'T12:00:00'))/86400000); }
+function lastPatrol(tid){ var pts=D.patrols.filter(function(p){return (p.troops||[]).indexOf(tid)>=0;}); pts.sort(function(a,b){return b.date.localeCompare(a.date);}); return pts.length?pts[0].date:null; }
+function patrolCount(tid){ return D.patrols.filter(function(p){return (p.troops||[]).indexOf(tid)>=0;}).length; }
+function patrolHours(tid){ return D.patrols.filter(function(p){return (p.troops||[]).indexOf(tid)>=0;}).reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0); }
+function monthlyPatrolCount(tid){ var n=new Date(),mo=n.getMonth(),yr=n.getFullYear(); return D.patrols.filter(function(p){ var d=new Date(p.date+'T12:00:00'); return d.getMonth()===mo&&d.getFullYear()===yr&&(p.troops||[]).indexOf(tid)>=0; }).length; }
+function isAvailable(t){ return !t.status||t.status==='available'; }
+
+// =====================================================================
+// AUDIT
+// =====================================================================
+function audit(msg){ var entry={ts:new Date().toISOString(),msg:msg}; D.audit.unshift(entry); if(D.audit.length>500) D.audit=D.audit.slice(0,500); saveData(); remoteSaveAudit(entry); }
+function renderAudit(){ var el=document.getElementById('audit-list'); if(D.audit.length===0){el.innerHTML='<div class="empty">No audit entries yet.</div>';return;} el.innerHTML=D.audit.map(function(e){ var d=new Date(e.ts); var ts=String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); return '<div class="audit-row"><span class="audit-time">'+ts+'</span><span class="audit-msg">'+e.msg+'</span></div>'; }).join(''); }
+function clearAudit(){ if(!confirm('Clear all audit log entries?')) return; D.audit=[]; saveData(); renderAudit(); }
+
+// =====================================================================
+// CLOCK
+// =====================================================================
+function tick(){ var n=new Date(); document.getElementById('clock-disp').textContent=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0')+':'+String(n.getSeconds()).padStart(2,'0'); }
+setInterval(tick,1000); tick();
+(function(){ var n=new Date(); var dd=String(n.getDate()).padStart(2,'0'),mm=String(n.getMonth()+1).padStart(2,'0'); document.getElementById('p-date').value=dd+'/'+mm+'/'+n.getFullYear(); updatePtlPreview(); })();
+function updatePtlPreview(){ var el=document.getElementById('ptl-preview'); if(el) el.textContent='Next ID: PTL-'+new Date().getFullYear()+'-'+String(D.counter).padStart(3,'0'); }
+
+// =====================================================================
+// THEME
+// =====================================================================
+var darkMode=true;
+function toggleTheme(){ darkMode=!darkMode; document.body.classList.toggle('light-mode',!darkMode); document.getElementById('theme-btn').textContent=darkMode?'☀':'🌙'; audit('Theme switched to '+(darkMode?'dark':'light')+' mode'); }
+
+// =====================================================================
+// NAV
+// =====================================================================
+var _moreMenuTabs=['inactive','report','handover','audit','backup','settings'];
+function showTab(id){
+  document.querySelectorAll('.section').forEach(function(s){s.classList.remove('active');});
+  var el=document.getElementById(id); if(el) el.classList.add('active');
+  // Scroll to top
+  document.getElementById('app-main').scrollTop=0;
+  // Update bottom nav (mobile)
+  document.querySelectorAll('.nav-item').forEach(function(b){b.classList.remove('active');});
+  var activeBtn=document.querySelector('[data-tab="'+id+'"]');
+  if(activeBtn) activeBtn.classList.add('active');
+  if(_moreMenuTabs.indexOf(id)>=0) { var mb=document.getElementById('more-btn'); if(mb) mb.classList.add('active'); }
+  // Update sidebar nav (desktop)
+  document.querySelectorAll('.sidebar-item').forEach(function(b){b.classList.remove('active');});
+  var activeSide=document.querySelector('.sidebar-item[data-tab="'+id+'"]');
+  if(activeSide) activeSide.classList.add('active');
+  var fn={
+    dashboard:renderDash,
+    'log-patrol':function(){selectedTroops=[];renderSelected();updatePtlPreview();},
+    'patrol-log':renderTable,
+    troops:renderRoster,
+    inactive:function(){renderInactive(_inactiveDays);},
+    report:function(){populateReportYears();genReport();},
+    handover:renderHandover,
+    audit:renderAudit,
+    backup:renderSysInfo,
+    settings:renderSettings
+  };
+  if(fn[id]) fn[id]();
+}
+function toggleMoreMenu(){
+  var m=document.getElementById('more-menu');
+  var o=document.getElementById('more-overlay');
+  var isOpen=m.classList.contains('open');
+  if(isOpen){ m.classList.remove('open'); o.classList.remove('open'); } else { m.classList.add('open'); o.classList.add('open'); }
+}
+function closeMoreMenu(){ document.getElementById('more-menu').classList.remove('open'); document.getElementById('more-overlay').classList.remove('open'); }
+function showTabFromMore(id){ closeMoreMenu(); showTab(id); }
+
+// =====================================================================
+// SETTINGS
+// =====================================================================
+function renderSettings(){ var s=D.settings,c=D.config; document.getElementById('cfg-pob').value=s.pob||''; document.getElementById('cfg-mission').value=s.mission||''; document.getElementById('cfg-cmd').value=s.commander||''; document.getElementById('cfg-class').value=s.classification||''; renderTagList('type-tags',c.types,'types'); renderTagList('sector-tags',c.sectors,'sectors'); renderTagList('route-tags',c.routes,'routes'); renderRankTags(); }
+function renderTagList(elId,arr,key){ var el=document.getElementById(elId); if(!el) return; el.innerHTML=arr.map(function(item,i){ return '<div class="tag"><span>'+item+'</span><button class="tag-del" onclick="removeItem(\''+key+'\','+i+',\''+elId+'\')">×</button></div>'; }).join(''); }
+function removeItem(key,idx,elId){ D.config[key].splice(idx,1); renderTagList(elId,D.config[key],key); populateDropdowns(); remoteSaveConfig(); audit('Removed from '+key); }
+function addItem(key,inputId,tagElId){ var val=document.getElementById(inputId).value.trim(); if(!val) return; D.config[key].push(val); document.getElementById(inputId).value=''; renderTagList(tagElId,D.config[key],key); populateDropdowns(); remoteSaveConfig(); audit('Added to '+key+': '+val); }
+function renderRankTags(){ document.getElementById('rank-tags').innerHTML=D.config.ranks.map(function(r,i){ return '<div class="tag"><button style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:0 3px;font-size:12px;" onclick="moveRank('+i+',-1)">↑</button><span>'+r+'</span><button style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:0 3px;font-size:12px;" onclick="moveRank('+i+',1)">↓</button><button class="tag-del" onclick="removeRank('+i+')" title="Remove rank">×</button></div>'; }).join(''); }
+function addRank(){ var val=document.getElementById('new-rank').value.trim(); if(!val) return; if(D.config.ranks.indexOf(val)>=0){showAlert('rank-alert','Rank already exists.','warn');return;} D.config.ranks.push(val); RANKS=D.config.ranks; document.getElementById('new-rank').value=''; remoteSaveConfig(); renderRankTags(); populateRankDropdowns(); audit('Added rank: '+val); }
+function removeRank(idx){ var val=D.config.ranks[idx]; if(D.config.ranks.length<=1){showAlert('rank-alert','Must keep at least one rank.','warn');return;} D.config.ranks.splice(idx,1); RANKS=D.config.ranks; remoteSaveConfig(); renderRankTags(); populateRankDropdowns(); audit('Removed rank: '+val); }
+function moveRank(idx,dir){ var arr=D.config.ranks; var newIdx=idx+dir; if(newIdx<0||newIdx>=arr.length) return; var tmp=arr[idx]; arr[idx]=arr[newIdx]; arr[newIdx]=tmp; RANKS=D.config.ranks; remoteSaveConfig(); renderRankTags(); populateRankDropdowns(); audit('Reordered ranks'); }
+function populateRankDropdowns(){ var el=document.getElementById('t-rank'); if(!el) return; var cur=el.value; el.innerHTML=D.config.ranks.map(function(r){return '<option>'+r+'</option>';}).join(''); if(cur&&D.config.ranks.indexOf(cur)>=0) el.value=cur; }
+function saveSettings(){ D.settings.pob=document.getElementById('cfg-pob').value.trim()||'POB Mobaye'; D.settings.mission=document.getElementById('cfg-mission').value.trim(); D.settings.commander=document.getElementById('cfg-cmd').value.trim(); D.settings.classification=document.getElementById('cfg-class').value; remoteSaveConfig(); applySettings(); showAlert('cfg-alert','Settings saved!','success'); audit('Settings updated'); }
+function applySettings(){ var s=D.settings; var title=s.pob+(s.mission?' — '+s.mission:''); document.getElementById('pob-title').textContent=title; document.title=title+' — Patrol Tracker'; if(document.getElementById('print-org-name')) document.getElementById('print-org-name').textContent=s.pob; if(document.getElementById('print-mission')) document.getElementById('print-mission').textContent=s.mission||'Patrol Tracker Report'; var wm=document.getElementById('watermark-text'); if(wm) wm.textContent=s.classification||''; }
+function populateDropdowns(){ var types=D.config.types,sectors=D.config.sectors; var ptEl=document.getElementById('p-type'); if(ptEl) ptEl.innerHTML=types.map(function(t){return '<option>'+t+'</option>';}).join(''); var paEl=document.getElementById('p-area'); if(paEl) paEl.innerHTML='<option value="">-- Select Sector --</option>'+sectors.map(function(s){return '<option>'+s+'</option>';}).join(''); var ftEl=document.getElementById('ft'); if(ftEl) ftEl.innerHTML='<option value="">All Types</option>'+types.map(function(t){return '<option>'+t+'</option>';}).join(''); var faEl=document.getElementById('fa'); if(faEl) faEl.innerHTML='<option value="">All Sectors</option>'+sectors.map(function(s){return '<option>'+s+'</option>';}).join(''); }
+function populateReportYears(){ var sel=document.getElementById('report-year-sel'); if(!sel) return; var years=new Set(); var now=new Date().getFullYear(); D.patrols.forEach(function(p){if(p.date) years.add(parseInt(p.date.slice(0,4)));}); years.add(now); var sorted=Array.from(years).sort(function(a,b){return b-a;}); sel.innerHTML=sorted.map(function(y){return '<option value="'+y+'"'+(y===now?' selected':'')+'>'+y+'</option>';}).join(''); }
+
+// =====================================================================
+// GLOBAL SEARCH
+// =====================================================================
+function globalSearch(val){ var box=document.getElementById('global-results'); if(!val||val.length<2){box.style.display='none';return;} var q=val.toLowerCase(); var results=[]; D.troops.forEach(function(t){ if((t.rank+' '+t.name+' '+t.unit+' '+(t.sn||'')).toLowerCase().indexOf(q)>=0) results.push({cat:'Troop',label:t.rank+' '+t.name+' ('+t.unit+')',action:"showProfile('"+t.id+"');closeGS();"}); }); D.patrols.forEach(function(p){ if(((p.ptlId||'')+' '+p.type+' '+(p.area||'')+' '+troopNames(p)+' '+(p.remarks||'')).toLowerCase().indexOf(q)>=0) results.push({cat:'Patrol',label:(p.ptlId||'?')+' — '+fmtDate(p.date)+' — '+p.type,action:"showTroopsModal('"+p.id+"');closeGS();"}); }); if(results.length===0){box.style.display='none';return;} box.style.display='block'; box.innerHTML=results.slice(0,8).map(function(r){ return '<div class="gr-item" onclick="'+r.action+'"><span class="gr-cat">'+r.cat+'</span>'+r.label+'</div>'; }).join(''); }
+function closeGS(){ document.getElementById('global-results').style.display='none'; document.getElementById('global-search').value=''; }
+document.addEventListener('click',function(e){ if(!e.target.closest('#global-search')&&!e.target.closest('#global-results')) document.getElementById('global-results').style.display='none'; if(!e.target.closest('#troop-search')&&!e.target.closest('#troop-suggest')) { var s=document.getElementById('troop-suggest'); if(s) s.style.display='none'; } if(!e.target.closest('.cal-wrap')&&!e.target.closest('.cal-icon')&&!e.target.closest('input[id="p-date"]')&&!e.target.closest('input[id="ff"]')&&!e.target.closest('input[id="fto"]')&&!e.target.closest('input[id="week-start"]')){ document.querySelectorAll('.cal-wrap.open').forEach(function(w){w.classList.remove('open');}); } });
+
+// =====================================================================
+// DASHBOARD
+// =====================================================================
+function renderDash(){
+  var now=new Date(),day=now.getDay();
+  var mon=new Date(now); mon.setDate(now.getDate()-(day===0?6:day-1)); mon.setHours(0,0,0,0);
+  var sun=new Date(mon); sun.setDate(mon.getDate()+6); sun.setHours(23,59,59,999);
+  var wkPats=D.patrols.filter(function(p){var pd=new Date(p.date+'T12:00:00');return pd>=mon&&pd<=sun;});
+  var totalH=D.patrols.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0);
+  var availTroops=D.troops.filter(isAvailable);
+  var inactive7=availTroops.filter(function(t){return daysSince(lastPatrol(t.id))>7;});
+  var mo=now.getMonth(),yr=now.getFullYear();
+  var moPats=D.patrols.filter(function(p){var d=new Date(p.date+'T12:00:00');return d.getMonth()===mo&&d.getFullYear()===yr;});
+
+  document.getElementById('dash-stats').innerHTML=
+    '<div class="stat"><div class="stat-num">'+D.troops.length+'</div><div class="stat-label">Troops</div></div>'+
+    '<div class="stat clickable" onclick="renderRoster()"><div class="stat-num">'+availTroops.length+'</div><div class="stat-label">Available</div></div>'+
+    '<div class="stat" style="border-color:var(--green-light);"><div class="stat-num" style="color:#5ddd88;">'+moPats.length+'</div><div class="stat-label">This Month</div></div>'+
+    '<div class="stat clickable" onclick="showInactiveModal()" style="border-color:'+(inactive7.length>0?'var(--red-light)':'var(--border)')+';">'+
+    '<div class="stat-num" style="color:'+(inactive7.length>0?'#ff6666':'var(--tan)')+'">'+inactive7.length+'</div>'+
+    '<div class="stat-label">Inactive >7d</div></div>';
+
+  var alerts='';
+  if(wkPats.length===0) alerts+='<div class="alert al-warn">No patrol logged this week.</div>';
+  document.getElementById('dash-alerts').innerHTML=alerts;
+
+  // Monthly stats
+  var moH=moPats.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0);
+  var best=null,bestC=0;
+  D.troops.forEach(function(t){var c=moPats.filter(function(p){return (p.troops||[]).indexOf(t.id)>=0;}).length;if(c>bestC){bestC=c;best=t;}});
+  var smap={};moPats.forEach(function(p){if(p.area)smap[p.area]=(smap[p.area]||0)+1;});
+  var topSector=Object.keys(smap).sort(function(a,b){return smap[b]-smap[a];})[0];
+  var moNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  document.getElementById('monthly-stats').innerHTML=
+    '<div style="font-family:\'Courier New\',monospace;font-size:9px;color:var(--tan);letter-spacing:1px;margin-bottom:8px;text-transform:uppercase;">'+moNames[mo]+' '+yr+'</div>'+
+    '<div style="display:flex;flex-direction:column;gap:5px;">'+
+    '<div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:var(--text-muted);">Patrols</span><span style="color:var(--tan);font-family:\'Courier New\',monospace;">'+moPats.length+'</span></div>'+
+    '<div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:var(--text-muted);">Hours</span><span style="color:var(--tan);font-family:\'Courier New\',monospace;">'+moH.toFixed(1)+'h</span></div>'+
+    '<div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:var(--text-muted);">Most Active</span><span style="color:var(--tan);font-size:11px;text-align:right;max-width:60px;word-break:break-word;">'+(best?best.name.split(',')[0]+'('+bestC+')':'—')+'</span></div>'+
+    (topSector?'<div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:var(--text-muted);">Top Sector</span><span style="color:var(--tan);font-size:10px;text-align:right;max-width:70px;word-break:break-word;">'+topSector+'</span></div>':'')+
+    '</div>';
+
+  // Inactive panel
+  var availForInactive=D.troops.filter(isAvailable);
+  var allInactiveList=availForInactive.map(function(t){return{t:t,ds:daysSince(lastPatrol(t.id)),lp:lastPatrol(t.id)};}).filter(function(x){return x.ds>=3;}).sort(function(a,b){return b.ds-a.ds;});
+  var totalInactive=allInactiveList.length;
+  var inactiveHTML='';
+  if(totalInactive===0){
+    inactiveHTML='<div style="text-align:center;padding:10px 0;font-size:12px;color:var(--text-muted);">✓ All active</div>';
+  } else {
+    var vis=allInactiveList.slice(0,4);
+    inactiveHTML=vis.map(function(x){var t=x.t,ds=x.ds;
+      var bc=ds>14?'b-red':ds>7?'b-orange':'b-gray';
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(100,130,100,0.15);cursor:pointer;" onclick="showProfile(\''+t.id+'\')">'+
+        '<div style="font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70px;">'+t.name.split(',')[0]+'</div>'+
+        '<span class="badge '+bc+'" style="font-size:9px;">'+(ds===9999?'Never':ds+'d')+'</span></div>';
+    }).join('');
+    if(allInactiveList.length>4) inactiveHTML+='<div style="font-size:10px;color:var(--text-muted);text-align:center;padding-top:4px;cursor:pointer;" onclick="showTab(\'inactive\')">+'+(allInactiveList.length-4)+' more \u2192</div>';
+  }
+  document.getElementById('dash-inactive').innerHTML=inactiveHTML;
+
+  // Deployment Fairness
+  var maxMo=Math.max(1,Math.max.apply(null,D.troops.map(function(t){return monthlyPatrolCount(t.id);})));
+  var sorted=sortTroops(D.troops);
+  var top8=sorted.slice(0,8),rest=sorted.slice(8);
+  function fairnessRow(t){var c=monthlyPatrolCount(t.id);var pct=Math.round(c/maxMo*100);var color=pct>70?'var(--green-light)':pct>30?'var(--orange)':'var(--red-light)';
+    return '<div style="margin-bottom:7px;cursor:pointer;" onclick="showProfile(\''+t.id+'\')">'+
+      '<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;">'+
+      '<span style="color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65%;">'+t.rank+' '+t.name+'</span>'+
+      '<span style="color:var(--tan);font-family:\'Courier New\',monospace;">'+c+'</span></div>'+
+      '<div class="fairness-bar"><div class="fairness-fill" style="width:'+pct+'%;background:'+color+';"></div></div></div>';}
+  var fairHTML=top8.map(fairnessRow).join('');
+  if(rest.length>0) fairHTML+='<div id="fairness-extra" style="display:none;">'+rest.map(fairnessRow).join('')+'</div>'+
+    '<button class="btn btn-ghost btn-sm" id="fairness-toggle-btn" onclick="toggleFairnessExtra()" style="width:100%;margin-top:4px;font-size:10px;">▼ Show '+rest.length+' More</button>';
+  document.getElementById('fairness-view').innerHTML=fairHTML||'<div class="empty">No data.</div>';
+
+  // Recent Patrols
+  var recent=D.patrols.slice().sort(function(a,b){return b.date.localeCompare(a.date);}).slice(0,5);
+  document.getElementById('recent-list').innerHTML=recent.length===0?'<li class="empty">No patrols yet.</li>':
+    recent.map(function(p){
+      return '<li class="recent-item"><div style="min-width:0;flex:1;">'+
+        '<div style="font-weight:600;color:var(--text);font-size:13px;">'+(p.ptlId||'')+
+        ' <button class="count-pill" onclick="showTroopsModal(\''+p.id+'\')">'+(p.troops||[]).length+'</button></div>'+
+        '<div style="font-size:10px;color:var(--text-muted);">'+fmtDateLong(p.date)+(p.area?' · '+p.area:'')+'</div></div>'+
+        '<span class="'+typeBadge(p.type)+'" style="flex-shrink:0;font-size:9px;">'+p.type+'</span></li>';
+    }).join('');
+}
+
+function toggleFairnessExtra(){ var extra=document.getElementById('fairness-extra'); var btn=document.getElementById('fairness-toggle-btn'); if(!extra||!btn) return; if(extra.style.display==='none'){extra.style.display='block';btn.textContent='▲ Show Less';}else{extra.style.display='none';btn.textContent='▼ Show More';} }
+
+// =====================================================================
+// LOG PATROL
+// =====================================================================
+var selectedTroops=[];
+function troopSuggest(val){ var box=document.getElementById('troop-suggest'); if(!val||val.length===0){box.style.display='none';return;} var q=val.toLowerCase(); var matches=sortTroops(D.troops.filter(isAvailable)).filter(function(t){return (t.rank+' '+t.name+' '+t.unit).toLowerCase().indexOf(q)>=0&&selectedTroops.indexOf(t.id)<0;}); if(matches.length===0){box.style.display='none';return;} box.style.display='block'; box.innerHTML=matches.slice(0,8).map(function(t){ return '<div class="suggest-item" onclick="addTroopToPatrol(\''+t.id+'\')"><strong>'+t.rank+'</strong> '+t.name+' <span style="color:var(--text-muted);font-size:11px;">('+t.unit+')</span></div>'; }).join(''); }
+function addTroopToPatrol(id){ if(selectedTroops.indexOf(id)<0) selectedTroops.push(id); document.getElementById('troop-search').value=''; document.getElementById('troop-suggest').style.display='none'; renderSelected(); }
+function removeTroopFromPatrol(id){ selectedTroops=selectedTroops.filter(function(x){return x!==id;}); renderSelected(); }
+function renderSelected(){
+  var el=document.getElementById('selected-troops');
+  if(D.troops.length===0){el.innerHTML='<span style="color:var(--text-muted);font-size:13px;">Add troops in Troops tab first.</span>';return;}
+  if(selectedTroops.length===0){
+    el.innerHTML='<div style="width:100%;"><span style="color:var(--text-muted);font-size:12px;">No troops selected. Tap to add:</span>'+
+      '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px;">'+
+      sortTroops(D.troops.filter(isAvailable)).map(function(t){
+        return '<button class="btn btn-ghost btn-sm" onclick="addTroopToPatrol(\''+t.id+'\')" style="font-size:11px;min-height:36px;">'+t.rank+' '+t.name+'</button>';
+      }).join('')+
+      '<button class="btn btn-ghost btn-sm" onclick="selectAll()" style="border-color:var(--tan);color:var(--tan);min-height:36px;">All</button></div></div>';
+    return;
+  }
+  el.innerHTML=sortTroops(D.troops.filter(function(t){return selectedTroops.indexOf(t.id)>=0;}))
+    .map(function(t){
+      return '<div style="display:flex;align-items:center;gap:6px;background:rgba(61,122,82,0.2);border:1px solid var(--green-light);padding:5px 10px;border-radius:6px;font-size:13px;">'+
+        t.rank+' '+t.name+
+        '<button onclick="removeTroopFromPatrol(\''+t.id+'\')" style="background:none;border:none;color:var(--red-light);cursor:pointer;font-size:18px;padding:0 2px;line-height:1;">×</button></div>';
+    }).join('');
+}
+function selectAll(){ D.troops.filter(isAvailable).forEach(function(t){if(selectedTroops.indexOf(t.id)<0) selectedTroops.push(t.id);}); renderSelected(); }
+function logPatrol(){
+  var dateRaw=document.getElementById('p-date').value;
+  var date=parseDate(dateRaw);
+  var type=document.getElementById('p-type').value;
+  var area=document.getElementById('p-area').value;
+  var dur=document.getElementById('p-dur').value;
+  var route=document.getElementById('p-route').value.trim();
+  var rem=document.getElementById('p-rem').value.trim();
+  if(!date){showAlert('log-alert','Please enter a valid date (DD/MM/YYYY).','danger');return;}
+  if(selectedTroops.length===0){showAlert('log-alert','Please select at least one troop.','danger');return;}
+  var dup=D.patrols.find(function(p){if(p.date!==date||p.type!==type)return false;return (p.troops||[]).some(function(tid){return selectedTroops.indexOf(tid)>=0;});});
+  var ptlId=nextPtlId();
+  var newPatrol={id:uid('p'),ptlId:ptlId,date:date,type:type,troops:selectedTroops.slice(),duration:dur,area:area,route:route,remarks:rem};
+  D.patrols.push(newPatrol);
+  remoteSavePatrol(newPatrol);
+  remoteSaveConfig();
+  audit('Patrol logged: '+ptlId+' | '+type+' | '+(area||'No sector')+' | '+selectedTroops.length+' troops');
+  if(dup) showAlert('log-alert','Patrol '+ptlId+' logged. WARNING: Possible duplicate.','warn');
+  else showAlert('log-alert','Patrol '+ptlId+' logged successfully!','success');
+  document.getElementById('p-dur').value=''; document.getElementById('p-area').value=''; document.getElementById('p-route').value=''; document.getElementById('p-rem').value='';
+  selectedTroops=[]; renderSelected(); updatePtlPreview();
+  document.getElementById('app-main').scrollTop=0;
+}
+
+// =====================================================================
+// PATROL LOG
+// =====================================================================
+function renderTable(){
+  var s=document.getElementById('fs').value.toLowerCase();
+  var ft=document.getElementById('ft').value;
+  var fa=document.getElementById('fa').value;
+  var ff=parseDate(document.getElementById('ff').value);
+  var fto=parseDate(document.getElementById('fto').value);
+  var sortMode=document.getElementById('fsort').value;
+  var rows=D.patrols.slice();
+  if(ft) rows=rows.filter(function(p){return p.type===ft;});
+  if(fa) rows=rows.filter(function(p){return p.area===fa;});
+  if(ff) rows=rows.filter(function(p){return p.date>=ff;});
+  if(fto) rows=rows.filter(function(p){return p.date<=fto;});
+  if(s) rows=rows.filter(function(p){return troopNames(p).toLowerCase().indexOf(s)>=0||p.type.toLowerCase().indexOf(s)>=0||(p.area||'').toLowerCase().indexOf(s)>=0||(p.remarks||'').toLowerCase().indexOf(s)>=0||(p.ptlId||'').toLowerCase().indexOf(s)>=0||(p.route||'').toLowerCase().indexOf(s)>=0;});
+  if(sortMode==='date-asc') rows.sort(function(a,b){return a.date.localeCompare(b.date);});
+  else if(sortMode==='name-asc') rows.sort(function(a,b){return troopNames(a).localeCompare(troopNames(b));});
+  else rows.sort(function(a,b){return b.date.localeCompare(a.date);});
+  document.getElementById('patrol-count-lbl').textContent='('+rows.length+')';
+  var summary=document.getElementById('filter-summary');
+  if(s&&rows.length>0){ var tH=rows.reduce(function(sum,p){return sum+(parseFloat(p.duration)||0);},0); summary.style.display=''; summary.innerHTML='<strong>'+rows.length+'</strong> patrols · <strong>'+tH.toFixed(1)+'h</strong> total'; } else { summary.style.display='none'; }
+  var container=document.getElementById('patrol-cards');
+  var em=document.getElementById('pempty');
+  if(rows.length===0){ container.innerHTML=''; em.style.display=''; return; }
+  em.style.display='none';
+  container.innerHTML=rows.map(function(p){
+    return '<div class="patrol-card">'+
+      '<div class="patrol-card-header">'+
+      '<div>'+
+      '<div class="patrol-card-id">'+(p.ptlId||'—')+' <span style="color:var(--text-muted);font-family:\'Courier New\',monospace;font-size:10px;">'+fmtDate(p.date)+'</span></div>'+
+      '<div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;">'+
+      '<span class="'+typeBadge(p.type)+'">'+p.type+'</span>'+
+      (p.area?'<span style="font-size:11px;color:var(--text-muted);">'+p.area+'</span>':'')+
+      (p.duration?'<span style="font-family:\'Courier New\',monospace;font-size:10px;color:var(--text-muted);">'+p.duration+'h</span>':'')+
+      '</div>'+
+      '</div>'+
+      '<div class="patrol-card-actions">'+
+      '<button class="count-pill" onclick="showTroopsModal(\''+p.id+'\')">'+(p.troops||[]).length+' trp</button>'+
+      '<button class="del-btn" onclick="confirmDel(\'patrol\',\''+p.id+'\')">×</button>'+
+      '</div></div>'+
+      (p.remarks?'<div style="font-size:11px;color:var(--text-muted);margin-top:5px;font-style:italic;">'+p.remarks+'</div>':'')+
+      (p.route?'<div style="font-size:10px;color:var(--text-muted);margin-top:3px;">📍 '+p.route+'</div>':'')+
+      '</div>';
+  }).join('');
+}
+function clearFilters(){ ['fs','ft','fa','ff','fto'].forEach(function(id){document.getElementById(id).value='';}); document.getElementById('fsort').value='date-desc'; renderTable(); }
+function showTroopsModal(patrolId){ var p=D.patrols.find(function(x){return x.id===patrolId;}); if(!p) return; document.getElementById('troops-modal-title').textContent=(p.ptlId||'')+' — '+fmtDateLong(p.date)+' — '+p.type; var list=(p.troops||[]).map(troopById).filter(Boolean); document.getElementById('troops-modal-body').innerHTML=list.length===0?'<div class="empty">No troops.</div>':sortTroops(list).map(function(t){ return '<div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:14px;">'+t.rank+' '+t.name+' <span style="color:var(--text-muted);font-size:11px;">('+t.unit+')</span></div>'; }).join(''); document.getElementById('troops-modal').classList.add('open'); }
+
+// =====================================================================
+// TROOPS
+// =====================================================================
+function saveTroop(){
+  var name=document.getElementById('t-name').value.trim();
+  var rank=document.getElementById('t-rank').value;
+  var unit=document.getElementById('t-unit').value.trim();
+  var sn=document.getElementById('t-sn').value.trim();
+  var status=document.getElementById('t-status').value;
+  var notes=document.getElementById('t-notes').value.trim();
+  var editId=document.getElementById('t-edit-id').value;
+  if(!name){showAlert('t-alert','Please enter a name.','danger');return;}
+  if(editId){
+    var t=D.troops.find(function(x){return x.id===editId;});
+    if(t){t.name=name;t.rank=rank;t.unit=unit;t.sn=sn;t.status=status;t.notes=notes;}
+    remoteSaveTroop(t); renderRoster();
+    showAlert('t-alert',rank+' '+name+' updated!','success');
+    audit('Troop updated: '+rank+' '+name); cancelEdit();
+  } else {
+    if(D.troops.find(function(t){return t.name.toLowerCase()===name.toLowerCase();})){showAlert('t-alert','Troop already exists.','danger');return;}
+    var newT={id:uid('t'),name:name,rank:rank,unit:unit,sn:sn,status:status,notes:notes};
+    D.troops.push(newT); remoteSaveTroop(newT); renderRoster();
+    showAlert('t-alert',rank+' '+name+' added!','success');
+    audit('Troop added: '+rank+' '+name);
+    ['t-name','t-unit','t-sn','t-notes'].forEach(function(id){document.getElementById(id).value='';});
+  }
+}
+var _pendingEditId=null;
+function confirmEditTroop(id){ _pendingEditId=id; document.getElementById('edit-confirm-modal').classList.add('open'); document.getElementById('edit-confirm-btn').onclick=function(){closeConfirmEdit();editTroop(_pendingEditId);_pendingEditId=null;}; }
+function closeConfirmEdit(){ document.getElementById('edit-confirm-modal').classList.remove('open'); }
+function editTroop(id){ var t=D.troops.find(function(x){return x.id===id;}); if(!t) return; document.getElementById('t-name').value=t.name; document.getElementById('t-rank').value=t.rank; document.getElementById('t-unit').value=t.unit||''; document.getElementById('t-sn').value=t.sn||''; document.getElementById('t-status').value=t.status||'available'; document.getElementById('t-notes').value=t.notes||''; document.getElementById('t-edit-id').value=id; document.getElementById('t-form-title').textContent='Edit Troop'; document.getElementById('t-submit-btn').textContent='Save Changes'; document.getElementById('t-cancel-btn').style.display=''; document.getElementById('app-main').scrollTop=0; }
+function cancelEdit(){ document.getElementById('t-edit-id').value=''; ['t-name','t-unit','t-sn','t-notes'].forEach(function(id){document.getElementById(id).value='';}); document.getElementById('t-status').value='available'; document.getElementById('t-form-title').textContent='Add Troop'; document.getElementById('t-submit-btn').textContent='Add Troop'; document.getElementById('t-cancel-btn').style.display='none'; }
+function archiveTroop(id){ var t=D.troops.find(function(x){return x.id===id;}); if(!t) return; if(!confirm('Archive '+t.rank+' '+t.name+'?')) return; t.archivedDate=new Date().toISOString().slice(0,10); D.archived.push(t); D.troops=D.troops.filter(function(x){return x.id!==id;}); remoteArchiveTroop(id,true); renderRoster(); audit('Troop archived: '+t.rank+' '+t.name); }
+function unarchiveTroop(id){ var t=D.archived.find(function(x){return x.id===id;}); if(!t) return; delete t.archivedDate; D.troops.push(t); D.archived=D.archived.filter(function(x){return x.id!==id;}); remoteArchiveTroop(id,false); renderRoster(); audit('Troop unarchived: '+t.rank+' '+t.name); }
+function renderRoster(){
+  var showArch=document.getElementById('show-arch').checked;
+  var troops=sortTroops(D.troops);
+  document.getElementById('troop-count').textContent=troops.length;
+  var el=document.getElementById('roster');
+  if(troops.length===0&&!showArch){el.innerHTML='<div class="empty">No troops yet.</div>';return;}
+  var html=troops.map(function(t){
+    var c=patrolCount(t.id),mo=monthlyPatrolCount(t.id),lp=lastPatrol(t.id),ds=daysSince(lp);
+    return '<div class="troop-card">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">'+
+      '<div style="cursor:pointer;flex:1;min-width:0;" onclick="showProfile(\''+t.id+'\')">'+
+      '<div class="troop-card-name">'+t.rank+' '+t.name+'</div>'+
+      '<div class="troop-card-sub">'+(t.unit||'')+(t.sn?' · '+t.sn:'')+'</div></div>'+
+      '<div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">'+
+      statusBadge(t.status||'available')+
+      (isAvailable(t)&&ds>7?'<span class="inactive-badge">'+(ds===9999?'N/A':ds+'d')+'</span>':'')+
+      '</div></div>'+
+      '<div class="troop-card-stats">'+
+      '<span class="troop-card-stat"><strong>'+c+'</strong> patrols</span>'+
+      '<span class="troop-card-stat"><strong>'+patrolHours(t.id).toFixed(1)+'h</strong> total</span>'+
+      '<span class="troop-card-stat"><strong>'+mo+'</strong> this month</span>'+
+      '<span class="troop-card-stat">Last: '+(lp?fmtDateLong(lp):'Never')+'</span>'+
+      '</div>'+
+      (t.notes?'<div class="notes-field">'+t.notes+'</div>':'')+
+      '<div class="troop-card-btns">'+
+      '<button class="btn btn-ghost btn-sm" onclick="showProfile(\''+t.id+'\')">Profile</button>'+
+      '<button class="btn btn-ghost btn-sm" onclick="confirmEditTroop(\''+t.id+'\')">Edit</button>'+
+      '<button class="btn btn-ghost btn-sm" onclick="archiveTroop(\''+t.id+'\')">Archive</button>'+
+      '<button class="del-btn" onclick="confirmDel(\'troop\',\''+t.id+'\')">×</button>'+
+      '</div></div>';
+  }).join('');
+  if(showArch&&D.archived.length>0){
+    html+='<div class="section-hdr">Archived ('+D.archived.length+')</div>';
+    html+=sortTroops(D.archived).map(function(t){
+      return '<div class="troop-card" style="opacity:0.6;border-style:dashed;">'+
+        '<div style="font-size:14px;font-weight:700;">'+t.rank+' '+t.name+' <span class="badge b-archived">Archived</span></div>'+
+        '<div style="font-size:11px;color:var(--text-muted);margin-top:3px;">'+(t.unit||'')+(t.archivedDate?' · Archived: '+fmtDateLong(t.archivedDate):'')+' · '+patrolCount(t.id)+' patrols</div>'+
+        '<div class="troop-card-btns" style="margin-top:8px;">'+
+        '<button class="btn btn-ghost btn-sm" onclick="showProfile(\''+t.id+'\',true)">Profile</button>'+
+        '<button class="btn btn-ghost btn-sm" onclick="unarchiveTroop(\''+t.id+'\')">Unarchive</button></div></div>';
+    }).join('');
+  }
+  el.innerHTML=html;
+}
+
+// =====================================================================
+// TROOP PROFILE
+// =====================================================================
+function showProfile(id, fromArch){
+  var t=D.troops.find(function(x){return x.id===id;})||D.archived.find(function(x){return x.id===id;});
+  if(!t) return;
+  var tp=D.patrols.filter(function(p){return (p.troops||[]).indexOf(id)>=0;}).sort(function(a,b){return b.date.localeCompare(a.date);});
+  var totalH=tp.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0);
+  var sectors=[];tp.forEach(function(p){if(p.area&&sectors.indexOf(p.area)<0)sectors.push(p.area);});
+  var types={};tp.forEach(function(p){types[p.type]=(types[p.type]||0)+1;});
+  var lp=tp.length?tp[0].date:null,ds=daysSince(lp);
+  var mo=new Date().getMonth(),yr=new Date().getFullYear();
+  var moPats=tp.filter(function(p){var d=new Date(p.date+'T12:00:00');return d.getMonth()===mo&&d.getFullYear()===yr;});
+  var moH=moPats.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0);
+  var earliest=tp.length?tp[tp.length-1].date:null;
+  document.getElementById('profile-title').textContent=t.rank+' '+t.name;
+  document.getElementById('profile-modal').dataset.troopId=id;
+  var html=
+    '<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border);">'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
+    '<div><div style="font-size:9px;color:var(--text-muted);font-family:\'Courier New\',monospace;">RANK</div><div style="font-size:15px;font-weight:700;">'+t.rank+'</div></div>'+
+    '<div><div style="font-size:9px;color:var(--text-muted);font-family:\'Courier New\',monospace;">STATUS</div><div style="margin-top:2px;">'+statusBadge(t.status||'available')+'</div></div>'+
+    '<div><div style="font-size:9px;color:var(--text-muted);font-family:\'Courier New\',monospace;">UNIT</div><div>'+(t.unit||'—')+'</div></div>'+
+    '<div><div style="font-size:9px;color:var(--text-muted);font-family:\'Courier New\',monospace;">SVC NO.</div><div>'+(t.sn||'—')+'</div></div>'+
+    '</div>'+
+    (t.notes?'<div class="notes-field">'+t.notes+'</div>':'')+
+    '</div>'+
+    '<div class="section-hdr">Statistics</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;">'+
+    '<div class="stat"><div class="stat-num">'+tp.length+'</div><div class="stat-label">Patrols</div></div>'+
+    '<div class="stat"><div class="stat-num">'+totalH.toFixed(0)+'</div><div class="stat-label">Hours</div></div>'+
+    '<div class="stat"><div class="stat-num">'+sectors.length+'</div><div class="stat-label">Sectors</div></div>'+
+    '<div class="stat" style="'+(ds>7?'border-color:var(--red-light);':'')+'">'+
+    '<div class="stat-num" style="'+(ds>7?'color:#ff6666;':'')+'">'+(ds===9999?'—':ds+'d')+'</div>'+
+    '<div class="stat-label">Inactive</div></div></div>'+
+    '<div class="section-hdr">This Month</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px;">'+
+    '<div class="stat"><div class="stat-num">'+moPats.length+'</div><div class="stat-label">Patrols</div></div>'+
+    '<div class="stat"><div class="stat-num">'+moH.toFixed(1)+'</div><div class="stat-label">Hours</div></div>'+
+    '</div>'+
+    (sectors.length>0?'<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Sectors: <strong style="color:var(--text);">'+sectors.join(', ')+'</strong></div>':'')+
+    (Object.keys(types).length>0?'<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Types: '+Object.entries(types).sort(function(a,b){return b[1]-a[1];}).map(function(kv){return '<span class="badge b-gray" style="margin-right:3px;margin-bottom:3px;">'+kv[0]+': '+kv[1]+'</span>';}).join('')+'</div>':'')+
+    '<div class="section-hdr">Patrol History ('+tp.length+')</div>'+
+    (tp.length===0?'<div class="empty">No patrols yet.</div>':
+      tp.map(function(p){
+        return '<div style="padding:8px 0;border-bottom:1px solid rgba(100,130,100,0.15);">'+
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:4px;">'+
+          '<div>'+
+          '<span style="font-family:\'Courier New\',monospace;color:var(--tan);font-size:10px;">'+(p.ptlId||'')+'</span> '+
+          '<span style="font-size:12px;">'+fmtDate(p.date)+'</span> '+
+          '<span class="'+typeBadge(p.type)+'" style="font-size:9px;">'+p.type+'</span>'+
+          (p.area?'<div style="font-size:11px;color:var(--text-muted);">'+p.area+'</div>':'')+
+          (p.remarks?'<div style="font-size:11px;color:var(--text-muted);font-style:italic;">'+p.remarks+'</div>':'')+
+          '</div>'+
+          '<span style="font-family:\'Courier New\',monospace;color:var(--text-muted);font-size:11px;flex-shrink:0;">'+(p.duration?p.duration+'h':'—')+'</span>'+
+          '</div></div>';
+      }).join(''));
+  document.getElementById('profile-body').innerHTML=html;
+  document.getElementById('profile-modal').classList.add('open');
+}
+
+function printProfile(){ var title=document.getElementById('profile-title').textContent; var body=document.getElementById('profile-body').innerHTML; var s=D.settings; var win=window.open('','_blank','width=900,height=700'); win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+title+'</title><style>body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:14px;}.print-hdr{text-align:center;border-bottom:2px solid #333;padding-bottom:12px;margin-bottom:20px;}.print-hdr h2{margin:0 0 4px;font-size:18px;}.section-hdr{font-family:\'Courier New\',monospace;font-size:10px;color:#2d5a3d;letter-spacing:2px;text-transform:uppercase;margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid #ccc;}.stat{background:#f5f5f5;border:1px solid #ccc;border-radius:4px;padding:8px;text-align:center;}.stat-num{font-size:20px;font-weight:700;color:#2d5a3d;font-family:\'Courier New\',monospace;}.stat-label{font-size:9px;color:#666;letter-spacing:1px;text-transform:uppercase;margin-top:2px;}.badge{display:inline-block;padding:2px 6px;border-radius:2px;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;font-family:\'Courier New\',monospace;background:#eee;border:1px solid #999;color:#333;}.notes-field{background:#f9f9f9;border:1px solid #ddd;border-radius:3px;padding:8px 10px;font-size:12px;color:#555;margin-top:6px;font-style:italic;}a,button{display:none!important;}@media print{body{padding:10px;}@page{margin:1cm;}}</style></head><body>'+
+  '<div class="print-hdr"><div style="font-size:10px;color:#999;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">'+(s.classification||'')+(s.classification?' — ':'')+''+(s.pob||'POB Mobaye')+'</div><h2>'+title+'</h2><p style="font-size:11px;color:#555;">Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p></div>'+body+'</body></html>'); win.document.close(); win.focus(); setTimeout(function(){win.print();},400); }
+
+function viewFullRecord(){
+  var id=document.getElementById('profile-modal').dataset.troopId;
+  var t=D.troops.find(function(x){return x.id===id;})||D.archived.find(function(x){return x.id===id;});
+  if(!t) return;
+  var tp=D.patrols.filter(function(p){return (p.troops||[]).indexOf(id)>=0;}).sort(function(a,b){return a.date.localeCompare(b.date);});
+  var totalH=tp.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0);
+  var earliest=tp.length?tp[0].date:null;
+  var sectors=[];tp.forEach(function(p){if(p.area&&sectors.indexOf(p.area)<0)sectors.push(p.area);});
+  var types={};tp.forEach(function(p){types[p.type]=(types[p.type]||0)+1;});
+  var s=D.settings; var todayStr=new Date().toISOString().slice(0,10);
+  var byMonth={};tp.forEach(function(p){var key=p.date.slice(0,7);if(!byMonth[key])byMonth[key]=[];byMonth[key].push(p);});
+  var monthKeys=Object.keys(byMonth).sort();
+  var win=window.open('','_blank','width=960,height=750');
+  var rowsHtml='';
+  if(tp.length===0){ rowsHtml='<tr><td colspan="6" style="text-align:center;color:#888;padding:20px;">No patrol records.</td></tr>'; }
+  else { monthKeys.forEach(function(mk){var mo=byMonth[mk];var moDate=new Date(mk+'-01T12:00:00');var moLabel=moDate.toLocaleString('default',{month:'long',year:'numeric'});var moH=mo.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0); rowsHtml+='<tr style="background:#e8f0e8;"><td colspan="6" style="font-family:\'Courier New\',monospace;font-size:11px;font-weight:700;color:#2d5a3d;letter-spacing:1px;text-transform:uppercase;padding:7px 10px;">'+moLabel+' · '+mo.length+' patrols · '+moH.toFixed(1)+'h</td></tr>'; mo.forEach(function(p){ rowsHtml+='<tr><td style="font-family:\'Courier New\',monospace;font-size:11px;color:#2d5a3d;white-space:nowrap;">'+(p.ptlId||'—')+'</td><td style="font-size:11px;white-space:nowrap;">'+fmtDate(p.date)+'</td><td><span style="display:inline-block;padding:2px 7px;border-radius:2px;font-size:10px;font-weight:700;background:#eef4ee;border:1px solid #9aaa9a;color:#333;">'+p.type+'</span></td><td style="font-size:12px;color:#555;">'+(p.area||'—')+'</td><td style="font-family:\'Courier New\',monospace;font-size:11px;">'+(p.duration?p.duration+'h':'—')+'</td><td style="font-size:11px;color:#777;">'+(p.remarks||'—')+'</td></tr>'; }); }); }
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Full Record — '+t.rank+' '+t.name+'</title><style>body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:14px;}.hdr{text-align:center;border-bottom:2px solid #2d5a3d;padding-bottom:14px;margin-bottom:20px;}.hdr h2{margin:0 0 4px;font-size:20px;color:#1a3a2a;}.hdr p{margin:2px 0;font-size:11px;color:#555;}.info-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;}.info-box{background:#f5f5f5;border:1px solid #ccc;border-radius:4px;padding:10px;text-align:center;}.info-num{font-size:22px;font-weight:700;color:#2d5a3d;font-family:\'Courier New\',monospace;}.info-lbl{font-size:10px;color:#666;letter-spacing:1px;text-transform:uppercase;margin-top:3px;}.sub-hdr{font-family:\'Courier New\',monospace;font-size:10px;color:#2d5a3d;letter-spacing:2px;text-transform:uppercase;margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid #ccc;}table{width:100%;border-collapse:collapse;font-size:13px;}th{background:#2d5a3d;color:#fff;font-family:\'Courier New\',monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:8px 10px;text-align:left;}td{padding:7px 10px;border-bottom:1px solid #e0e8e0;}tr:hover td{background:#f8fff8;}.footer{margin-top:20px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}@media print{@page{margin:1cm;}.no-print{display:none!important;}}</style></head><body>'+
+  '<div class="hdr"><div style="font-size:10px;color:#999;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;">'+(s.classification||'')+(s.classification?' — ':'')+''+(s.pob||'POB Mobaye')+'</div><h2>COMPLETE SERVICE RECORD</h2><p style="font-size:14px;font-weight:700;color:#1a3a2a;">'+t.rank+' '+t.name+(t.sn?' · SN: '+t.sn:'')+'</p><p>Unit: '+(t.unit||'—')+'</p><p>Period: <strong>'+(earliest?fmtDateLong(earliest):'N/A')+' — '+fmtDateLong(todayStr)+'</strong></p><p style="color:#888;">Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p></div>'+
+  '<div class="info-grid"><div class="info-box"><div class="info-num">'+tp.length+'</div><div class="info-lbl">Total Patrols</div></div><div class="info-box"><div class="info-num">'+totalH.toFixed(1)+'</div><div class="info-lbl">Total Hours</div></div><div class="info-box"><div class="info-num">'+sectors.length+'</div><div class="info-lbl">Sectors</div></div><div class="info-box"><div class="info-num">'+monthKeys.length+'</div><div class="info-lbl">Active Months</div></div></div>'+
+  (sectors.length>0?'<div class="sub-hdr">Sectors Covered</div><p style="font-size:13px;color:#444;margin-bottom:14px;">'+sectors.join(', ')+'</p>':'')+
+  (Object.keys(types).length>0?'<div class="sub-hdr">Patrol Types</div><p style="font-size:13px;color:#444;margin-bottom:14px;">'+Object.entries(types).sort(function(a,b){return b[1]-a[1];}).map(function(kv){return kv[0]+': <strong>'+kv[1]+'</strong>';}).join(' · ')+'</p>':'')+
+  '<div class="sub-hdr">Full Patrol History ('+tp.length+')</div><table><thead><tr><th>Patrol ID</th><th>Date</th><th>Type</th><th>Sector</th><th>Duration</th><th>Remarks</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'+
+  '<div class="footer">'+(s.pob||'POB Mobaye')+' · '+t.rank+' '+t.name+' · Record as of '+fmtDateLong(todayStr)+'</div>'+
+  '<div class="no-print" style="margin-top:20px;text-align:center;"><button onclick="window.print()" style="padding:10px 24px;background:#2d5a3d;color:#fff;border:none;border-radius:4px;font-size:13px;cursor:pointer;font-weight:700;">🖨 Print / Save as PDF</button></div>'+
+  '</body></html>'); win.document.close(); win.focus();
+}
+
+// =====================================================================
+// INACTIVE
+// =====================================================================
+var _inactiveDays=0,_inactiveRollingMonths=0;
+function setInactiveFilter(days,btn){ _inactiveDays=days; _inactiveRollingMonths=0; document.getElementById('inactive-rolling-sel').value=''; renderInactive(days); }
+function setInactiveRollingFilter(val){ _inactiveRollingMonths=parseInt(val)||0; _inactiveDays=0; renderInactive(0); }
+function renderInactive(days){
+  if(days===undefined) days=_inactiveDays;
+  var rollingMonths=_inactiveRollingMonths;
+  var list=D.troops.filter(isAvailable).map(function(t){return{t:t,lp:lastPatrol(t.id),ds:daysSince(lastPatrol(t.id)),c:patrolCount(t.id),h:patrolHours(t.id)};});
+  var labelEl=document.getElementById('inactive-filter-label');
+  if(rollingMonths>0){
+    var now=new Date(); var windowStart=new Date(now); windowStart.setMonth(now.getMonth()-rollingMonths); windowStart.setHours(0,0,0,0);
+    var windowStartISO=windowStart.toISOString().slice(0,10); var windowEndISO=now.toISOString().slice(0,10);
+    list=list.filter(function(x){var cnt=D.patrols.filter(function(p){return p.date>=windowStartISO&&p.date<=windowEndISO&&(p.troops||[]).indexOf(x.t.id)>=0;}).length;return cnt===0;});
+    if(labelEl) labelEl.textContent='No patrols in last '+rollingMonths+' month'+(rollingMonths!==1?'s':'')+' — '+list.length+' troop'+(list.length!==1?'s':'');
+  } else if(days>0){ list=list.filter(function(x){return x.ds>=days;}); if(labelEl) labelEl.textContent='Inactive '+days+'+ days — '+list.length+' troop'+(list.length!==1?'s':''); }
+  else { if(labelEl) labelEl.textContent='All available troops — '+list.length; }
+  list.sort(function(a,b){return b.ds-a.ds;});
+  var el=document.getElementById('inactive-list');
+  if(list.length===0){el.innerHTML='<div class="empty" style="grid-column:1/-1;">No troops matching this filter.</div>';return;}
+  el.innerHTML=list.map(function(x){var t=x.t,lp=x.lp,ds=x.ds,c=x.c,h=x.h;
+    var bc=ds>14?'b-red':ds>7?'b-orange':'b-gray';
+    var daysLbl=ds===9999?'NEVER':ds+' DAYS';
+    var daysColor=ds>14?'#ff6666':ds>7?'#ffb466':'var(--tan)';
+    return '<div class="inactive-card" onclick="showProfile(\''+t.id+'\')">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'+
+      '<span class="badge '+bc+'">'+daysLbl+'</span>'+
+      '<span class="badge b-gray" style="font-size:9px;">'+c+'ptl</span></div>'+
+      '<div class="ic-name">'+t.rank+' '+t.name+'</div>'+
+      '<div class="ic-unit">'+(t.unit||'No Unit')+' · '+h.toFixed(1)+'h</div>'+
+      '<div class="ic-meta">Last: '+(lp?fmtDateLong(lp):'Never')+'</div></div>';
+  }).join('');
+}
+function showInactiveModal(){ var list=D.troops.filter(function(t){return isAvailable(t)&&daysSince(lastPatrol(t.id))>7;}); document.getElementById('inactive-modal-body').innerHTML=list.length===0?'<div class="empty">No inactive troops.</div>':list.map(function(t){var lp=lastPatrol(t.id),ds=daysSince(lp);return '<div style="padding:10px 0;border-bottom:1px solid var(--border);"><div style="font-weight:700;">'+t.rank+' '+t.name+'</div><div style="font-size:12px;color:var(--text-muted);">Unit: '+(t.unit||'—')+' · Last: '+(lp?fmtDateLong(lp):'Never')+' · <span style="color:#ff8888;">'+(ds===9999?'Never patrolled':ds+' days ago')+'</span></div></div>';}).join(''); document.getElementById('inactive-modal').classList.add('open'); }
+function printInactive(){ var filterLbl=document.getElementById('inactive-filter-label')?document.getElementById('inactive-filter-label').textContent:''; var cards=document.getElementById('inactive-list').querySelectorAll('.inactive-card'); var s=D.settings; var rows=''; cards.forEach(function(card){var name=card.querySelector('.ic-name')?card.querySelector('.ic-name').textContent:'';var unit=card.querySelector('.ic-unit')?card.querySelector('.ic-unit').textContent:'';var meta=card.querySelector('.ic-meta')?card.querySelector('.ic-meta').textContent:'';var badge=card.querySelector('.badge')?card.querySelector('.badge').textContent:'';rows+='<tr><td>'+name+'</td><td>'+unit+'</td><td>'+meta+'</td><td><strong>'+badge+'</strong></td></tr>';}); var win=window.open('','_blank','width=900,height=700'); win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Inactive Troops Report</title><style>body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:14px;}.hdr{text-align:center;border-bottom:2px solid #2d5a3d;padding-bottom:12px;margin-bottom:20px;}.hdr h2{margin:0 0 4px;font-size:18px;color:#1a3a2a;}.hdr p{margin:2px 0;font-size:11px;color:#555;}table{width:100%;border-collapse:collapse;font-size:13px;}th{background:#2d5a3d;color:#fff;font-family:\'Courier New\',monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:8px 10px;text-align:left;}td{padding:7px 10px;border-bottom:1px solid #e0e8e0;}tr:nth-child(even) td{background:#f8f8f8;}.footer{margin-top:16px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}@media print{@page{margin:1.5cm;size:A4;}button{display:none!important;}}</style></head><body><div class="hdr"><div style="font-size:10px;color:#999;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">'+(s.classification||'')+(s.classification?' — ':'')+''+(s.pob||'POB Mobaye')+'</div><h2>INACTIVE TROOPS REPORT</h2><p>'+filterLbl+'</p><p>Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p></div><table><thead><tr><th>Name &amp; Rank</th><th>Unit / Hours</th><th>Last Patrol</th><th>Inactivity</th></tr></thead><tbody>'+rows+'</tbody></table><div class="footer">'+(s.pob||'POB Mobaye')+' Patrol Tracker · Inactive Troops Report · '+nowStr()+'</div><div style="margin-top:16px;text-align:center;"><button onclick="window.print()" style="padding:10px 24px;background:#2d5a3d;color:#fff;border:none;border-radius:4px;font-size:13px;cursor:pointer;font-weight:700;">🖨 Print</button></div></body></html>'); win.document.close(); win.focus(); setTimeout(function(){win.print();},400); }
+
+// =====================================================================
+// REPORT
+// =====================================================================
+function thisWeek(){ var n=new Date(),day=n.getDay(); var mon=new Date(n); mon.setDate(n.getDate()-(day===0?6:day-1)); var dd=String(mon.getDate()).padStart(2,'0'),mm=String(mon.getMonth()+1).padStart(2,'0'); document.getElementById('week-start').value=dd+'/'+mm+'/'+mon.getFullYear(); genReport(); }
+function onReportModeChange(){ var mode=document.getElementById('report-mode').value; var weekWrap=document.getElementById('report-week-wrap'); var moWrap=document.getElementById('report-month-wrap'); if(mode==='weekly'){weekWrap.style.display='flex';moWrap.style.display='none';}else if(mode==='monthly'){weekWrap.style.display='none';moWrap.style.display='flex';}else{weekWrap.style.display='none';moWrap.style.display='none';} genReport(); }
+function genReport(){
+  var mode=document.getElementById('report-mode')?document.getElementById('report-mode').value:'weekly';
+  var rc=document.getElementById('rep-content'),rs=document.getElementById('rep-summary');
+  var s=D.settings; var cmdR=document.getElementById('cmd-remarks').value.trim();
+  var moNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var periodLabel='',patrols=[],periodStart='',periodEnd='';
+  if(mode==='total'){ patrols=D.patrols.slice(); if(patrols.length>0){var sorted=patrols.slice().sort(function(a,b){return a.date.localeCompare(b.date);});periodStart=fmtDateLong(sorted[0].date);periodEnd=fmtDateLong(sorted[sorted.length-1].date);}else{periodStart='N/A';periodEnd='N/A';} periodLabel='Total Up To Date'; }
+  else if(mode==='monthly'){ var selMo=parseInt(document.getElementById('report-month-sel').value)||new Date().getMonth()+1; var selYr=parseInt(document.getElementById('report-year-sel')?document.getElementById('report-year-sel').value:new Date().getFullYear())||new Date().getFullYear(); patrols=D.patrols.filter(function(p){var d=new Date(p.date+'T12:00:00');return d.getMonth()===(selMo-1)&&d.getFullYear()===selYr;}); periodLabel='Monthly — '+moNames[selMo-1]+' '+selYr; periodStart=moNames[selMo-1]+' '+selYr; periodEnd=moNames[selMo-1]+' '+selYr; }
+  else { var ws=parseDate(document.getElementById('week-start').value); if(!ws){rc.innerHTML='<div class="alert al-info">Select a week start date.</div>';rs.innerHTML='';return;} var mon=new Date(ws+'T12:00:00');mon.setHours(0,0,0,0); var sun=new Date(mon);sun.setDate(mon.getDate()+6);sun.setHours(23,59,59,999); patrols=D.patrols.filter(function(p){var pd=new Date(p.date+'T12:00:00');return pd>=mon&&pd<=sun;}); var sunDate=new Date(ws+'T12:00:00');sunDate.setDate(sunDate.getDate()+6); var sunISO=sunDate.toISOString().slice(0,10); periodLabel='Weekly Patrol Report'; periodStart=fmtDateLong(ws); periodEnd=fmtDateLong(sunISO); }
+  var totalH=patrols.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0);
+  var deployed=new Set(patrols.reduce(function(a,p){return a.concat(p.troops||[]);},[]));
+  var notDep=D.troops.filter(function(t){return !deployed.has(t.id);});
+  rs.innerHTML=
+    '<div class="stat"><div class="stat-num">'+patrols.length+'</div><div class="stat-label">Patrols</div></div>'+
+    '<div class="stat"><div class="stat-num">'+deployed.size+'</div><div class="stat-label">Deployed</div></div>'+
+    '<div class="stat"><div class="stat-num">'+(totalH>0?totalH.toFixed(1):'—')+'</div><div class="stat-label">Hours</div></div>'+
+    '<div class="stat"><div class="stat-num">'+notDep.length+'</div><div class="stat-label">Not Dep.</div></div>';
+  var maxP=Math.max(1,patrols.length);
+  var html='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:14px;">'+
+    '<div style="font-family:\'Courier New\',monospace;font-size:10px;color:var(--tan);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">'+periodLabel+'</div>'+
+    '<div style="font-size:12px;color:var(--text-muted);line-height:1.8;">'+
+    '<span>Unit: <strong style="color:var(--text);">'+(s.pob||'POB Mobaye')+'</strong></span><br>'+
+    (s.mission?'<span>Op: <strong style="color:var(--text);">'+s.mission+'</strong></span><br>':'')+
+    '<span>Period: <strong style="color:var(--text);">'+periodStart+(periodEnd&&periodEnd!==periodStart?' — '+periodEnd:'')+'</strong></span><br>'+
+    (s.commander?'<span>Commanding: <strong style="color:var(--text);">'+s.commander+'</strong></span><br>':'')+
+    (s.classification?'<span class="badge b-red">'+s.classification+'</span>':'')+
+    '</div>'+
+    (cmdR?'<div style="margin-top:10px;padding:8px;background:rgba(200,184,122,0.08);border-left:3px solid var(--tan);font-size:13px;"><div style="font-size:9px;color:var(--tan);font-family:\'Courier New\',monospace;letter-spacing:1px;margin-bottom:3px;">COMMANDER\'S REMARKS</div>'+cmdR+'</div>':'')+
+    '</div>';
+  var allT=sortTroops(D.troops);
+  var activeT=allT.filter(function(t){return deployed.has(t.id);});
+  var inactiveT=allT.filter(function(t){return !deployed.has(t.id);});
+  var notDepLabel=mode==='weekly'?'NOT DEPLOYED THIS WEEK':mode==='monthly'?'NOT DEPLOYED THIS PERIOD':'NEVER DEPLOYED';
+  function troopBlock(t,i){
+    var tp=patrols.filter(function(p){return (p.troops||[]).indexOf(t.id)>=0;});
+    var tH=tp.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0);
+    var part=tp.length>0,pct=Math.round(tp.length/maxP*100);
+    var medal=i===0&&part?'🥇 ':i===1&&part?'🥈 ':i===2&&part?'🥉 ':'';
+    return '<div class="troop-row">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">'+
+      '<div style="cursor:pointer;" onclick="showProfile(\''+t.id+'\')">'+
+      '<div style="font-size:13px;font-weight:700;">'+medal+t.rank+' '+t.name+'</div>'+
+      '<div style="font-size:10px;color:var(--text-muted);">'+(t.unit||'')+'</div></div>'+
+      '<span class="badge '+(part?'b-green':'b-red')+'" style="font-size:9px;">'+(part?'DEPLOYED':'NOT DEP.')+'</span></div>'+
+      '<div style="display:flex;gap:8px;font-size:11px;color:var(--text-muted);margin-bottom:6px;flex-wrap:wrap;">'+
+      '<span>'+tp.length+' patrol'+(tp.length!==1?'s':'')+'</span>'+
+      (tH>0?'<span>'+tH.toFixed(1)+'h</span>':'')+
+      (tp.length>0?'<span>'+Array.from(new Set(tp.map(function(p){return p.area;}).filter(Boolean))).join(', ')+'</span>':'')+
+      '</div>'+
+      '<div style="font-size:9px;color:var(--text-muted);margin-bottom:2px;font-family:\'Courier New\',monospace;">PARTICIPATION: '+pct+'%</div>'+
+      '<div class="pbar"><div class="pbar-fill" style="width:'+pct+'%;background:'+(part?'var(--green-light)':'var(--red)')+'"></div></div>'+
+      (tp.length>0?'<div style="margin-top:8px;">'+tp.map(function(p){return '<div style="padding:4px 0;border-bottom:1px solid rgba(100,130,100,0.15);font-size:11px;"><span style="font-family:\'Courier New\',monospace;color:var(--tan);font-size:9px;">'+(p.ptlId||'')+'</span> '+fmtDate(p.date)+' <span class="'+typeBadge(p.type)+'" style="font-size:9px;">'+p.type+'</span>'+(p.area?' · '+p.area:'')+' '+(p.duration?'<span style="font-family:\'Courier New\',monospace;color:var(--text-muted);font-size:10px;">'+p.duration+'h</span>':'')+'</div>';}).join('')+'</div>':'')+'</div>';
+  }
+  html+=activeT.map(troopBlock).join('');
+  if(inactiveT.length>0){
+    html+='<div style="font-family:\'Courier New\',monospace;font-size:10px;color:var(--red-light);letter-spacing:1px;text-transform:uppercase;margin:12px 0 8px;padding:8px;background:rgba(139,26,26,0.15);border:1px solid rgba(200,50,50,0.3);border-radius:6px;">'+notDepLabel+' ('+inactiveT.length+')</div>';
+    html+=inactiveT.map(troopBlock).join('');
+  }
+  rc.innerHTML=html;
+}
+function exportCSV(){ var ws=parseDate(document.getElementById('week-start').value); if(!ws){alert('Select a week start date.');return;} var mon=new Date(ws+'T12:00:00');mon.setHours(0,0,0,0); var sun=new Date(mon);sun.setDate(mon.getDate()+6);sun.setHours(23,59,59,999); var wk=D.patrols.filter(function(p){var pd=new Date(p.date+'T12:00:00');return pd>=mon&&pd<=sun;}); var csv='Patrol ID,Date,Type,Sector,Route,Duration(h),Troops,Remarks\n'; wk.forEach(function(p){var troops=(p.troops||[]).map(troopLabel).join(' | ');csv+='"'+(p.ptlId||'')+'","'+fmtDate(p.date)+'","'+p.type+'","'+(p.area||'')+'","'+(p.route||'')+'","'+(p.duration||'')+'","'+troops+'","'+((p.remarks||'').replace(/"/g,'""'))+'"\n';}); dlFile(csv,'text/csv','POB_Mobaye_WeeklyReport_'+ws+'.csv'); }
+function exportCSVFull(){ var csv='Patrol ID,Date,Type,Sector,Route,Duration(h),Troops,Remarks\n'; D.patrols.slice().sort(function(a,b){return b.date.localeCompare(a.date);}).forEach(function(p){var troops=(p.troops||[]).map(troopLabel).join(' | ');csv+='"'+(p.ptlId||'')+'","'+fmtDate(p.date)+'","'+p.type+'","'+(p.area||'')+'","'+(p.route||'')+'","'+(p.duration||'')+'","'+troops+'","'+((p.remarks||'').replace(/"/g,'""'))+'"\n';}); dlFile(csv,'text/csv','POB_Mobaye_AllPatrols.csv'); }
+
+function printPatrolSummary(){
+  var s=D.settings;
+  var cards=document.getElementById('patrol-cards').querySelectorAll('.patrol-card');
+  var countLbl=document.getElementById('patrol-count-lbl').textContent;
+  var rowsHtml='';
+  cards.forEach(function(card){
+    var id_el=card.querySelector('.patrol-card-id');
+    var badge=card.querySelector('.badge');
+    if(!id_el) return;
+    var txt=id_el.textContent;
+    rowsHtml+='<tr><td>'+txt+'</td><td>'+(badge?badge.textContent:'')+'</td></tr>';
+  });
+  var win=window.open('','_blank','width=900,height=700');
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Patrol Summary</title><style>body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:13px;}.hdr{text-align:center;border-bottom:2px solid #2d5a3d;padding-bottom:12px;margin-bottom:16px;}.hdr h2{margin:0 0 4px;font-size:18px;color:#1a3a2a;}.hdr p{margin:2px 0;font-size:11px;color:#555;}table{width:100%;border-collapse:collapse;}th{background:#2d5a3d;color:#fff;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:7px 8px;text-align:left;}td{padding:6px 8px;border-bottom:1px solid #e0e8e0;}.footer{margin-top:14px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:8px;}@media print{@page{margin:1cm;size:A4 landscape;}button{display:none!important;}}</style></head><body><div class="hdr"><div style="font-size:10px;color:#999;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">'+(s.classification||'')+(s.classification?' — ':'')+''+(s.pob||'POB Mobaye')+'</div><h2>PATROL LOG SUMMARY</h2><p>'+countLbl+' · Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p></div>'+
+  '<table><thead><tr><th>Patrol Info</th><th>Type</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'+
+  '<div class="footer">'+(s.pob||'POB Mobaye')+' Patrol Tracker Mobile · '+nowStr()+'</div>'+
+  '<div style="margin-top:14px;text-align:center;"><button onclick="window.print()" style="padding:10px 24px;background:#2d5a3d;color:#fff;border:none;border-radius:4px;font-size:13px;cursor:pointer;font-weight:700;">🖨 Print / Save PDF</button></div>'+
+  '</body></html>'); win.document.close(); win.focus(); setTimeout(function(){win.print();},400);
+}
+
+// =====================================================================
+// HANDOVER
+// =====================================================================
+function renderHandover(){
+  var now=new Date(); var last30=new Date(now); last30.setDate(now.getDate()-30); var last30ISO=last30.toISOString().slice(0,10);
+  var recentPats=D.patrols.filter(function(p){return p.date>=last30ISO;});
+  var totalH=recentPats.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0);
+  var s=D.settings; var smap={};recentPats.forEach(function(p){if(p.area)smap[p.area]=(smap[p.area]||0)+1;});
+  var sectors=Object.keys(smap).sort(function(a,b){return smap[b]-smap[a];});
+  var html=
+    '<div class="lh-block"><div class="lh-title">Unit Status — '+nowStr()+'</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">'+
+    '<div class="stat"><div class="stat-num">'+D.troops.length+'</div><div class="stat-label">Strength</div></div>'+
+    '<div class="stat"><div class="stat-num">'+D.troops.filter(isAvailable).length+'</div><div class="stat-label">Available</div></div>'+
+    '<div class="stat"><div class="stat-num">'+D.troops.filter(function(t){return !isAvailable(t);}).length+'</div><div class="stat-label">Unavailable</div></div>'+
+    '</div>'+
+    '<div style="font-size:12px;display:flex;gap:8px;flex-wrap:wrap;">'+sortTroops(D.troops.filter(function(t){return !isAvailable(t);})).map(function(t){return '<span>'+statusBadge(t.status)+' '+t.rank+' '+t.name+'</span>';}).join('')+'</div></div>'+
+    '<div class="lh-block"><div class="lh-title">Patrol Activity — Last 30 Days</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px;">'+
+    '<div class="stat"><div class="stat-num">'+recentPats.length+'</div><div class="stat-label">Patrols</div></div>'+
+    '<div class="stat"><div class="stat-num">'+totalH.toFixed(0)+'</div><div class="stat-label">Hours</div></div>'+
+    '<div class="stat"><div class="stat-num">'+sectors.length+'</div><div class="stat-label">Sectors</div></div>'+
+    '</div>'+
+    '<div style="font-size:12px;color:var(--text-muted);">Sectors: <strong style="color:var(--text);">'+(sectors.join(', ')||'None')+'</strong></div></div>'+
+    '<div class="lh-block"><div class="lh-title">Troop Performance</div>'+
+    sortTroops(D.troops).map(function(t){var c30=recentPats.filter(function(p){return (p.troops||[]).indexOf(t.id)>=0;}).length;var h30=recentPats.filter(function(p){return (p.troops||[]).indexOf(t.id)>=0;}).reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0);var lp=lastPatrol(t.id),ds=daysSince(lp);return '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:1px solid rgba(100,130,100,0.15);font-size:13px;flex-wrap:wrap;gap:4px;cursor:pointer;" onclick="showProfile(\''+t.id+'\')"><div><strong>'+t.rank+' '+t.name+'</strong> '+statusBadge(t.status||'available')+'</div><div style="font-size:11px;color:var(--text-muted);">30d: <strong style="color:var(--text);">'+c30+'ptl/'+h30.toFixed(1)+'h</strong> · Last: <strong style="color:'+(ds>14?'#ff8888':'var(--text)');'">'+(lp?fmtDateLong(lp):'Never')+'</strong></div></div>';}).join('')+'</div>'+
+    '<div class="lh-block"><div class="lh-title">Inactive Troops (Action Required)</div>'+
+    (function(){var inn=sortTroops(D.troops.filter(function(t){return isAvailable(t)&&daysSince(lastPatrol(t.id))>7;}));if(inn.length===0) return '<div style="color:var(--text-muted);font-size:13px;">All available troops patrolled within 7 days.</div>';return inn.map(function(t){var ds=daysSince(lastPatrol(t.id));return '<div style="padding:8px 0;border-bottom:1px solid rgba(100,130,100,0.15);font-size:13px;"><strong>'+t.rank+' '+t.name+'</strong> — <span style="color:#ff8888;">'+(ds===9999?'Never patrolled':ds+' days inactive')+'</span></div>';}).join('');})()+
+    '</div>'+
+    '<div class="lh-block"><div class="lh-title">Commander\'s Handover Notes</div>'+
+    '<textarea style="width:100%;min-height:80px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:10px;border-radius:8px;font-family:\'Segoe UI\',Arial,sans-serif;font-size:14px;" placeholder="Enter handover remarks, pending tasks, outstanding issues..."></textarea></div>';
+  document.getElementById('handover-content').innerHTML=html;
+}
+
+// =====================================================================
+// BACKUP & RESTORE
+// =====================================================================
+function doExport(){ var backup={version:4,exportDate:new Date().toISOString(),exportedBy:'POB Mobaye Patrol Tracker Mobile',data:D}; dlFile(JSON.stringify(backup,null,2),'application/json','POB_Mobaye_Backup_'+new Date().toISOString().slice(0,10)+'.json'); audit('Full backup exported'); }
+function dlFile(content,type,filename){ var blob=new Blob([content],{type:type}); var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a);a.click(); document.body.removeChild(a);URL.revokeObjectURL(a.href); }
+var pendingRestore=null;
+function previewRestore(input){ var file=input.files[0]; if(!file) return; var reader=new FileReader(); reader.onload=function(e){ try{var backup=JSON.parse(e.target.result);if(!backup.data) throw new Error('Invalid');pendingRestore=backup;var d=backup.data;var prev=document.getElementById('restore-preview');prev.style.display='';prev.className='alert al-info';prev.innerHTML='Valid backup: <strong>'+(backup.exportDate?backup.exportDate.slice(0,10):'?')+'</strong><br>Troops: <strong>'+(d.troops||[]).length+'</strong> · Archived: <strong>'+(d.archived||[]).length+'</strong> · Patrols: <strong>'+(d.patrols||[]).length+'</strong><br><strong style="color:#ff9999;">This will overwrite all current data.</strong>';document.getElementById('restore-btn').style.display='';document.getElementById('restore-cancel').style.display='';}catch(err){var prev=document.getElementById('restore-preview');prev.style.display='';prev.className='alert al-danger';prev.innerHTML='Invalid backup file.';document.getElementById('restore-btn').style.display='none';document.getElementById('restore-cancel').style.display='none';} }; reader.readAsText(file); }
+function doRestore(){ if(!pendingRestore||!pendingRestore.data){alert('No valid backup.');return;} D=pendingRestore.data; if(!D.archived) D.archived=[]; if(!D.counter) D.counter=D.patrols.length+1; if(!D.audit) D.audit=[]; if(!D.settings) D.settings={pob:'POB Mobaye',mission:'',commander:'',classification:'CONFIDENTIAL'}; if(!D.config) D.config={types:DEFAULT_TYPES.slice(),sectors:DEFAULT_SECTORS.slice(),routes:DEFAULT_ROUTES.slice(),ranks:DEFAULT_RANKS.slice()}; if(!D.config.ranks) D.config.ranks=DEFAULT_RANKS.slice(); RANKS=D.config.ranks; D.troops.forEach(function(t){if(!t.status)t.status='available';if(!t.notes)t.notes='';}); saveData(); var allTroops=D.troops.concat(D.archived); Promise.all(allTroops.map(function(t){return apiFetch('/troops',{method:'POST',body:JSON.stringify(t)}).catch(function(){});}).concat(D.patrols.map(function(p){return apiFetch('/patrols',{method:'POST',body:JSON.stringify({id:p.id,ptl_id:p.ptlId,date:p.date,type:p.type,troops:p.troops,area:p.area,duration:p.duration,route:p.route,remarks:p.remarks})}).catch(function(){});}))).then(function(){return remoteSaveConfig();}); D.archived.forEach(function(t){apiFetch('/troops/'+t.id+'/archive',{method:'PATCH',body:JSON.stringify({archived:true})}).catch(function(){});}); document.getElementById('restore-alert').innerHTML='<div class="alert al-success">Restore successful!</div>'; cancelRestore(); applySettings(); populateDropdowns(); populateRankDropdowns(); renderDash(); renderSysInfo(); audit('Data restored from backup'); setTimeout(function(){document.getElementById('restore-alert').innerHTML='';},5000); }
+function cancelRestore(){ pendingRestore=null; document.getElementById('restore-file').value=''; document.getElementById('restore-preview').style.display='none'; document.getElementById('restore-btn').style.display='none'; document.getElementById('restore-cancel').style.display='none'; }
+function renderSysInfo(){ var sz=JSON.stringify(D).length; document.getElementById('sys-info').innerHTML='Version: v4 (Mobile)<br>Active Troops: '+D.troops.length+'<br>Archived Troops: '+(D.archived||[]).length+'<br>Total Patrols: '+D.patrols.length+'<br>Total Hours: '+D.patrols.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0).toFixed(1)+'h<br>Patrol Types: '+D.config.types.length+'<br>Sectors: '+D.config.sectors.length+'<br>Audit Entries: '+D.audit.length+'<br>Next Patrol ID: PTL-'+new Date().getFullYear()+'-'+String(D.counter).padStart(3,'0')+'<br>Storage Used: ~'+(sz/1024).toFixed(1)+' KB<br>API: '+API_URL; }
+
+// =====================================================================
+// DELETE
+// =====================================================================
+var pendingDel=null;
+function confirmDel(type,id){ pendingDel={type:type,id:id}; document.getElementById('del-modal').classList.add('open'); document.getElementById('del-confirm').onclick=function(){ if(pendingDel.type==='patrol'){var p=D.patrols.find(function(x){return x.id===pendingDel.id;});if(p) audit('Patrol deleted: '+(p.ptlId||p.id));D.patrols=D.patrols.filter(function(p){return p.id!==pendingDel.id;});remoteDeletePatrol(pendingDel.id);}else{var t=D.troops.find(function(x){return x.id===pendingDel.id;});if(t) audit('Troop deleted: '+t.rank+' '+t.name);D.troops=D.troops.filter(function(t){return t.id!==pendingDel.id;});D.patrols.forEach(function(p){p.troops=(p.troops||[]).filter(function(id){return id!==pendingDel.id;});});remoteDeleteTroop(pendingDel.id);} saveData(); closeModal('del-modal'); pendingDel=null; var active=document.querySelector('.section.active'); if(active){var aid=active.id;if(aid==='dashboard') renderDash();if(aid==='patrol-log') renderTable();if(aid==='troops') renderRoster();if(aid==='report') genReport();if(aid==='inactive') renderInactive(0);} }; }
+
+['del-modal','troops-modal','profile-modal','inactive-modal'].forEach(function(id){ document.getElementById(id).addEventListener('click',function(e){if(e.target===this)closeModal(id);}); });
+document.getElementById('edit-confirm-modal').addEventListener('click',function(e){if(e.target===this)closeConfirmEdit();});
+
+// =====================================================================
+// DATE PICKER CALENDAR
+// =====================================================================
+var _calState={};
+function toggleCal(calId,inputEl){ var wrap=document.getElementById(calId); if(!wrap) return; var isOpen=wrap.classList.contains('open'); document.querySelectorAll('.cal-wrap.open').forEach(function(w){w.classList.remove('open');}); if(isOpen) return; var val=inputEl?inputEl.value:''; var parsed=parseDate(val); var now=new Date(); var yr=now.getFullYear(),mo=now.getMonth(); if(parsed){var dt=new Date(parsed+'T12:00:00');yr=dt.getFullYear();mo=dt.getMonth();} _calState[calId]={year:yr,month:mo,inputId:inputEl?inputEl.id:null}; renderCal(calId); wrap.classList.add('open'); }
+function renderCal(calId){ var s=_calState[calId]; if(!s) return; var wrap=document.getElementById(calId); if(!wrap) return; var mo=s.month,yr=s.year; var moNames=['January','February','March','April','May','June','July','August','September','October','November','December']; var today=new Date(); var todayStr=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0'); var selStr=''; if(s.inputId){var raw=document.getElementById(s.inputId)?document.getElementById(s.inputId).value:'';selStr=parseDate(raw);} var first=new Date(yr,mo,1).getDay(); var daysInMonth=new Date(yr,mo+1,0).getDate(); var days=''; var dow=['Su','Mo','Tu','We','Th','Fr','Sa']; days+=dow.map(function(d){return '<div class="cal-dow">'+d+'</div>';}).join(''); for(var b=0;b<first;b++) days+='<div class="cal-day empty"></div>'; for(var d=1;d<=daysInMonth;d++){var ds=yr+'-'+String(mo+1).padStart(2,'0')+'-'+String(d).padStart(2,'0'); var cls='cal-day'; if(ds===todayStr) cls+=' today'; if(ds===selStr) cls+=' selected'; days+='<div class="'+cls+'" onclick="pickDate(\''+calId+'\',\''+ds+'\')">'+d+'</div>';} wrap.innerHTML='<div class="cal-head"><button class="cal-nav" onclick="calShift(\''+calId+'\',-1,event)">‹</button><span class="cal-month-lbl">'+moNames[mo]+' '+yr+'</span><button class="cal-nav" onclick="calShift(\''+calId+'\',1,event)">›</button></div><div class="cal-grid">'+days+'</div>'; }
+function calShift(calId,delta,evt){ if(evt){evt.stopPropagation();evt.preventDefault();} var s=_calState[calId]; if(!s) return; s.month+=delta; if(s.month>11){s.month=0;s.year++;} if(s.month<0){s.month=11;s.year--;} renderCal(calId); }
+function pickDate(calId,isoStr){ var s=_calState[calId]; if(!s) return; if(s.inputId){var inp=document.getElementById(s.inputId);if(inp){var parts=isoStr.split('-');inp.value=parts[2]+'/'+parts[1]+'/'+parts[0];if(s.inputId==='ff'||s.inputId==='fto') renderTable();if(s.inputId==='week-start') genReport();}} document.getElementById(calId).classList.remove('open'); }
+
+// =====================================================================
+// ASYNC INIT
+// =====================================================================
+(function initApp(){
+  loadData().then(function(){
+    try{
+      applySettings();
+      populateDropdowns();
+      populateRankDropdowns();
+      populateReportYears();
+      var _nowM=new Date().getMonth()+1;
+      if(document.getElementById('report-month-sel')) document.getElementById('report-month-sel').value=_nowM;
+      updatePtlPreview();
+      thisWeek();
+      renderDash();
+      renderTable();
+      renderRoster();
+      renderInactive(0);
+      document.getElementById('print-date-line').textContent='Generated: '+nowStr();
+      startCountdown();
+    }catch(e){console.error('Init error:',e);}
+  });
+})();
+</script>
+</body>
+</html>
