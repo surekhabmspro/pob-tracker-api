@@ -1,0 +1,298 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Deep military night background -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0a1a0d"/>
+      <stop offset="100%" stop-color="#040c06"/>
+    </linearGradient>
+    <!-- Ground gradient -->
+    <linearGradient id="ground" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1a3a1a"/>
+      <stop offset="100%" stop-color="#0d1f0d"/>
+    </linearGradient>
+    <!-- Jeep body gradient -->
+    <linearGradient id="jeepBody" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#3a5e2a"/>
+      <stop offset="100%" stop-color="#1e3a14"/>
+    </linearGradient>
+    <!-- Jeep hood -->
+    <linearGradient id="jeepHood" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4a7030"/>
+      <stop offset="100%" stop-color="#2a4a1a"/>
+    </linearGradient>
+    <!-- Soldier uniform -->
+    <linearGradient id="uniform" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4a6040"/>
+      <stop offset="100%" stop-color="#2a3c24"/>
+    </linearGradient>
+    <!-- Skin tone -->
+    <linearGradient id="skin" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#c8956a"/>
+      <stop offset="100%" stop-color="#a87050"/>
+    </linearGradient>
+    <!-- Gold accent -->
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e8c84a"/>
+      <stop offset="100%" stop-color="#b89020"/>
+    </linearGradient>
+    <!-- Tire -->
+    <radialGradient id="tire" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#2a2a2a"/>
+      <stop offset="70%" stop-color="#1a1a1a"/>
+      <stop offset="100%" stop-color="#333"/>
+    </radialGradient>
+    <!-- Window glass -->
+    <linearGradient id="glass" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4a8a6a" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#2a5a4a" stop-opacity="0.4"/>
+    </linearGradient>
+    <!-- Rifle metal -->
+    <linearGradient id="rifle" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5a5a4a"/>
+      <stop offset="100%" stop-color="#2a2a1a"/>
+    </linearGradient>
+    <!-- Shadow filter -->
+    <filter id="dropshadow">
+      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#000" flood-opacity="0.5"/>
+    </filter>
+    <filter id="softshadow">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- ── BACKGROUND ── -->
+  <rect width="512" height="512" rx="100" ry="100" fill="url(#bg)"/>
+
+  <!-- Stars in sky (top portion) -->
+  <g fill="#ffffff" opacity="0.5">
+    <circle cx="60" cy="55" r="1.5"/>
+    <circle cx="110" cy="38" r="1"/>
+    <circle cx="160" cy="68" r="1.5"/>
+    <circle cx="200" cy="42" r="1"/>
+    <circle cx="250" cy="28" r="2"/>
+    <circle cx="310" cy="52" r="1"/>
+    <circle cx="370" cy="35" r="1.5"/>
+    <circle cx="420" cy="60" r="1"/>
+    <circle cx="460" cy="44" r="1.5"/>
+    <circle cx="85" cy="90" r="1"/>
+    <circle cx="430" cy="85" r="1"/>
+    <circle cx="340" cy="78" r="1"/>
+  </g>
+
+  <!-- ── GROUND ── -->
+  <rect x="0" y="380" width="512" height="132" rx="0" fill="url(#ground)"/>
+  <!-- Ground line / horizon -->
+  <line x1="30" y1="382" x2="482" y2="382" stroke="#2a5a2a" stroke-width="1.5" opacity="0.6"/>
+  <!-- Ground texture marks -->
+  <g stroke="#1a3a1a" stroke-width="1" opacity="0.5">
+    <line x1="50" y1="395" x2="80" y2="395"/>
+    <line x1="100" y1="400" x2="140" y2="400"/>
+    <line x1="370" y1="395" x2="410" y2="395"/>
+    <line x1="430" y1="400" x2="470" y2="400"/>
+  </g>
+
+  <!-- ── PATROL JEEP ── -->
+  <g filter="url(#dropshadow)">
+
+    <!-- Jeep shadow on ground -->
+    <ellipse cx="265" cy="384" rx="155" ry="10" fill="#000" opacity="0.35"/>
+
+    <!-- REAR WHEEL -->
+    <circle cx="148" cy="370" r="46" fill="url(#tire)"/>
+    <circle cx="148" cy="370" r="34" fill="#111"/>
+    <circle cx="148" cy="370" r="22" fill="#222"/>
+    <!-- Wheel spokes -->
+    <g stroke="#333" stroke-width="4">
+      <line x1="148" y1="348" x2="148" y2="392"/>
+      <line x1="126" y1="370" x2="170" y2="370"/>
+      <line x1="132" y1="354" x2="164" y2="386"/>
+      <line x1="164" y1="354" x2="132" y2="386"/>
+    </g>
+    <!-- Wheel hub -->
+    <circle cx="148" cy="370" r="9" fill="#3a3a3a"/>
+    <circle cx="148" cy="370" r="4" fill="#555"/>
+
+    <!-- FRONT WHEEL -->
+    <circle cx="358" cy="370" r="46" fill="url(#tire)"/>
+    <circle cx="358" cy="370" r="34" fill="#111"/>
+    <circle cx="358" cy="370" r="22" fill="#222"/>
+    <g stroke="#333" stroke-width="4">
+      <line x1="358" y1="348" x2="358" y2="392"/>
+      <line x1="336" y1="370" x2="380" y2="370"/>
+      <line x1="342" y1="354" x2="374" y2="386"/>
+      <line x1="374" y1="354" x2="342" y2="386"/>
+    </g>
+    <circle cx="358" cy="370" r="9" fill="#3a3a3a"/>
+    <circle cx="358" cy="370" r="4" fill="#555"/>
+
+    <!-- CHASSIS / UNDERCARRIAGE -->
+    <rect x="100" y="340" width="310" height="34" rx="4" fill="#1a2e12"/>
+
+    <!-- JEEP BODY (main cab) -->
+    <path d="M108 260 L108 344 L408 344 L408 260 Z" fill="url(#jeepBody)" rx="2"/>
+
+    <!-- HOOD / BONNET (front, slopes down) -->
+    <path d="M362 285 L408 260 L440 280 L440 344 L362 344 Z" fill="url(#jeepHood)"/>
+    <!-- Hood crease line -->
+    <line x1="390" y1="264" x2="440" y2="290" stroke="#2a4a18" stroke-width="2" opacity="0.6"/>
+
+    <!-- WINDSHIELD FRAME -->
+    <path d="M230 190 L358 190 L370 265 L218 265 Z" fill="#1a2e12"/>
+    <!-- WINDSHIELD GLASS -->
+    <path d="M237 197 L352 197 L363 258 L226 258 Z" fill="url(#glass)"/>
+    <!-- Windshield wiper -->
+    <line x1="280" y1="254" x2="340" y2="205" stroke="#1a2e12" stroke-width="3" stroke-linecap="round"/>
+
+    <!-- ROOF / ROLL BAR -->
+    <rect x="215" y="175" width="148" height="18" rx="5" fill="#2a4a1a"/>
+    <!-- Roll bar uprights -->
+    <rect x="218" y="175" width="10" height="95" rx="3" fill="#2a4a1a"/>
+    <rect x="353" y="175" width="10" height="95" rx="3" fill="#2a4a1a"/>
+
+    <!-- SIDE PANEL DETAIL -->
+    <!-- Door outline rear -->
+    <rect x="118" y="268" width="88" height="70" rx="3" fill="none" stroke="#2a4a1a" stroke-width="2.5"/>
+    <!-- Door handle -->
+    <rect x="196" y="298" width="14" height="5" rx="2" fill="#1a3a10"/>
+    <!-- Door outline front -->
+    <rect x="214" y="268" width="88" height="70" rx="3" fill="none" stroke="#2a4a1a" stroke-width="2.5"/>
+
+    <!-- HEADLIGHT (front) -->
+    <ellipse cx="436" cy="298" rx="14" ry="12" fill="#f0e88a" opacity="0.9"/>
+    <ellipse cx="436" cy="298" rx="10" ry="8" fill="#ffffff" opacity="0.8"/>
+    <!-- Headlight beam -->
+    <path d="M450 292 L490 278 L490 320 L450 306 Z" fill="#f0e88a" opacity="0.12"/>
+
+    <!-- TAIL LIGHT -->
+    <rect x="100" y="295" width="10" height="18" rx="2" fill="#cc2222" opacity="0.9"/>
+
+    <!-- SPARE TYRE (rear, mounted) -->
+    <circle cx="108" cy="296" r="28" fill="#1a1a1a" stroke="#2a3a20" stroke-width="3"/>
+    <circle cx="108" cy="296" r="20" fill="#111"/>
+    <circle cx="108" cy="296" r="10" fill="#1a1a1a"/>
+    <circle cx="108" cy="296" r="4" fill="#333"/>
+
+    <!-- BUMPER front -->
+    <rect x="428" y="332" width="18" height="16" rx="3" fill="#1a2a10"/>
+    <!-- Bumper rear -->
+    <rect x="66" y="332" width="18" height="16" rx="3" fill="#1a2a10"/>
+
+    <!-- JERRY CAN on side -->
+    <rect x="390" y="290" width="18" height="34" rx="3" fill="#2a4a1a" stroke="#1a3a10" stroke-width="1.5"/>
+    <rect x="393" y="287" width="12" height="6" rx="2" fill="#1a3a10"/>
+
+    <!-- ANTENNA -->
+    <line x1="360" y1="175" x2="345" y2="90" stroke="#2a4a1a" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="345" cy="88" r="4" fill="#3a6a2a"/>
+
+  </g>
+
+  <!-- ── SOLDIER ── -->
+  <g filter="url(#softshadow)">
+
+    <!-- Soldier shadow -->
+    <ellipse cx="468" cy="386" rx="28" ry="6" fill="#000" opacity="0.3"/>
+
+    <!-- BOOTS -->
+    <rect x="452" y="358" width="18" height="26" rx="3" fill="#1a1a14"/>
+    <rect x="474" y="358" width="18" height="26" rx="3" fill="#1a1a14"/>
+    <!-- Boot soles -->
+    <rect x="450" y="378" width="22" height="6" rx="2" fill="#111"/>
+    <rect x="472" y="378" width="22" height="6" rx="2" fill="#111"/>
+
+    <!-- LEGS / TROUSERS -->
+    <rect x="453" y="300" width="16" height="62" rx="3" fill="url(#uniform)"/>
+    <rect x="475" y="300" width="16" height="62" rx="3" fill="url(#uniform)"/>
+    <!-- Trouser crease -->
+    <line x1="461" y1="305" x2="461" y2="358" stroke="#2a3c1c" stroke-width="1" opacity="0.5"/>
+    <line x1="483" y1="305" x2="483" y2="358" stroke="#2a3c1c" stroke-width="1" opacity="0.5"/>
+
+    <!-- TORSO / BODY ARMOUR -->
+    <rect x="447" y="220" width="54" height="84" rx="6" fill="url(#uniform)"/>
+    <!-- Plate carrier / vest detail -->
+    <rect x="452" y="228" width="44" height="60" rx="4" fill="#3a5030" stroke="#2a3c20" stroke-width="1.5"/>
+    <!-- Vest pocket straps -->
+    <line x1="460" y1="245" x2="488" y2="245" stroke="#2a3c20" stroke-width="2.5"/>
+    <line x1="460" y1="258" x2="488" y2="258" stroke="#2a3c20" stroke-width="2.5"/>
+    <!-- Pouches on vest -->
+    <rect x="455" y="265" width="14" height="18" rx="2" fill="#2a3c20"/>
+    <rect x="477" y="265" width="14" height="18" rx="2" fill="#2a3c20"/>
+
+    <!-- LEFT ARM (weapon side, forward) -->
+    <path d="M447 228 L432 230 L428 280 L444 282 L448 280 Z" fill="url(#uniform)" rx="3"/>
+    <!-- RIGHT ARM (at side) -->
+    <path d="M501 228 L516 232 L516 275 L500 278 Z" fill="url(#uniform)" rx="3"/>
+
+    <!-- GLOVES / HANDS -->
+    <ellipse cx="435" cy="284" rx="10" ry="8" fill="#2a2a1a"/>
+    <ellipse cx="512" cy="278" rx="9" ry="7" fill="#2a2a1a"/>
+
+    <!-- NECK -->
+    <rect x="464" y="207" width="20" height="18" rx="4" fill="url(#skin)"/>
+
+    <!-- HEAD -->
+    <ellipse cx="474" cy="192" rx="28" ry="30" fill="url(#skin)"/>
+
+    <!-- HELMET -->
+    <path d="M446 186 Q446 152 474 150 Q502 152 502 186 L502 196 L446 196 Z" fill="#3a4e2a"/>
+    <!-- Helmet rim -->
+    <path d="M443 193 Q443 197 474 198 Q505 197 505 193" fill="none" stroke="#2a3c1a" stroke-width="3"/>
+    <!-- Helmet straps -->
+    <line x1="452" y1="196" x2="456" y2="214" stroke="#2a3c1a" stroke-width="2"/>
+    <line x1="496" y1="196" x2="492" y2="214" stroke="#2a3c1a" stroke-width="2"/>
+    <!-- Chin strap -->
+    <path d="M456 214 Q474 218 492 214" fill="none" stroke="#2a3c1a" stroke-width="2"/>
+    <!-- Helmet band -->
+    <path d="M448 183 Q448 172 474 170 Q500 172 500 183" fill="none" stroke="#2a3c1a" stroke-width="1.5" opacity="0.5"/>
+
+    <!-- FACE DETAILS -->
+    <!-- Eyes -->
+    <ellipse cx="463" cy="194" rx="5" ry="4" fill="#2a1a0a"/>
+    <ellipse cx="485" cy="194" rx="5" ry="4" fill="#2a1a0a"/>
+    <!-- Eye whites -->
+    <ellipse cx="461" cy="193" rx="2" ry="2" fill="#fff" opacity="0.6"/>
+    <ellipse cx="483" cy="193" rx="2" ry="2" fill="#fff" opacity="0.6"/>
+    <!-- Nose -->
+    <path d="M472 198 Q474 204 476 198" fill="none" stroke="#8a6040" stroke-width="1.5"/>
+    <!-- Mouth / stern expression -->
+    <line x1="466" y1="208" x2="482" y2="208" stroke="#8a6040" stroke-width="2" stroke-linecap="round"/>
+
+    <!-- ── RIFLE (AK / M4 style) ── -->
+    <!-- Rifle butt (bottom) -->
+    <rect x="420" y="318" width="22" height="10" rx="3" fill="#3a2a10"/>
+    <!-- Rifle stock -->
+    <rect x="426" y="270" width="10" height="52" rx="3" fill="#3a2a10"/>
+    <!-- Receiver / action body -->
+    <rect x="424" y="238" width="14" height="36" rx="2" fill="url(#rifle)"/>
+    <!-- Magazine -->
+    <path d="M426 258 L432 258 L435 285 L421 285 Z" fill="#3a3a28"/>
+    <!-- Barrel (extends up) -->
+    <rect x="428" y="170" width="6" height="70" rx="2" fill="url(#rifle)"/>
+    <!-- Front sight -->
+    <rect x="426" y="168" width="10" height="5" rx="1" fill="#444"/>
+    <rect x="430" y="163" width="2" height="7" fill="#555"/>
+    <!-- Gas tube / rail on top -->
+    <rect x="427" y="220" width="8" height="20" rx="1" fill="#4a4a3a"/>
+    <!-- Carry handle / rear sight -->
+    <path d="M424 238 L426 228 L436 228 L438 238" fill="none" stroke="#3a3a2a" stroke-width="2.5"/>
+    <!-- Sling attachment -->
+    <circle cx="431" cy="310" r="4" fill="none" stroke="#2a2a1a" stroke-width="2"/>
+
+  </g>
+
+  <!-- ── GOLD ACCENT LINE (ground level) ── -->
+  <line x1="46" y1="382" x2="466" y2="382" stroke="url(#gold)" stroke-width="2" opacity="0.4"/>
+
+  <!-- ── APP LABEL (subtle, bottom) ── -->
+  <text x="256" y="470" text-anchor="middle"
+        font-family="Arial Black, Arial, sans-serif" font-weight="900"
+        font-size="32" fill="url(#gold)" letter-spacing="6" opacity="0.85">
+    PATROL
+  </text>
+  <text x="256" y="497" text-anchor="middle"
+        font-family="Arial, sans-serif" font-weight="400"
+        font-size="16" fill="#5a8a5a" letter-spacing="4" opacity="0.7">
+    TRACKER
+  </text>
+
+</svg>
