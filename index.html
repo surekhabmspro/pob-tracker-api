@@ -16,19 +16,20 @@
 <title>Patrol Tracker — POB Mobaye</title>
 <style>
 :root{
-  --green:#163024;--green-mid:#2f6b4a;--green-light:#3f9468;
-  --tan:#e8c96a;--tan-dark:#c4a030;--red:#a82828;--red-light:#e44141;
-  --white:#f8f6ef;--bg:#0a1410;--surface:#13241b;--surface2:#1c3225;
-  --text:#f3f5f0;--text-muted:#9bb5a4;--border:#3a5a47;
-  --orange:#e0954a;--blue:#4a72c4;
-  --nav-h:60px;--header-h:56px;
+  /* Rich military dark theme */
+  --green:#0f2318;--green-mid:#1e5c36;--green-light:#27a062;
+  --tan:#f0cd6a;--tan-dark:#c8a030;--red:#c0282a;--red-light:#f04545;
+  --white:#f9f7f0;--bg:#080f0a;--surface:#0f1f14;--surface2:#162c1e;
+  --text:#eef5ee;--text-muted:#8aaf96;--border:#2a4e38;
+  --orange:#e89040;--blue:#4a80d4;
+  --nav-h:60px;--header-h:58px;
   --sidebar-w:230px;
-  --fs-base:16px;
 }
 body.light-mode{
-  --bg:#eef2ec;--surface:#ffffff;--surface2:#dfeadd;--text:#0e1f14;
-  --text-muted:#3a5a44;--border:#7fa589;--green-light:#1f7a45;--green-mid:#175c34;
-  --tan:#8a6200;--tan-dark:#6b4b00;--red:#a01f1f;--red-light:#c41e1e;--orange:#b85f12;
+  /* Clean, high-contrast light mode */
+  --bg:#f2f6f2;--surface:#ffffff;--surface2:#e6efe6;--text:#0a1a0e;
+  --text-muted:#2d5a3a;--border:#7ab08a;--green-light:#1a7a42;--green-mid:#115c30;
+  --tan:#7a5500;--tan-dark:#5a3d00;--red:#b81c1c;--red-light:#d42020;--orange:#a85010;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;overflow:hidden;}
@@ -174,32 +175,107 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--te
 .section{display:none;padding:16px;padding-bottom:20px;max-width:1000px;margin:0 auto;overflow-x:hidden;}
 .section.active{display:block;}
 
-/* ── DESKTOP LAYOUT OVERRIDES (≥900px, pointer:fine i.e. mouse/trackpad) ── */
-@media (min-width:900px) and (pointer:fine){
+/* ═══════════════════════════════════════════════
+   DESKTOP OVERRIDES  ≥900px
+═══════════════════════════════════════════════ */
+@media (min-width:900px) and (pointer:fine),(min-width:1024px){
+  /* ── Sidebar nav ── */
   #sidebar-nav{display:block;}
   #bottom-nav,#more-menu,#more-overlay{display:none!important;}
+
+  /* ── Sidebar wider, more refined on desktop ── */
+  #sidebar-nav{width:var(--sidebar-w);padding:16px 0;}
+  .sidebar-label{font-size:11px;letter-spacing:2.5px;padding:14px 20px 5px;}
+  .sidebar-item{padding:12px 20px;font-size:15px;border-left-width:4px;gap:12px;}
+  .sidebar-item .si-icon{font-size:18px;}
+
+  /* ── Main area shifts right of sidebar ── */
   #app-main{left:var(--sidebar-w);}
   html,body{overflow:hidden;}
-  .section{padding:20px 24px;}
-  /* Desktop: logo shows full title */
-  .logo-text h1{font-size:16px;letter-spacing:2px;}
-  .logo-text p{display:block;}
-}
-/* Fallback for desktops without fine pointer detection (older browsers) */
-@media (min-width:1024px){
-  #sidebar-nav{display:block;}
-  #bottom-nav,#more-menu,#more-overlay{display:none!important;}
-  #app-main{left:var(--sidebar-w);}
+
+  /* ── Section: max-width, generous padding ── */
+  .section{padding:24px 28px;max-width:1200px;}
+
+  /* ── Header ── */
+  #app-header{padding:0 20px;}
+  .logo-text h1{font-size:17px;letter-spacing:2.5px;}
+  .logo-text p{display:block;font-size:12px;}
+  .logo-hex{width:40px;height:40px;}
+
+  /* ── Dashboard: stat bar spans full width ── */
+  .stat-grid{grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;}
+  .stat-num{font-size:34px;}
+  .stat-label{font-size:12px;margin-top:5px;}
+  .stat{padding:18px 12px;border-radius:12px;}
+
+  /* ── Dashboard 2-col layout ── */
+  .dash-row2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px;}
+
+  /* ── Cards ── */
+  .card{border-radius:12px;padding:22px;margin-bottom:18px;}
+  .card-title{font-size:13px;margin-bottom:14px;padding-bottom:10px;}
+
+  /* ── Patrol cards: table-like rows on desktop ── */
+  .patrol-card{padding:14px 16px;}
+  .patrol-card-id{font-size:15px;}
+
+  /* ── Troop cards: 2-col grid on desktop ── */
+  .troop-card{padding:16px;}
+  .troop-card-name{font-size:17px;}
+
+  /* ── Inactive grid: 3 cols on desktop ── */
+  .inactive-grid{grid-template-columns:repeat(3,1fr);gap:14px;}
+
+  /* ── Forms: wider inputs ── */
+  input,select,textarea{font-size:16px;padding:12px 14px;}
+  label.field-label{font-size:12px;margin-bottom:5px;}
+  .btn{font-size:15px;padding:13px 20px;min-height:46px;}
+  .btn-sm{font-size:13px;padding:8px 14px;min-height:36px;}
+
+  /* ── Report/Handover: wider troop rows ── */
+  .troop-row{padding:14px 16px;}
+
+  /* ── Fairness bars ── */
+  .fairness-bar{height:8px;}
+
+  /* ── Audit ── */
+  .audit-time{min-width:130px;font-size:12px;}
+  .audit-msg{font-size:14px;}
 }
 
-/* ── DESKTOP DASHBOARD GRID ── */
+/* ── Extra wide: 5-col stats ── */
+@media (min-width:1280px){
+  :root{--sidebar-w:250px;}
+  .stat-grid{grid-template-columns:repeat(5,1fr);}
+  .inactive-grid{grid-template-columns:repeat(4,1fr);}
+  .section{max-width:1400px;}
+}
+
+/* ── Desktop: recent-list looks like a clean data table ── */
 @media (min-width:900px){
-  .dash-row2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
-  .stat-grid{grid-template-columns:repeat(7,1fr);}
+  .recent-item{padding:12px 4px;font-size:15px;gap:14px;}
+  .recent-list{border:1px solid var(--border);border-radius:10px;overflow:hidden;padding:0 12px;}
+  .recent-item:last-child{border-bottom:none;}
+
+  /* Patrol log cards become compact rows */
+  .patrol-card{display:flex;align-items:center;gap:14px;padding:12px 16px;margin-bottom:6px;border-radius:8px;}
+  .patrol-card-header{flex:1;flex-direction:row;align-items:center;justify-content:flex-start;gap:12px;margin-bottom:0;}
+  .patrol-card-meta{margin-top:0;font-size:13px;}
+  .patrol-card-actions{flex-shrink:0;}
+
+  /* Troop cards: 2-col grid */
+  #roster{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .troop-card{margin-bottom:0;}
+
+  /* Fairness rows: bigger and more readable */
+  #fairness-view .fairness-bar{height:10px;}
 }
-@media (min-width:1024px){
-  .stat-grid{grid-template-columns:repeat(7,1fr);}
-}
+
+/* ── Light mode desktop surface overrides for better contrast ── */
+body.light-mode .card{box-shadow:0 2px 10px rgba(0,50,20,0.08);}
+body.light-mode #sidebar-nav{background:var(--surface);border-right-color:var(--border);}
+body.light-mode .sidebar-item:hover{background:#e6f0e6;}
+body.light-mode .sidebar-item.active{background:#d4ecda;color:var(--green-light);}
 
 /* ── CARDS ── */
 .card{background:var(--surface);border:1.5px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:0 2px 8px rgba(0,0,0,0.18);max-width:100%;overflow:hidden;}
@@ -561,46 +637,57 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 <div id="dashboard" class="section active">
   <div id="dash-alerts"></div>
 
-  <!-- Stats Bar -->
+  <!-- Stats Bar — 4 cols mobile, 4-5 cols desktop via CSS -->
   <div class="stat-grid" id="dash-stats"></div>
 
-  <!-- Monthly Stats + Inactive in 2-col -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
-    <div class="card" style="margin-bottom:0;">
-      <div class="card-title" style="font-size:9px;letter-spacing:1px;">Monthly</div>
-      <div id="monthly-stats"></div>
-    </div>
-    <div class="card" style="margin-bottom:0;">
-      <div class="card-title" style="font-size:9px;letter-spacing:1px;">
-        <span>🔴 Inactive</span>
-        <button class="btn btn-ghost btn-sm" onclick="showTab('inactive')" style="font-size:8px;padding:2px 6px;min-height:24px;">All →</button>
+  <!-- 2-col on desktop: left=Monthly+Inactive, right=Fairness -->
+  <div class="dash-row2">
+    <!-- LEFT column -->
+    <div>
+      <!-- Monthly Stats -->
+      <div class="card">
+        <div class="card-title">
+          📅 Monthly Overview
+          <span style="font-size:11px;color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0;" id="month-year-lbl"></span>
+        </div>
+        <div id="monthly-stats"></div>
       </div>
-      <div id="dash-inactive"></div>
+      <!-- Inactive -->
+      <div class="card" style="margin-bottom:0;">
+        <div class="card-title">
+          🔴 Inactive Troops
+          <button class="btn btn-ghost btn-sm" onclick="showTab('inactive')">View All →</button>
+        </div>
+        <div id="dash-inactive"></div>
+      </div>
+    </div>
+    <!-- RIGHT column -->
+    <div>
+      <!-- Deployment Fairness -->
+      <div class="card" style="margin-bottom:0;height:100%;box-sizing:border-box;">
+        <div class="card-title">
+          ⚖ Deployment Fairness
+          <span style="font-size:11px;color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0;">This Month</span>
+        </div>
+        <div id="fairness-view"></div>
+      </div>
     </div>
   </div>
 
-  <!-- Deployment Fairness -->
-  <div class="card">
-    <div class="card-title">
-      Deployment Fairness
-      <span style="font-size:9px;color:var(--text-muted);font-weight:400;">(This Month)</span>
-    </div>
-    <div id="fairness-view"></div>
-  </div>
-
-  <!-- Recent Patrols -->
+  <!-- Recent Patrols — full width -->
   <div class="card" style="margin-bottom:0;">
     <div class="card-title">
-      <span>Recent Patrols</span>
-      <button class="btn btn-ghost btn-sm" onclick="showTab('patrol-log')" style="font-size:9px;padding:3px 8px;min-height:28px;">View All</button>
+      🗂 Recent Patrols
+      <button class="btn btn-ghost btn-sm" onclick="showTab('patrol-log')">View All →</button>
     </div>
     <ul class="recent-list" id="recent-list"></ul>
   </div>
 
   <!-- Credit -->
-  <div style="text-align:center;padding:14px 0 4px;border-top:1px solid var(--border);margin-top:10px;">
-    <span style="font-family:'Courier New',monospace;font-size:9px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;line-height:1.8;">
-      Designed &amp; Created by <strong style="color:var(--tan);">Major Shrawan Mallik</strong><br>POB Mobaye · NEP-LIB-IV, MINUSCA
+  <div style="text-align:center;padding:18px 0 6px;border-top:1px solid var(--border);margin-top:14px;">
+    <span style="font-family:'Courier New',monospace;font-size:11px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;line-height:2;">
+      Designed &amp; Created by <strong style="color:var(--tan);">Major Shrawan Mallik</strong><br>
+      POB Mobaye · NEP-LIB-IV, MINUSCA
     </span>
   </div>
 </div>
@@ -1594,78 +1681,100 @@ function renderDash(){
   var inactive7=availTroops.filter(function(t){return daysSince(lastPatrol(t.id))>7;});
   var mo=now.getMonth(),yr=now.getFullYear();
   var moPats=D.patrols.filter(function(p){var d=new Date(p.date+'T12:00:00');return d.getMonth()===mo&&d.getFullYear()===yr;});
+  var moNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var moAbbr=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
+  // ── STAT CARDS ──────────────────────────────────────────────────────
   document.getElementById('dash-stats').innerHTML=
-    '<div class="stat"><div class="stat-num">'+D.troops.length+'</div><div class="stat-label">Troops</div></div>'+
-    '<div class="stat clickable" onclick="renderRoster()"><div class="stat-num">'+availTroops.length+'</div><div class="stat-label">Available</div></div>'+
-    '<div class="stat" style="border-color:var(--green-light);"><div class="stat-num" style="color:#5ddd88;">'+moPats.length+'</div><div class="stat-label">This Month</div></div>'+
-    '<div class="stat clickable" onclick="showInactiveModal()" style="border-color:'+(inactive7.length>0?'var(--red-light)':'var(--border)')+';">'+
-    '<div class="stat-num" style="color:'+(inactive7.length>0?'#ff6666':'var(--tan)')+'">'+inactive7.length+'</div>'+
-    '<div class="stat-label">Inactive >7d</div></div>';
+    '<div class="stat"><div class="stat-num">'+D.troops.length+'</div><div class="stat-label">Total Troops</div></div>'+
+    '<div class="stat clickable" onclick="showTab(\'troops\')"><div class="stat-num" style="color:var(--green-light);">'+availTroops.length+'</div><div class="stat-label">Available</div></div>'+
+    '<div class="stat" style="border-color:var(--green-light);"><div class="stat-num" style="color:var(--green-light);">'+moPats.length+'</div><div class="stat-label">Patrols This Month</div></div>'+
+    '<div class="stat clickable" onclick="showTab(\'inactive\')" style="border-color:'+(inactive7.length>0?'var(--red-light)':'var(--border)')+';">'+
+    '<div class="stat-num" style="color:'+(inactive7.length>0?'var(--red-light)':'var(--tan)')+';">'+inactive7.length+'</div>'+
+    '<div class="stat-label">Inactive &gt;7 Days</div></div>';
 
+  // ── ALERTS ──────────────────────────────────────────────────────────
   var alerts='';
-  if(wkPats.length===0) alerts+='<div class="alert al-warn">No patrol logged this week.</div>';
+  if(wkPats.length===0) alerts+='<div class="alert al-warn" style="margin-bottom:14px;">⚠ No patrol logged this week.</div>';
   document.getElementById('dash-alerts').innerHTML=alerts;
 
-  // Monthly stats
+  // ── MONTHLY STATS ───────────────────────────────────────────────────
   var moH=moPats.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0);
   var best=null,bestC=0;
   D.troops.forEach(function(t){var c=moPats.filter(function(p){return (p.troops||[]).indexOf(t.id)>=0;}).length;if(c>bestC){bestC=c;best=t;}});
   var smap={};moPats.forEach(function(p){if(p.area)smap[p.area]=(smap[p.area]||0)+1;});
   var topSector=Object.keys(smap).sort(function(a,b){return smap[b]-smap[a];})[0];
-  var moNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  document.getElementById('monthly-stats').innerHTML=
-    '<div style="font-family:\'Courier New\',monospace;font-size:9px;color:var(--tan);letter-spacing:1px;margin-bottom:8px;text-transform:uppercase;">'+moNames[mo]+' '+yr+'</div>'+
-    '<div style="display:flex;flex-direction:column;gap:5px;">'+
-    '<div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:var(--text-muted);">Patrols</span><span style="color:var(--tan);font-family:\'Courier New\',monospace;">'+moPats.length+'</span></div>'+
-    '<div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:var(--text-muted);">Hours</span><span style="color:var(--tan);font-family:\'Courier New\',monospace;">'+moH.toFixed(1)+'h</span></div>'+
-    '<div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:var(--text-muted);">Most Active</span><span style="color:var(--tan);font-size:11px;text-align:right;max-width:60px;word-break:break-word;">'+(best?best.name.split(',')[0]+'('+bestC+')':'—')+'</span></div>'+
-    (topSector?'<div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:var(--text-muted);">Top Sector</span><span style="color:var(--tan);font-size:10px;text-align:right;max-width:70px;word-break:break-word;">'+topSector+'</span></div>':'')+
-    '</div>';
+  var moTroops=new Set(moPats.reduce(function(a,p){return a.concat(p.troops||[]);},[]));
 
-  // Inactive panel
+  document.getElementById('monthly-stats').innerHTML=
+    '<div style="font-family:\'Courier New\',monospace;font-size:11px;color:var(--tan);letter-spacing:1.5px;margin-bottom:12px;text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:8px;">'+moAbbr[mo]+' '+yr+'</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'+
+    '<div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center;">'+
+    '<div style="font-size:26px;font-weight:800;color:var(--green-light);font-family:\'Courier New\',monospace;">'+moPats.length+'</div>'+
+    '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-top:3px;">Patrols</div></div>'+
+    '<div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center;">'+
+    '<div style="font-size:26px;font-weight:800;color:var(--tan);font-family:\'Courier New\',monospace;">'+moH.toFixed(1)+'</div>'+
+    '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-top:3px;">Hours</div></div>'+
+    '<div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center;">'+
+    '<div style="font-size:26px;font-weight:800;color:var(--orange);font-family:\'Courier New\',monospace;">'+moTroops.size+'</div>'+
+    '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-top:3px;">Deployed</div></div>'+
+    '<div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center;">'+
+    '<div style="font-size:26px;font-weight:800;color:var(--blue);font-family:\'Courier New\',monospace;">'+wkPats.length+'</div>'+
+    '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-top:3px;">This Week</div></div>'+
+    '</div>'+
+    (best?'<div style="margin-top:12px;padding:10px;background:rgba(240,205,106,0.08);border:1px solid rgba(240,205,106,0.2);border-radius:8px;font-size:13px;"><span style="color:var(--text-muted);">⭐ Most Active: </span><strong style="color:var(--tan);">'+best.rank+' '+best.name+'</strong><span style="color:var(--text-muted);"> ('+bestC+' patrols)</span></div>':'')+
+    (topSector?'<div style="margin-top:8px;padding:10px;background:rgba(39,160,98,0.08);border:1px solid rgba(39,160,98,0.2);border-radius:8px;font-size:13px;"><span style="color:var(--text-muted);">📍 Top Sector: </span><strong style="color:var(--green-light);">'+topSector+'</strong></div>':'');
+
+  // ── INACTIVE PANEL ──────────────────────────────────────────────────
   var availForInactive=D.troops.filter(isAvailable);
   var allInactiveList=availForInactive.map(function(t){return{t:t,ds:daysSince(lastPatrol(t.id)),lp:lastPatrol(t.id)};}).filter(function(x){return x.ds>=3;}).sort(function(a,b){return b.ds-a.ds;});
-  var totalInactive=allInactiveList.length;
   var inactiveHTML='';
-  if(totalInactive===0){
-    inactiveHTML='<div style="text-align:center;padding:10px 0;font-size:12px;color:var(--text-muted);">✓ All active</div>';
+  if(allInactiveList.length===0){
+    inactiveHTML='<div style="text-align:center;padding:18px 0;color:var(--green-light);font-size:15px;">✓ All troops active</div>';
   } else {
-    var vis=allInactiveList.slice(0,4);
+    var vis=allInactiveList.slice(0,6);
     inactiveHTML=vis.map(function(x){var t=x.t,ds=x.ds;
       var bc=ds>14?'b-red':ds>7?'b-orange':'b-gray';
-      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(100,130,100,0.15);cursor:pointer;" onclick="showProfile(\''+t.id+'\')">'+
-        '<div style="font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70px;">'+t.name.split(',')[0]+'</div>'+
-        '<span class="badge '+bc+'" style="font-size:9px;">'+(ds===9999?'Never':ds+'d')+'</span></div>';
+      var dsl=ds===9999?'Never':ds+'d ago';
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(100,130,100,0.15);cursor:pointer;" onclick="showProfile(\''+t.id+'\')">'+
+        '<div><div style="font-size:14px;font-weight:700;">'+t.rank+' '+t.name+'</div>'+
+        '<div style="font-size:12px;color:var(--text-muted);">'+t.unit+'</div></div>'+
+        '<span class="badge '+bc+'">'+dsl+'</span></div>';
     }).join('');
-    if(allInactiveList.length>4) inactiveHTML+='<div style="font-size:10px;color:var(--text-muted);text-align:center;padding-top:4px;cursor:pointer;" onclick="showTab(\'inactive\')">+'+(allInactiveList.length-4)+' more \u2192</div>';
+    if(allInactiveList.length>6) inactiveHTML+='<div style="font-size:13px;color:var(--text-muted);text-align:center;padding-top:10px;cursor:pointer;" onclick="showTab(\'inactive\')">+'+(allInactiveList.length-6)+' more — View All →</div>';
   }
   document.getElementById('dash-inactive').innerHTML=inactiveHTML;
 
-  // Deployment Fairness
+  // ── DEPLOYMENT FAIRNESS ─────────────────────────────────────────────
   var maxMo=Math.max(1,Math.max.apply(null,D.troops.map(function(t){return monthlyPatrolCount(t.id);})));
   var sorted=sortTroops(D.troops);
-  var top8=sorted.slice(0,8),rest=sorted.slice(8);
-  function fairnessRow(t){var c=monthlyPatrolCount(t.id);var pct=Math.round(c/maxMo*100);var color=pct>70?'var(--green-light)':pct>30?'var(--orange)':'var(--red-light)';
-    return '<div style="margin-bottom:7px;cursor:pointer;" onclick="showProfile(\''+t.id+'\')">'+
-      '<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;">'+
-      '<span style="color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65%;">'+t.rank+' '+t.name+'</span>'+
-      '<span style="color:var(--tan);font-family:\'Courier New\',monospace;">'+c+'</span></div>'+
-      '<div class="fairness-bar"><div class="fairness-fill" style="width:'+pct+'%;background:'+color+';"></div></div></div>';}
-  var fairHTML=top8.map(fairnessRow).join('');
+  var top10=sorted.slice(0,10),rest=sorted.slice(10);
+  function fairnessRow(t){
+    var c=monthlyPatrolCount(t.id);var pct=Math.round(c/maxMo*100);
+    var color=pct>70?'var(--green-light)':pct>30?'var(--orange)':'var(--red-light)';
+    return '<div style="margin-bottom:10px;cursor:pointer;" onclick="showProfile(\''+t.id+'\')">'+
+      '<div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:4px;">'+
+      '<span style="color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:75%;">'+t.rank+' '+t.name+'</span>'+
+      '<span style="color:var(--tan);font-family:\'Courier New\',monospace;font-weight:700;">'+c+' / '+maxMo+'</span></div>'+
+      '<div class="fairness-bar"><div class="fairness-fill" style="width:'+pct+'%;background:'+color+';"></div></div></div>';
+  }
+  var fairHTML=top10.map(fairnessRow).join('');
   if(rest.length>0) fairHTML+='<div id="fairness-extra" style="display:none;">'+rest.map(fairnessRow).join('')+'</div>'+
-    '<button class="btn btn-ghost btn-sm" id="fairness-toggle-btn" onclick="toggleFairnessExtra()" style="width:100%;margin-top:4px;font-size:10px;">▼ Show '+rest.length+' More</button>';
-  document.getElementById('fairness-view').innerHTML=fairHTML||'<div class="empty">No data.</div>';
+    '<button class="btn btn-ghost btn-sm" id="fairness-toggle-btn" onclick="toggleFairnessExtra()" style="width:100%;margin-top:6px;">▼ Show '+rest.length+' More</button>';
+  document.getElementById('fairness-view').innerHTML=fairHTML||'<div class="empty">No troop data.</div>';
 
-  // Recent Patrols
-  var recent=D.patrols.slice().sort(function(a,b){return b.date.localeCompare(a.date);}).slice(0,5);
-  document.getElementById('recent-list').innerHTML=recent.length===0?'<li class="empty">No patrols yet.</li>':
+  // ── RECENT PATROLS ──────────────────────────────────────────────────
+  var recent=D.patrols.slice().sort(function(a,b){return b.date.localeCompare(a.date);}).slice(0,8);
+  document.getElementById('recent-list').innerHTML=recent.length===0?'<li class="empty">No patrols logged yet.</li>':
     recent.map(function(p){
-      return '<li class="recent-item"><div style="min-width:0;flex:1;">'+
-        '<div style="font-weight:600;color:var(--text);font-size:13px;">'+(p.ptlId||'')+
-        ' <button class="count-pill" onclick="showTroopsModal(\''+p.id+'\')">'+(p.troops||[]).length+'</button></div>'+
-        '<div style="font-size:10px;color:var(--text-muted);">'+fmtDateLong(p.date)+(p.area?' · '+p.area:'')+'</div></div>'+
-        '<span class="'+typeBadge(p.type)+'" style="flex-shrink:0;font-size:9px;">'+p.type+'</span></li>';
+      return '<li class="recent-item">'+
+        '<div style="min-width:0;flex:1;">'+
+        '<div style="font-weight:700;color:var(--text);font-size:15px;">'+(p.ptlId||'')+
+        ' <button class="count-pill" onclick="showTroopsModal(\''+p.id+'\')">'+(p.troops||[]).length+' trp</button></div>'+
+        '<div style="font-size:13px;color:var(--text-muted);margin-top:2px;">'+fmtDateLong(p.date)+(p.area?' · <strong style="color:var(--text);">'+p.area+'</strong>':'')+(p.duration?' · '+p.duration+'h':'')+'</div>'+
+        (p.remarks?'<div style="font-size:12px;color:var(--text-muted);margin-top:1px;font-style:italic;">'+p.remarks+'</div>':'')+
+        '</div>'+
+        '<span class="'+typeBadge(p.type)+'" style="flex-shrink:0;">'+p.type+'</span></li>';
     }).join('');
 }
 
