@@ -37,13 +37,13 @@ app.get('/archived', async (req, res) => {
 // ── UPSERT TROOP ──────────────────────────────────────────────────────
 app.post('/troops', async (req, res) => {
   try {
-    const { id, name, rank, unit, sn, status, notes } = req.body;
+    const { id, name, rank, unit, sn, status, notes, phoneLocal, phoneWa } = req.body;
     await pool.query(
-      `INSERT INTO troops (id, name, rank, unit, sn, status, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)
+      `INSERT INTO troops (id, name, rank, unit, sn, status, notes, phone_local, phone_wa)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        ON CONFLICT (id) DO UPDATE
-         SET name=$2, rank=$3, unit=$4, sn=$5, status=$6, notes=$7`,
-      [id, name, rank || '', unit || '', sn || '', status || 'available', notes || '']
+         SET name=$2, rank=$3, unit=$4, sn=$5, status=$6, notes=$7, phone_local=$8, phone_wa=$9`,
+      [id, name, rank || '', unit || '', sn || '', status || 'available', notes || '', phoneLocal || '', phoneWa || '']
     );
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
