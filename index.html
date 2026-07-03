@@ -115,6 +115,38 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--te
   width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;
   font-size:18px;cursor:pointer;transition:all 0.2s;flex-shrink:0;}
 .icon-btn:hover,.icon-btn:active{border-color:var(--green-light);color:var(--text);}
+/* ── ARCHIVE/UNARCHIVE TICK CONFIRMATION ── */
+.troop-card{transition:opacity 0.38s ease,transform 0.38s ease;}
+.troop-card.tick-active{
+  border-color:var(--green-light)!important;
+  box-shadow:0 0 0 2px rgba(90,200,120,0.35),0 0 16px rgba(90,200,120,0.3);
+}
+.troop-card.tick-hide{opacity:0;transform:scale(0.96);}
+.tick-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  background:var(--green-light);color:#0a1f14;
+  font-size:12px;font-weight:800;letter-spacing:0.3px;
+  padding:5px 12px;border-radius:14px;
+  animation:tickPop 0.25s ease;
+}
+@keyframes tickPop{from{transform:scale(0.6);opacity:0;}to{transform:scale(1);opacity:1;}}
+/* ── CUSTOM CHECKBOX (reliable tick — native accent-color checkboxes render inconsistently) ── */
+.cb-wrap{display:flex;align-items:center;gap:7px;text-transform:none;cursor:pointer;
+  letter-spacing:0;margin:0;font-family:'Segoe UI',Arial,sans-serif;font-weight:400;user-select:none;}
+.cb-wrap input[type="checkbox"]{position:absolute;opacity:0;width:0;height:0;}
+.cb-box{
+  width:19px;height:19px;border-radius:5px;flex-shrink:0;
+  border:2px solid var(--border);background:var(--surface2);
+  display:inline-flex;align-items:center;justify-content:center;
+  transition:background 0.15s ease,border-color 0.15s ease;
+}
+.cb-box::after{
+  content:'✓';font-size:13px;font-weight:900;line-height:1;color:#0a1f14;
+  opacity:0;transform:scale(0.5);transition:opacity 0.15s ease,transform 0.15s ease;
+}
+.cb-wrap input:checked+.cb-box{background:var(--green-light);border-color:var(--green-light);}
+.cb-wrap input:checked+.cb-box::after{opacity:1;transform:scale(1);}
+.cb-wrap input:focus-visible+.cb-box{outline:2px solid var(--tan);outline-offset:2px;}
 /* ── TOAST (success confirmation, e.g. after Archive) ── */
 #toast-container{position:fixed;left:0;right:0;bottom:calc(var(--nav-h) + 16px);z-index:500;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;}
 @media (min-width:900px) and (pointer:fine){#toast-container{left:var(--sidebar-w);bottom:24px;}}
@@ -209,8 +241,8 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--te
   .sidebar-item{padding:12px 20px;font-size:15px;border-left-width:4px;gap:12px;}
   .sidebar-item .si-icon{font-size:18px;}
 
-  /* ── Main area shifts right of sidebar ── */
-  #app-main{left:var(--sidebar-w);}
+  /* ── Main area shifts right of sidebar; reclaim bottom space (no bottom-nav on desktop) ── */
+  #app-main{left:var(--sidebar-w);bottom:0;}
   html,body{overflow:hidden;}
 
   /* ── Section: max-width, generous padding ── */
@@ -897,6 +929,10 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
         </select>
       </div>
     </div>
+    <div class="fr">
+      <div class="fg"><label class="field-label">📞 Local No.</label><input type="tel" id="t-phone-local" placeholder="e.g. 981-234-5678"></div>
+      <div class="fg"><label class="field-label">💬 WhatsApp No.</label><input type="tel" id="t-phone-wa" placeholder="e.g. +977-981-234-5678"></div>
+    </div>
     <div class="fg"><label class="field-label">Notes / Skills / Restrictions</label><textarea id="t-notes" rows="2" placeholder="e.g. Medic trained, No night ops..."></textarea></div>
     <div style="display:flex;gap:8px;">
       <button class="btn btn-primary" id="t-submit-btn" onclick="saveTroop()" style="flex:1;">Add Troop</button>
@@ -907,12 +943,20 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
   <div class="card">
     <div class="card-title">
       <span>Roster (<span id="troop-count">0</span>)</span>
-      <label style="display:flex;align-items:center;gap:5px;font-size:10px;text-transform:none;cursor:pointer;color:var(--text-muted);letter-spacing:0;margin:0;font-family:'Segoe UI',Arial,sans-serif;font-weight:400;">
-        <input type="checkbox" id="show-arch" onchange="renderRoster()" style="width:auto;accent-color:var(--green-light);">
-        Archived
-      </label>
+      <button class="btn btn-ghost btn-sm" onclick="showTab('archived-troops')" style="font-size:11px;">📁 Archived (<span id="arch-count-btn">0</span>) →</button>
     </div>
     <div id="roster"></div>
+  </div>
+</div>
+
+<!-- ===== ARCHIVED TROOPS ===== -->
+<div id="archived-troops" class="section">
+  <div class="card">
+    <div class="card-title">
+      <span>📁 Archived (<span id="arch-count">0</span>)</span>
+      <button class="btn btn-ghost btn-sm" onclick="showTab('troops')">← Roster</button>
+    </div>
+    <div id="archived-list"></div>
   </div>
 </div>
 
@@ -1293,7 +1337,7 @@ function apiFetch(path, opts) {
     .then(function(r){ return r.json(); });
 }
 function dbToTroop(r) {
-  return {id:r.id,name:r.name,rank:r.rank,unit:r.unit,sn:r.sn||'',status:r.status||'available',notes:r.notes||''};
+  return {id:r.id,name:r.name,rank:r.rank,unit:r.unit,sn:r.sn||'',status:r.status||'available',notes:r.notes||'',phoneLocal:r.phoneLocal||'',phoneWa:r.phoneWa||''};
 }
 function dbToPatrol(r) {
   return {id:r.id,ptlId:r.ptl_id,date:(r.date||'').slice(0,10),type:r.type,
@@ -1389,6 +1433,7 @@ function backgroundSync() {
         if(aid==='dashboard') renderDash();
         if(aid==='patrol-log') renderTable();
         if(aid==='troops') renderRoster();
+        if(aid==='archived-troops') renderArchivedTroops();
         if(aid==='inactive') renderInactive();
         if(aid==='report') genReport();
         if(aid==='audit') renderAudit();
@@ -1597,6 +1642,7 @@ function _showTabInner(id){
     'log-patrol':function(){selectedTroops=[];renderSelected();updatePtlPreview();},
     'patrol-log':renderTable,
     troops:renderRoster,
+    'archived-troops':renderArchivedTroops,
     inactive:function(){renderInactive(_inactiveDays);},
     report:function(){populateReportYears();genReport();},
     handover:renderHandover,
@@ -2093,55 +2139,77 @@ function saveTroop(){
   var unit=document.getElementById('t-unit').value.trim();
   var sn=document.getElementById('t-sn').value.trim();
   var status=document.getElementById('t-status').value;
+  var phoneLocal=document.getElementById('t-phone-local').value.trim();
+  var phoneWa=document.getElementById('t-phone-wa').value.trim();
   var notes=document.getElementById('t-notes').value.trim();
   var editId=document.getElementById('t-edit-id').value;
   if(!name){showAlert('t-alert','Please enter a name.','danger');return;}
   if(editId){
     var t=D.troops.find(function(x){return x.id===editId;});
-    if(t){t.name=name;t.rank=rank;t.unit=unit;t.sn=sn;t.status=status;t.notes=notes;}
+    if(t){t.name=name;t.rank=rank;t.unit=unit;t.sn=sn;t.status=status;t.phoneLocal=phoneLocal;t.phoneWa=phoneWa;t.notes=notes;}
     remoteSaveTroop(t); renderRoster();
     showAlert('t-alert',rank+' '+name+' updated!','success');
     audit('Troop updated: '+rank+' '+name); cancelEdit();
   } else {
     if(D.troops.find(function(t){return t.name.toLowerCase()===name.toLowerCase();})){showAlert('t-alert','Troop already exists.','danger');return;}
-    var newT={id:uid('t'),name:name,rank:rank,unit:unit,sn:sn,status:status,notes:notes};
+    var newT={id:uid('t'),name:name,rank:rank,unit:unit,sn:sn,status:status,phoneLocal:phoneLocal,phoneWa:phoneWa,notes:notes};
     D.troops.push(newT); remoteSaveTroop(newT); renderRoster();
     showAlert('t-alert',rank+' '+name+' added!','success');
     audit('Troop added: '+rank+' '+name);
-    ['t-name','t-unit','t-sn','t-notes'].forEach(function(id){document.getElementById(id).value='';});
+    ['t-name','t-unit','t-sn','t-phone-local','t-phone-wa','t-notes'].forEach(function(id){document.getElementById(id).value='';});
   }
 }
 var _pendingEditId=null;
 function confirmEditTroop(id){ requirePin(function(){ _pendingEditId=id; document.getElementById('edit-confirm-modal').classList.add('open'); document.getElementById('edit-confirm-btn').onclick=function(){closeConfirmEdit();editTroop(_pendingEditId);_pendingEditId=null;}; }); }
 function closeConfirmEdit(){ document.getElementById('edit-confirm-modal').classList.remove('open'); }
-function editTroop(id){ var t=D.troops.find(function(x){return x.id===id;}); if(!t) return; document.getElementById('t-name').value=t.name; document.getElementById('t-rank').value=t.rank; document.getElementById('t-unit').value=t.unit||''; document.getElementById('t-sn').value=t.sn||''; document.getElementById('t-status').value=t.status||'available'; document.getElementById('t-notes').value=t.notes||''; document.getElementById('t-edit-id').value=id; document.getElementById('t-form-title').textContent='Edit Troop'; document.getElementById('t-submit-btn').textContent='Save Changes'; document.getElementById('t-cancel-btn').style.display=''; document.getElementById('app-main').scrollTop=0; }
-function cancelEdit(){ document.getElementById('t-edit-id').value=''; ['t-name','t-unit','t-sn','t-notes'].forEach(function(id){document.getElementById(id).value='';}); document.getElementById('t-status').value='available'; document.getElementById('t-form-title').textContent='Add Troop'; document.getElementById('t-submit-btn').textContent='Add Troop'; document.getElementById('t-cancel-btn').style.display='none'; }
+function editTroop(id){ var t=D.troops.find(function(x){return x.id===id;}); if(!t) return; document.getElementById('t-name').value=t.name; document.getElementById('t-rank').value=t.rank; document.getElementById('t-unit').value=t.unit||''; document.getElementById('t-sn').value=t.sn||''; document.getElementById('t-status').value=t.status||'available'; document.getElementById('t-phone-local').value=t.phoneLocal||''; document.getElementById('t-phone-wa').value=t.phoneWa||''; document.getElementById('t-notes').value=t.notes||''; document.getElementById('t-edit-id').value=id; document.getElementById('t-form-title').textContent='Edit Troop'; document.getElementById('t-submit-btn').textContent='Save Changes'; document.getElementById('t-cancel-btn').style.display=''; document.getElementById('app-main').scrollTop=0; }
+function cancelEdit(){ document.getElementById('t-edit-id').value=''; ['t-name','t-unit','t-sn','t-phone-local','t-phone-wa','t-notes'].forEach(function(id){document.getElementById(id).value='';}); document.getElementById('t-status').value='available'; document.getElementById('t-form-title').textContent='Add Troop'; document.getElementById('t-submit-btn').textContent='Add Troop'; document.getElementById('t-cancel-btn').style.display='none'; }
 function archiveTroop(id){
   var t=D.troops.find(function(x){return x.id===id;}); if(!t) return;
   document.activeElement&&document.activeElement.blur&&document.activeElement.blur();
   requirePin(function(){
     setTimeout(function(){
       if(!confirm('Archive '+upLabel(t.rank,t.name)+'?')) return;
+      var card=document.getElementById('tc-'+id);
+      var btnRow=card?card.querySelector('.troop-card-btns'):null;
+      if(card){ card.classList.add('tick-active'); if(btnRow) btnRow.innerHTML='<span class="tick-badge">✓ Archived</span>'; }
       t.archivedDate=new Date().toISOString().slice(0,10);
       D.archived.push(t);
       D.troops=D.troops.filter(function(x){return x.id!==id;});
       remoteArchiveTroop(id,true);
-      renderRoster();
       audit('Troop archived: '+upLabel(t.rank,t.name));
-      showToast('Archived — '+upLabel(t.rank,t.name));
+      if(card){
+        setTimeout(function(){ card.classList.add('tick-hide'); },400);
+        setTimeout(function(){ refreshTroopViews(); },780);
+      } else { refreshTroopViews(); }
     },10);
   });
 }
-function unarchiveTroop(id){ var t=D.archived.find(function(x){return x.id===id;}); if(!t) return; delete t.archivedDate; D.troops.push(t); D.archived=D.archived.filter(function(x){return x.id!==id;}); remoteArchiveTroop(id,false); renderRoster(); audit('Troop unarchived: '+upLabel(t.rank,t.name)); showToast('Unarchived — '+upLabel(t.rank,t.name)); }
+function unarchiveTroop(id){
+  var t=D.archived.find(function(x){return x.id===id;}); if(!t) return;
+  document.activeElement&&document.activeElement.blur&&document.activeElement.blur();
+  var card=document.getElementById('tc-a-'+id);
+  var btnRow=card?card.querySelector('.troop-card-btns'):null;
+  if(card){ card.classList.add('tick-active'); if(btnRow) btnRow.innerHTML='<span class="tick-badge">✓ Restored</span>'; }
+  delete t.archivedDate;
+  D.troops.push(t);
+  D.archived=D.archived.filter(function(x){return x.id!==id;});
+  remoteArchiveTroop(id,false);
+  audit('Troop unarchived: '+upLabel(t.rank,t.name));
+  if(card){
+    setTimeout(function(){ card.classList.add('tick-hide'); },400);
+    setTimeout(function(){ refreshTroopViews(); },780);
+  } else { refreshTroopViews(); }
+}
 function renderRoster(){
-  var showArch=document.getElementById('show-arch').checked;
   var troops=sortTroops(D.troops);
   document.getElementById('troop-count').textContent=troops.length;
+  var abtn=document.getElementById('arch-count-btn'); if(abtn) abtn.textContent=D.archived.length;
   var el=document.getElementById('roster');
-  if(troops.length===0&&!showArch){el.innerHTML='<div class="empty">No troops yet.</div>';return;}
+  if(troops.length===0){el.innerHTML='<div class="empty">No troops yet.</div>';return;}
   var html=troops.map(function(t){
     var c=patrolCount(t.id),mo=monthlyPatrolCount(t.id),lp=lastPatrol(t.id),ds=daysSince(lp);
-    return '<div class="troop-card">'+
+    return '<div class="troop-card" id="tc-'+t.id+'">'+
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">'+
       '<div style="cursor:pointer;flex:1;min-width:0;" onclick="showProfile(\''+t.id+'\')">'+
       '<div class="troop-card-name">'+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong></div>'+
@@ -2164,19 +2232,24 @@ function renderRoster(){
       '<button class="del-btn" onclick="confirmDel(\'troop\',\''+t.id+'\')">×</button>'+
       '</div></div>';
   }).join('');
-  if(showArch&&D.archived.length>0){
-    html+='<div class="section-hdr">Archived ('+D.archived.length+')</div>';
-    html+=sortTroops(D.archived).map(function(t){
-      return '<div class="troop-card" style="opacity:0.6;border-style:dashed;">'+
-        '<div style="font-size:14px;">'+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong> <span class="badge b-archived">Archived</span></div>'+
-        '<div style="font-size:11px;color:var(--text-muted);margin-top:3px;">'+(t.unit||'')+(t.archivedDate?' · Archived: '+fmtDateLong(t.archivedDate):'')+' · '+patrolCount(t.id)+' patrols</div>'+
-        '<div class="troop-card-btns" style="margin-top:8px;">'+
-        '<button class="btn btn-ghost btn-sm" onclick="showProfile(\''+t.id+'\',true)">Profile</button>'+
-        '<button class="btn btn-ghost btn-sm" onclick="unarchiveTroop(\''+t.id+'\')">Unarchive</button></div></div>';
-    }).join('');
-  }
   el.innerHTML=html;
 }
+function renderArchivedTroops(){
+  var cbtn=document.getElementById('arch-count-btn'); if(cbtn) cbtn.textContent=D.archived.length;
+  var chdr=document.getElementById('arch-count'); if(chdr) chdr.textContent=D.archived.length;
+  var el=document.getElementById('archived-list');
+  if(!el) return;
+  if(D.archived.length===0){ el.innerHTML='<div class="empty">No archived troops.</div>'; return; }
+  el.innerHTML=sortTroops(D.archived).map(function(t){
+    return '<div class="troop-card" id="tc-a-'+t.id+'" style="opacity:0.6;border-style:dashed;">'+
+      '<div style="font-size:14px;">'+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong> <span class="badge b-archived">Archived</span></div>'+
+      '<div style="font-size:11px;color:var(--text-muted);margin-top:3px;">'+(t.unit||'')+(t.archivedDate?' · Archived: '+fmtDateLong(t.archivedDate):'')+' · '+patrolCount(t.id)+' patrols</div>'+
+      '<div class="troop-card-btns" style="margin-top:8px;">'+
+      '<button class="btn btn-ghost btn-sm" onclick="showProfile(\''+t.id+'\',true)">Profile</button>'+
+      '<button class="btn btn-ghost btn-sm" onclick="unarchiveTroop(\''+t.id+'\')">Unarchive</button></div></div>';
+  }).join('');
+}
+function refreshTroopViews(){ renderRoster(); if(document.getElementById('archived-list')) renderArchivedTroops(); }
 
 // =====================================================================
 // TROOP PROFILE
@@ -2202,6 +2275,8 @@ function showProfile(id, fromArch){
     '<div><div style="font-size:9px;color:var(--text-muted);font-family:\'Courier New\',monospace;">STATUS</div><div style="margin-top:2px;">'+statusBadge(t.status||'available')+'</div></div>'+
     '<div><div style="font-size:9px;color:var(--text-muted);font-family:\'Courier New\',monospace;">UNIT</div><div>'+(t.unit||'—')+'</div></div>'+
     '<div><div style="font-size:9px;color:var(--text-muted);font-family:\'Courier New\',monospace;">SVC NO.</div><div>'+(t.sn||'—')+'</div></div>'+
+    '<div><div style="font-size:9px;color:var(--text-muted);font-family:\'Courier New\',monospace;">📞 LOCAL NO.</div><div>'+(t.phoneLocal?'<a href="tel:'+t.phoneLocal.replace(/\s+/g,'')+'" style="color:var(--tan);text-decoration:none;">'+t.phoneLocal+'</a>':'—')+'</div></div>'+
+    '<div><div style="font-size:9px;color:var(--text-muted);font-family:\'Courier New\',monospace;">💬 WHATSAPP NO.</div><div>'+(t.phoneWa?'<a href="https://wa.me/'+t.phoneWa.replace(/[^0-9]/g,'')+'" target="_blank" style="color:var(--tan);text-decoration:none;">'+t.phoneWa+'</a>':'—')+'</div></div>'+
     '</div>'+
     (t.notes?'<div class="notes-field">'+t.notes+'</div>':'')+
     '</div>'+
@@ -2608,6 +2683,7 @@ var LOGO_DATA_URI='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAAC
       renderDash();
       renderTable();
       renderRoster();
+      renderArchivedTroops();
       renderInactive(0);
       document.getElementById('print-date-line').textContent='Generated: '+nowStr();
       startCountdown();
