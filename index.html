@@ -68,6 +68,12 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--te
   color:#a8dbb8;padding:13px 44px 13px 42px;border-radius:10px;
   font-size:17px;outline:none;box-sizing:border-box;display:block;}
 #search-overlay input::placeholder{color:rgba(168,219,184,0.5);}
+#search-overlay input:-webkit-autofill,#search-overlay input:-webkit-autofill:hover,
+#search-overlay input:-webkit-autofill:focus{
+  -webkit-text-fill-color:#a8dbb8!important;
+  -webkit-box-shadow:0 0 0 1000px var(--surface2) inset!important;
+  box-shadow:0 0 0 1000px var(--surface2) inset!important;
+  caret-color:#a8dbb8;transition:background-color 9999s ease-in-out 0s;}
 #so-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);
   font-size:17px;pointer-events:none;}
 #so-close{position:absolute;right:10px;top:50%;transform:translateY(-50%);
@@ -89,6 +95,12 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--te
     color:#a8dbb8;padding:9px 14px 9px 36px;border-radius:22px;font-size:15px;outline:none;}
   .search-desktop-wrap input::placeholder{color:rgba(168,219,184,0.5);}
   .search-desktop-wrap input:focus{border-color:var(--green-light);box-shadow:0 0 0 3px rgba(63,148,104,0.15);}
+  .search-desktop-wrap input:-webkit-autofill,.search-desktop-wrap input:-webkit-autofill:hover,
+  .search-desktop-wrap input:-webkit-autofill:focus{
+    -webkit-text-fill-color:#a8dbb8!important;
+    -webkit-box-shadow:0 0 0 1000px var(--surface2) inset!important;
+    box-shadow:0 0 0 1000px var(--surface2) inset!important;
+    caret-color:#a8dbb8;transition:background-color 9999s ease-in-out 0s;}
   .search-desktop-wrap .sd-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);
     font-size:15px;color:var(--text-muted);pointer-events:none;}
   .global-results{position:absolute;top:calc(100% + 6px);left:0;right:0;}
@@ -2735,8 +2747,23 @@ function pickDate(calId,isoStr){ var s=_calState[calId]; if(!s) return; if(s.inp
 // ASYNC INIT
 // =====================================================================
 var LOGO_DATA_URI='data:image/png;base64,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';
+// Forces the global-search boxes back to empty. Browsers sometimes silently
+// auto-fill generic text inputs with a previously-typed value (e.g. "POB Mobaye"
+// typed once into Settings) even with autocomplete="off", and paint them with
+// their own light autofill background that ignores our CSS. Clearing on every
+// load/restore, plus the autofill CSS override above, fixes both symptoms.
+function resetSearchFields(){
+  ['global-search','global-search-desktop'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(el && el.value){ el.value=''; }
+  });
+}
+window.addEventListener('pageshow',resetSearchFields);
+document.addEventListener('DOMContentLoaded',resetSearchFields);
+
 (function initApp(){
   document.getElementById('logo-img').src=LOGO_DATA_URI;
+  resetSearchFields();
   wirePinInputs();
   relocateCalendarsToBody();
   loadData().then(function(){
@@ -2779,6 +2806,18 @@ function wirePinInputs(){
   if(resetConfirm) resetConfirm.addEventListener('keydown',function(e){ if(e.key==='Enter') submitPinReset(); });
   var secA=document.getElementById('security-a-input');
   if(secA) secA.addEventListener('keydown',function(e){ if(e.key==='Enter') verifySecurityAnswer(); });
+}
+
+// ── OFFLINE APP SHELL ──────────────────────────────────────────────────
+// Without this, the browser has to fetch index.html itself from the network
+// on every launch, so the app can't even open with no connection — the
+// outbox/localStorage logic above only helps with DATA once the page is
+// already loaded. Registering a service worker caches the page shell so it
+// can open fully offline after the first successful visit.
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').catch(function(e){ console.warn('SW registration failed',e); });
+  });
 }
 </script>
 </body>
