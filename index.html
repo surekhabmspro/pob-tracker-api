@@ -453,6 +453,9 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 
 /* ── TROOP CARDS ── */
 .troop-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;}
+#archived-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;}
+#archived-list .troop-card{margin-bottom:0;}
+@media (max-width:600px){#archived-list{grid-template-columns:1fr;}}
 .troop-card-name{font-size:17px;font-weight:700;margin-bottom:2px;}
 .troop-card-sub{font-size:13.5px;color:var(--text-muted);margin-bottom:8px;}
 .troop-card-stats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
@@ -1344,7 +1347,7 @@ var DEFAULT_ROUTES = ['Main Gate - Market - Base','River Crossing - Perimeter','
 
 var D = {
   troops:[], patrols:[], archived:[], counter:1, audit:[],
-  settings:{pob:'POB Mobaye',mission:'',commander:'',classification:'CONFIDENTIAL'},
+  settings:{pob:'POB Mobaye',mission:'',commander:'',classification:'CONFIDENTIAL',lastBackupDate:null},
   config:{types:DEFAULT_TYPES.slice(),sectors:DEFAULT_SECTORS.slice(),routes:DEFAULT_ROUTES.slice(),ranks:DEFAULT_RANKS.slice()},
   security:{pinHash:'',securityQ:'',securityAHash:''}
 };
@@ -1406,7 +1409,8 @@ function loadLocalFallback() {
   if (!D.archived) D.archived=[];
   if (!D.counter) D.counter=D.patrols.length+1;
   if (!D.audit) D.audit=[];
-  if (!D.settings) D.settings={pob:'POB Mobaye',mission:'',commander:'',classification:'CONFIDENTIAL'};
+  if (!D.settings) D.settings={pob:'POB Mobaye',mission:'',commander:'',classification:'CONFIDENTIAL',lastBackupDate:null};
+  if (D.settings.lastBackupDate===undefined) D.settings.lastBackupDate=null;
   if (!D.config) D.config={types:DEFAULT_TYPES.slice(),sectors:DEFAULT_SECTORS.slice(),routes:DEFAULT_ROUTES.slice(),ranks:DEFAULT_RANKS.slice()};
   if (!D.config.ranks) D.config.ranks=DEFAULT_RANKS.slice();
   if (!D.security) D.security={pinHash:'',securityQ:'',securityAHash:''};
@@ -2027,6 +2031,14 @@ function renderDash(){
   // ── ALERTS ──────────────────────────────────────────────────────────
   var alerts='';
   if(wkPats.length===0) alerts+='<div class="alert al-warn" style="margin-bottom:14px;">⚠ No patrol logged this week.</div>';
+  var lastBk=D.settings.lastBackupDate;
+  var bkDays=lastBk?daysSince(lastBk.slice(0,10)):null;
+  if(!lastBk||bkDays>=7){
+    var bkMsg=lastBk?('Last backup was '+bkDays+' day'+(bkDays===1?'':'s')+' ago.'):'No backup has been made yet.';
+    alerts+='<div class="alert al-warn" style="margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">'+
+      '<span>⚠ '+bkMsg+' Please back up your data.</span>'+
+      '<button class="btn btn-primary btn-sm" onclick="doExport()">📥 Backup Now</button></div>';
+  }
   document.getElementById('dash-alerts').innerHTML=alerts;
 
   // ── MONTHLY STATS ───────────────────────────────────────────────────
@@ -2644,7 +2656,7 @@ function renderHandover(){
 // =====================================================================
 // BACKUP & RESTORE
 // =====================================================================
-function doExport(){ var backup={version:4,exportDate:new Date().toISOString(),exportedBy:'POB Mobaye Patrol Tracker Mobile',data:D}; dlFile(JSON.stringify(backup,null,2),'application/json','POB_Mobaye_Backup_'+new Date().toISOString().slice(0,10)+'.json'); audit('Full backup exported'); }
+function doExport(){ var backup={version:4,exportDate:new Date().toISOString(),exportedBy:'POB Mobaye Patrol Tracker Mobile',data:D}; dlFile(JSON.stringify(backup,null,2),'application/json','POB_Mobaye_Backup_'+new Date().toISOString().slice(0,10)+'.json'); D.settings.lastBackupDate=new Date().toISOString(); saveData(); remoteSaveConfig(); audit('Full backup exported'); if(document.getElementById('dash-alerts')) renderDash(); }
 function dlFile(content,type,filename){ var blob=new Blob([content],{type:type}); var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a);a.click(); document.body.removeChild(a);URL.revokeObjectURL(a.href); }
 var pendingRestore=null;
 function previewRestore(input){ var file=input.files[0]; if(!file) return; var reader=new FileReader(); reader.onload=function(e){ try{var backup=JSON.parse(e.target.result);if(!backup.data) throw new Error('Invalid');pendingRestore=backup;var d=backup.data;var prev=document.getElementById('restore-preview');prev.style.display='';prev.className='alert al-info';prev.innerHTML='Valid backup: <strong>'+(backup.exportDate?backup.exportDate.slice(0,10):'?')+'</strong><br>Troops: <strong>'+(d.troops||[]).length+'</strong> · Archived: <strong>'+(d.archived||[]).length+'</strong> · Patrols: <strong>'+(d.patrols||[]).length+'</strong><br><strong style="color:#ff9999;">This will overwrite all current data.</strong>';document.getElementById('restore-btn').style.display='';document.getElementById('restore-cancel').style.display='';}catch(err){var prev=document.getElementById('restore-preview');prev.style.display='';prev.className='alert al-danger';prev.innerHTML='Invalid backup file.';document.getElementById('restore-btn').style.display='none';document.getElementById('restore-cancel').style.display='none';} }; reader.readAsText(file); }
