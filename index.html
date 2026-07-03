@@ -164,24 +164,6 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--te
 .cb-wrap input:checked+.cb-box{background:var(--green-light);border-color:var(--green-light);}
 .cb-wrap input:checked+.cb-box::after{opacity:1;transform:scale(1);}
 .cb-wrap input:focus-visible+.cb-box{outline:2px solid var(--tan);outline-offset:2px;}
-/* ── TOAST (success confirmation, e.g. after Archive) ── */
-#toast-container{position:fixed;left:0;right:0;bottom:calc(var(--nav-h) + 16px);z-index:500;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;}
-@media (min-width:900px) and (pointer:fine){#toast-container{left:var(--sidebar-w);bottom:24px;}}
-.toast{
-  display:flex;align-items:center;gap:8px;
-  background:var(--surface2);border:1.5px solid var(--green-light);
-  color:var(--text);font-size:13.5px;font-weight:600;
-  padding:10px 18px;border-radius:24px;
-  box-shadow:0 6px 18px rgba(0,0,0,0.35);
-  animation:toastIn 0.25s ease,toastOut 0.25s ease 1.85s forwards;
-}
-.toast-tick{
-  display:flex;align-items:center;justify-content:center;
-  width:20px;height:20px;border-radius:50%;flex-shrink:0;
-  background:var(--green-light);color:#0a1f14;font-size:12px;font-weight:900;
-}
-@keyframes toastIn{from{opacity:0;transform:translateY(12px) scale(0.95);}to{opacity:1;transform:translateY(0) scale(1);}}
-@keyframes toastOut{from{opacity:1;transform:translateY(0) scale(1);}to{opacity:0;transform:translateY(8px) scale(0.95);}}
 
 /* ── DESKTOP SIDEBAR NAV (≥768px) ── */
 #sidebar-nav{
@@ -1216,7 +1198,6 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 </div>
 
 <!-- TOAST -->
-<div id="toast-container"></div>
 
 <!-- MODALS -->
 <div class="modal-ov" id="del-modal">
@@ -1582,7 +1563,21 @@ function statusBadge(s){ var m={available:'b-available',leave:'b-leave',sick:'b-
 function showAlert(elId,msg,type){ var el=document.getElementById(elId); if(!el) return; el.innerHTML='<div class="alert al-'+type+'">'+msg+'</div>'; setTimeout(function(){if(el) el.innerHTML='';},5000); }
 function closeModal(id){ document.getElementById(id).classList.remove('open'); }
 function rankOrder(rank){ var i=RANKS.indexOf(rank); return i===-1?99:i; }
-function sortTroops(arr){ return arr.slice().sort(function(a,b){ var r=rankOrder(a.rank)-rankOrder(b.rank); return r!==0?r:a.name.localeCompare(b.name); }); }
+// ── SENIORITY (single source of truth) ─────────────────────────────────
+// Rank always takes priority. Only within the same rank does a lower service number
+// indicate higher seniority. Every part of the app that orders or ranks personnel by
+// seniority (rosters, patrol participant lists, commander auto-assignment, Most Active
+// tie-breaks, reports, archives, etc.) must go through compareSeniority() — never compare
+// service numbers alone.
+function snSortValue(sn){ var m=(sn||'').match(/\d+/); return m?parseInt(m[0],10):Infinity; }
+function compareSeniority(a,b){
+  var r=rankOrder(a.rank)-rankOrder(b.rank);
+  if(r!==0) return r;
+  var s=snSortValue(a.sn)-snSortValue(b.sn);
+  if(s!==0) return s;
+  return (a.name||'').localeCompare(b.name||'');
+}
+function sortTroops(arr){ return arr.slice().sort(compareSeniority); }
 function daysSince(dateStr){ if(!dateStr) return 9999; return Math.floor((new Date()-new Date(dateStr+'T12:00:00'))/86400000); }
 function lastPatrol(tid){ var pts=D.patrols.filter(function(p){return (p.troops||[]).indexOf(tid)>=0;}); pts.sort(function(a,b){return b.date.localeCompare(a.date);}); return pts.length?pts[0].date:null; }
 function patrolCount(tid){ return D.patrols.filter(function(p){return (p.troops||[]).indexOf(tid)>=0;}).length; }
@@ -1593,28 +1588,11 @@ function isOfficerOrJCO(rank){ if(!rank) return false; var r=rank.toLowerCase();
 function allPersonnel(){ return D.troops.concat(D.archived||[]); }
 function personById(id){ return allPersonnel().find(function(p){return p.id===id;}); }
 function upLabel(rank,name){ return ((rank||'')+' '+(name||'')).trim().toUpperCase(); }
-function showToast(msg){
-  var c=document.getElementById('toast-container'); if(!c) return;
-  var el=document.createElement('div');
-  el.className='toast';
-  el.innerHTML='<span class="toast-tick">✓</span><span>'+msg+'</span>';
-  c.appendChild(el);
-  setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); },2150);
-}
-function snCompare(a,b){
-  var an=parseInt(String(a||'').replace(/\D/g,''),10), bn=parseInt(String(b||'').replace(/\D/g,''),10);
-  var aValid=!isNaN(an), bValid=!isNaN(bn);
-  if(aValid&&bValid&&an!==bn) return an-bn;
-  if(aValid&&bValid) return String(a||'').localeCompare(String(b||''));
-  if(aValid) return -1;
-  if(bValid) return 1;
-  return String(a||'').localeCompare(String(b||''));
-}
 function rankPersonnel(list){
   return list.slice().sort(function(a,b){
     if(b.hours!==a.hours) return b.hours-a.hours;
     if(b.count!==a.count) return b.count-a.count;
-    return snCompare(a.sn,b.sn);
+    return compareSeniority(a.person,b.person);
   });
 }
 /* Compute Most Active Troop + qualifying Officer/JCO Activity Record for a given set of patrols.
@@ -2179,12 +2157,10 @@ function renderSelected(){
   renderCommanderDropdown();
 }
 function selectAll(){ D.troops.filter(isAvailable).forEach(function(t){if(selectedTroops.indexOf(t.id)<0) selectedTroops.push(t.id);}); renderSelected(); }
-// Natural comparison of service numbers (handles formats like "SN-0042", "042", "42")
-function snSortValue(sn){ var m=(sn||'').match(/\d+/); return m?parseInt(m[0],10):Infinity; }
 function pickSeniorTroopId(troopIds){
   var list=(troopIds||[]).map(troopById).filter(Boolean);
   if(list.length===0) return null;
-  list.sort(function(a,b){ var d=snSortValue(a.sn)-snSortValue(b.sn); if(d!==0) return d; var r=rankOrder(a.rank)-rankOrder(b.rank); return r!==0?r:a.name.localeCompare(b.name); });
+  list.sort(compareSeniority);
   return list[0].id;
 }
 function editPatrol(id){
