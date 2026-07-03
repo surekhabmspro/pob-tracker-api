@@ -11,6 +11,10 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
+// ── VERSION (bump this string on every backend deploy) ─────────────────
+const API_VERSION = '2026.07.03.1';
+app.get('/version', (_, res) => res.json({ version: API_VERSION }));
+
 // ── HEALTH ────────────────────────────────────────────────────────────
 app.get('/health', (_, res) => res.json({ status: 'ok', time: new Date() }));
 
@@ -81,15 +85,15 @@ app.get('/patrols', async (req, res) => {
 // ── UPSERT PATROL ─────────────────────────────────────────────────────
 app.post('/patrols', async (req, res) => {
   try {
-    const { id, ptl_id, date, type, troops, area, duration, route, remarks } = req.body;
+    const { id, ptl_id, date, type, troops, area, duration, route, remarks, commander } = req.body;
     await pool.query(
-      `INSERT INTO patrols (id, ptl_id, date, type, troops, area, duration, route, remarks)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      `INSERT INTO patrols (id, ptl_id, date, type, troops, area, duration, route, remarks, commander)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        ON CONFLICT (id) DO UPDATE
          SET ptl_id=$2, date=$3, type=$4, troops=$5, area=$6,
-             duration=$7, route=$8, remarks=$9`,
+             duration=$7, route=$8, remarks=$9, commander=$10`,
       [id, ptl_id || '', date, type || '', troops || [], area || '',
-       parseFloat(duration) || null, route || '', remarks || '']
+       parseFloat(duration) || null, route || '', remarks || '', commander || null]
     );
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }

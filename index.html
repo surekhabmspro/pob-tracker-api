@@ -480,6 +480,9 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 .rep-summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;}
 .lh-block{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;}
 .lh-title{font-size:13.5px;font-weight:700;color:var(--tan);letter-spacing:1px;text-transform:uppercase;font-family:'Courier New',monospace;margin-bottom:8px;}
+.lh-person-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;}
+.lh-person-card{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:13px;cursor:pointer;}
+@media (max-width:600px){.lh-person-grid{grid-template-columns:1fr;}}
 .troop-row{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;}
 
 /* ── PROGRESS BAR ── */
@@ -879,12 +882,19 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
       <label class="field-label">Selected Troops</label>
       <div id="selected-troops"></div>
     </div>
+    <div class="fg" id="commander-field-wrap" style="display:none;">
+      <label class="field-label">⭐ Commander (optional)</label>
+      <select id="p-commander" onchange="selectedCommander=this.value||null;"><option value="">-- None --</option></select>
+    </div>
     <div class="fg">
       <label class="field-label">Remarks (optional)</label>
       <textarea id="p-rem" rows="2" placeholder="Any notes..."></textarea>
     </div>
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-family:'Courier New',monospace;font-size:12px;color:var(--tan);margin-bottom:12px;" id="ptl-preview">Next Patrol ID: --</div>
-    <button class="btn btn-primary btn-full" onclick="logPatrol()">⚡ Log Patrol</button>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-primary btn-full" id="p-submit-btn" onclick="logPatrol()">⚡ Log Patrol</button>
+      <button class="btn btn-ghost" id="p-cancel-edit-btn" onclick="cancelEditPatrol()" style="display:none;">Cancel</button>
+    </div>
   </div>
 </div>
 
@@ -1015,7 +1025,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
       <span>Patrol Report</span>
       <div style="display:flex;gap:5px;flex-wrap:wrap;">
         <button class="btn btn-ghost btn-sm" onclick="exportCSV()" style="font-size:9px;padding:3px 7px;min-height:28px;">CSV</button>
-        <button class="btn btn-ghost btn-sm" onclick="window.print()" style="font-size:9px;padding:3px 7px;min-height:28px;">PDF</button>
+        <button class="btn btn-ghost btn-sm" onclick="printReport()" style="font-size:9px;padding:3px 7px;min-height:28px;">PDF</button>
       </div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
@@ -1058,7 +1068,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
   <div class="card">
     <div class="card-title">
       <span>Command Handover</span>
-      <button class="btn btn-ghost btn-sm" onclick="window.print()" style="font-size:9px;padding:3px 8px;min-height:28px;">🖨</button>
+      <button class="btn btn-ghost btn-sm" onclick="printHandover()" style="font-size:9px;padding:3px 8px;min-height:28px;">🖨</button>
     </div>
     <div id="handover-content"></div>
   </div>
@@ -1324,20 +1334,12 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
   </div>
 </div>
 
-<div class="modal-ov" id="inactive-modal">
-  <div class="modal">
-    <div class="modal-handle"></div>
-    <div class="modal-title">Inactive Troops</div>
-    <div id="inactive-modal-body"></div>
-    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('inactive-modal')">Close</button></div>
-  </div>
-</div>
-
 <script>
 // =====================================================================
 // DATA & CONSTANTS
 // =====================================================================
 var API_URL = 'https://pob-tracker-api.onrender.com';
+var APP_VERSION = '2026.07.03.1';
 var SK = 'pob_v4';
 var DEFAULT_RANKS = ['POB Commander','Major','Captain','WO1','WO2','CSM','Sergeant','Corporal','Lance Corporal','Private','NCE'];
 var RANKS = DEFAULT_RANKS.slice();
@@ -1399,7 +1401,7 @@ function dbToTroop(r) {
 }
 function dbToPatrol(r) {
   return {id:r.id,ptlId:r.ptl_id,date:(r.date||'').slice(0,10),type:r.type,
-    troops:r.troops||[],area:r.area||'',duration:r.duration||'',route:r.route||'',remarks:r.remarks||''};
+    troops:r.troops||[],area:r.area||'',duration:r.duration||'',route:r.route||'',remarks:r.remarks||'',commander:r.commander||null};
 }
 function loadLocalFallback() {
   try {
@@ -1414,6 +1416,7 @@ function loadLocalFallback() {
   if (!D.config) D.config={types:DEFAULT_TYPES.slice(),sectors:DEFAULT_SECTORS.slice(),routes:DEFAULT_ROUTES.slice(),ranks:DEFAULT_RANKS.slice()};
   if (!D.config.ranks) D.config.ranks=DEFAULT_RANKS.slice();
   if (!D.security) D.security={pinHash:'',securityQ:'',securityAHash:''};
+  migrateCommanders();
 }
 
 // ── Sync indicator ────────────────────────────────────────────────────────
@@ -1486,6 +1489,7 @@ function pullFromServer(){
     if(!D.config.ranks) D.config.ranks=DEFAULT_RANKS.slice();
     RANKS=D.config.ranks;
     D.troops.forEach(function(t){if(!t.status)t.status='available';if(!t.notes)t.notes='';});
+    migrateCommanders();
     localStorage.setItem(SK,JSON.stringify(D));
     _lastSyncTime=new Date(); setSyncState('online'); _syncCountdown=_autoSyncSeconds;
     try {
@@ -1533,7 +1537,23 @@ function saveData(){ localStorage.setItem(SK,JSON.stringify(D)); }
 function remoteSaveTroop(t){ saveData(); return apiFetch('/troops',{method:'POST',body:JSON.stringify(t)}).catch(function(e){console.error('saveTroop failed',e); queueOp('saveTroop',t);}); }
 function remoteDeleteTroop(id){ saveData(); return apiFetch('/troops/'+id,{method:'DELETE'}).catch(function(e){console.error(e); queueOp('deleteTroop',{id:id});}); }
 function remoteArchiveTroop(id,archived){ saveData(); return apiFetch('/troops/'+id+'/archive',{method:'PATCH',body:JSON.stringify({archived:archived})}).catch(function(e){console.error(e); queueOp('archiveTroop',{id:id,archived:archived});}); }
-function remoteSavePatrol(p){ saveData(); var body={id:p.id,ptl_id:p.ptlId,date:p.date,type:p.type,troops:p.troops,area:p.area,duration:p.duration,route:p.route,remarks:p.remarks}; return apiFetch('/patrols',{method:'POST',body:JSON.stringify(body)}).catch(function(e){console.error(e); queueOp('savePatrol',body);}); }
+function remoteSavePatrol(p){ saveData(); var body={id:p.id,ptl_id:p.ptlId,date:p.date,type:p.type,troops:p.troops,area:p.area,duration:p.duration,route:p.route,remarks:p.remarks,commander:p.commander||null}; return apiFetch('/patrols',{method:'POST',body:JSON.stringify(body)}).catch(function(e){console.error(e); queueOp('savePatrol',body);}); }
+function migrateCommanders(){
+  // Backfills the Commander field on older patrol records that predate this feature,
+  // assigning the senior-most participating troop (lowest service number) as commander.
+  // Purely additive metadata — never touches troops, patrol counts, or hour totals.
+  var changed=[];
+  (D.patrols||[]).forEach(function(p){
+    if(p.commander===undefined||p.commander===null||p.commander===''){
+      var senior=pickSeniorTroopId(p.troops);
+      if(senior){ p.commander=senior; changed.push(p); }
+    }
+  });
+  if(changed.length>0){
+    saveData();
+    changed.forEach(function(p){ remoteSavePatrol(p); });
+  }
+}
 function remoteDeletePatrol(id){ saveData(); return apiFetch('/patrols/'+id,{method:'DELETE'}).catch(function(e){console.error(e); queueOp('deletePatrol',{id:id});}); }
 function remoteSaveAudit(entry){ return apiFetch('/audit',{method:'POST',body:JSON.stringify(entry)}).catch(function(e){console.error(e); queueOp('saveAudit',entry);}); }
 function remoteSaveConfig(){
@@ -1724,7 +1744,7 @@ function _showTabInner(id){
   if(activeSide) activeSide.classList.add('active');
   var fn={
     dashboard:renderDash,
-    'log-patrol':function(){selectedTroops=[];renderSelected();updatePtlPreview();},
+    'log-patrol':function(){ if(!editingPatrolId){selectedTroops=[];selectedCommander=null;} renderSelected(); updatePtlPreview(); if(editingPatrolId){document.getElementById('p-submit-btn').textContent='💾 Save Changes';document.getElementById('p-cancel-edit-btn').style.display='';} },
     'patrol-log':renderTable,
     troops:renderRoster,
     'archived-troops':renderArchivedTroops,
@@ -1899,8 +1919,6 @@ function globalSearch(val){ globalSearchTarget(val, 'global-results'); }
 // ── GLOBAL SEARCH ─────────────────────────────────────────────────────
 // Mobile: full-width overlay below header. Desktop: inline input in header.
 var _isDesktopSearch = false;
-function _getSearchInput(){ return _isDesktopSearch ? document.getElementById('global-search-desktop') : document.getElementById('global-search'); }
-function _getResultsBox(){ return _isDesktopSearch ? document.getElementById('global-results-desktop') : document.getElementById('global-results'); }
 
 function _isMobileSearch(){
   // Desktop if wide screen with fine pointer (mouse), otherwise mobile overlay
@@ -1941,9 +1959,6 @@ function closeGS(){
   var dBox=document.getElementById('global-results-desktop');
   if(dBox) dBox.style.display='none';
 }
-
-function expandSearch(){ openSearch(); }
-function collapseSearch(){ closeGS(); }
 
 (function setupSearchToggle(){
   var icon=document.getElementById('search-icon-btn');
@@ -2127,12 +2142,24 @@ function toggleFairnessExtra(){ var extra=document.getElementById('fairness-extr
 // LOG PATROL
 // =====================================================================
 var selectedTroops=[];
+var selectedCommander=null;
+var editingPatrolId=null;
 function troopSuggest(val){ var box=document.getElementById('troop-suggest'); if(!val||val.length===0){box.style.display='none';return;} var q=val.toLowerCase(); var matches=sortTroops(D.troops.filter(isAvailable)).filter(function(t){return (t.rank+' '+t.name+' '+t.unit).toLowerCase().indexOf(q)>=0&&selectedTroops.indexOf(t.id)<0;}); if(matches.length===0){box.style.display='none';return;} box.style.display='block'; box.innerHTML=matches.slice(0,8).map(function(t){ return '<div class="suggest-item" onclick="addTroopToPatrol(\''+t.id+'\')">'+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>'+' <span style="color:var(--text-muted);font-size:11px;">('+t.unit+')</span></div>'; }).join(''); }
 function addTroopToPatrol(id){ if(selectedTroops.indexOf(id)<0) selectedTroops.push(id); document.getElementById('troop-search').value=''; document.getElementById('troop-suggest').style.display='none'; renderSelected(); }
-function removeTroopFromPatrol(id){ selectedTroops=selectedTroops.filter(function(x){return x!==id;}); renderSelected(); }
+function removeTroopFromPatrol(id){ selectedTroops=selectedTroops.filter(function(x){return x!==id;}); if(selectedCommander===id) selectedCommander=null; renderSelected(); }
+function renderCommanderDropdown(){
+  var wrap=document.getElementById('commander-field-wrap');
+  var sel=document.getElementById('p-commander');
+  if(!wrap||!sel) return;
+  if(selectedTroops.length===0){ wrap.style.display='none'; selectedCommander=null; return; }
+  wrap.style.display='';
+  var opts=sortTroops(D.troops.filter(function(t){return selectedTroops.indexOf(t.id)>=0;}));
+  sel.innerHTML='<option value="">-- None --</option>'+opts.map(function(t){return '<option value="'+t.id+'"'+(selectedCommander===t.id?' selected':'')+'>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</option>';}).join('');
+  if(selectedCommander&&selectedTroops.indexOf(selectedCommander)<0){ selectedCommander=null; sel.value=''; }
+}
 function renderSelected(){
   var el=document.getElementById('selected-troops');
-  if(D.troops.length===0){el.innerHTML='<span style="color:var(--text-muted);font-size:13px;">Add troops in Troops tab first.</span>';return;}
+  if(D.troops.length===0){el.innerHTML='<span style="color:var(--text-muted);font-size:13px;">Add troops in Troops tab first.</span>';renderCommanderDropdown();return;}
   if(selectedTroops.length===0){
     el.innerHTML='<div style="width:100%;"><span style="color:var(--text-muted);font-size:12px;">No troops selected. Tap to add:</span>'+
       '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px;">'+
@@ -2140,6 +2167,7 @@ function renderSelected(){
         return '<button class="btn btn-ghost btn-sm" onclick="addTroopToPatrol(\''+t.id+'\')" style="font-size:11px;min-height:36px;">'+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong></button>';
       }).join('')+
       '<button class="btn btn-ghost btn-sm" onclick="selectAll()" style="border-color:var(--tan);color:var(--tan);min-height:36px;">All</button></div></div>';
+    renderCommanderDropdown();
     return;
   }
   el.innerHTML=sortTroops(D.troops.filter(function(t){return selectedTroops.indexOf(t.id)>=0;}))
@@ -2148,8 +2176,44 @@ function renderSelected(){
         '<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>'+
         '<button onclick="removeTroopFromPatrol(\''+t.id+'\')" style="background:none;border:none;color:var(--red-light);cursor:pointer;font-size:18px;padding:0 2px;line-height:1;">×</button></div>';
     }).join('');
+  renderCommanderDropdown();
 }
 function selectAll(){ D.troops.filter(isAvailable).forEach(function(t){if(selectedTroops.indexOf(t.id)<0) selectedTroops.push(t.id);}); renderSelected(); }
+// Natural comparison of service numbers (handles formats like "SN-0042", "042", "42")
+function snSortValue(sn){ var m=(sn||'').match(/\d+/); return m?parseInt(m[0],10):Infinity; }
+function pickSeniorTroopId(troopIds){
+  var list=(troopIds||[]).map(troopById).filter(Boolean);
+  if(list.length===0) return null;
+  list.sort(function(a,b){ var d=snSortValue(a.sn)-snSortValue(b.sn); if(d!==0) return d; var r=rankOrder(a.rank)-rankOrder(b.rank); return r!==0?r:a.name.localeCompare(b.name); });
+  return list[0].id;
+}
+function editPatrol(id){
+  var p=D.patrols.find(function(x){return x.id===id;});
+  if(!p) return;
+  editingPatrolId=id;
+  selectedTroops=(p.troops||[]).slice();
+  selectedCommander=p.commander||null;
+  document.getElementById('p-date').value=fmtDate(p.date);
+  document.getElementById('p-type').value=p.type||'';
+  document.getElementById('p-area').value=p.area||'';
+  document.getElementById('p-dur').value=p.duration||'';
+  document.getElementById('p-route').value=p.route||'';
+  document.getElementById('p-rem').value=p.remarks||'';
+  renderSelected();
+  document.getElementById('p-submit-btn').textContent='💾 Save Changes';
+  document.getElementById('p-cancel-edit-btn').style.display='';
+  showTab('log-patrol');
+  document.getElementById('app-main').scrollTop=0;
+}
+function cancelEditPatrol(){
+  editingPatrolId=null;
+  selectedTroops=[]; selectedCommander=null;
+  document.getElementById('p-date').value=''; document.getElementById('p-area').value=''; document.getElementById('p-dur').value=''; document.getElementById('p-route').value=''; document.getElementById('p-rem').value='';
+  renderSelected();
+  document.getElementById('p-submit-btn').textContent='⚡ Log Patrol';
+  document.getElementById('p-cancel-edit-btn').style.display='none';
+  updatePtlPreview();
+}
 function logPatrol(){
   var dateRaw=document.getElementById('p-date').value;
   var date=parseDate(dateRaw);
@@ -2160,17 +2224,30 @@ function logPatrol(){
   var rem=document.getElementById('p-rem').value.trim();
   if(!date){showAlert('log-alert','Please enter a valid date (DD/MM/YYYY).','danger');return;}
   if(selectedTroops.length===0){showAlert('log-alert','Please select at least one troop.','danger');return;}
-  var dup=D.patrols.find(function(p){if(p.date!==date||p.type!==type)return false;return (p.troops||[]).some(function(tid){return selectedTroops.indexOf(tid)>=0;});});
-  var ptlId=nextPtlId();
-  var newPatrol={id:uid('p'),ptlId:ptlId,date:date,type:type,troops:selectedTroops.slice(),duration:dur,area:area,route:route,remarks:rem};
-  D.patrols.push(newPatrol);
-  remoteSavePatrol(newPatrol);
-  remoteSaveConfig();
-  audit('Patrol logged: '+ptlId+' | '+type+' | '+(area||'No sector')+' | '+selectedTroops.length+' troops');
-  if(dup) showAlert('log-alert','Patrol '+ptlId+' logged. WARNING: Possible duplicate.','warn');
-  else showAlert('log-alert','Patrol '+ptlId+' logged successfully!','success');
+  if(editingPatrolId){
+    var ep=D.patrols.find(function(x){return x.id===editingPatrolId;});
+    if(!ep){editingPatrolId=null;showAlert('log-alert','Patrol no longer exists.','danger');return;}
+    ep.date=date; ep.type=type; ep.area=area; ep.duration=dur; ep.route=route; ep.remarks=rem;
+    ep.troops=selectedTroops.slice(); ep.commander=selectedCommander||null;
+    remoteSavePatrol(ep);
+    audit('Patrol edited: '+ep.ptlId+' | '+type+' | '+(area||'No sector'));
+    showAlert('log-alert','Patrol '+ep.ptlId+' updated successfully!','success');
+    editingPatrolId=null;
+    document.getElementById('p-submit-btn').textContent='⚡ Log Patrol';
+    document.getElementById('p-cancel-edit-btn').style.display='none';
+  } else {
+    var dup=D.patrols.find(function(p){if(p.date!==date||p.type!==type)return false;return (p.troops||[]).some(function(tid){return selectedTroops.indexOf(tid)>=0;});});
+    var ptlId=nextPtlId();
+    var newPatrol={id:uid('p'),ptlId:ptlId,date:date,type:type,troops:selectedTroops.slice(),duration:dur,area:area,route:route,remarks:rem,commander:selectedCommander||null};
+    D.patrols.push(newPatrol);
+    remoteSavePatrol(newPatrol);
+    remoteSaveConfig();
+    audit('Patrol logged: '+ptlId+' | '+type+' | '+(area||'No sector')+' | '+selectedTroops.length+' troops');
+    if(dup) showAlert('log-alert','Patrol '+ptlId+' logged. WARNING: Possible duplicate.','warn');
+    else showAlert('log-alert','Patrol '+ptlId+' logged successfully!','success');
+  }
   document.getElementById('p-dur').value=''; document.getElementById('p-area').value=''; document.getElementById('p-route').value=''; document.getElementById('p-rem').value='';
-  selectedTroops=[]; renderSelected(); updatePtlPreview();
+  selectedTroops=[]; selectedCommander=null; renderSelected(); updatePtlPreview();
   document.getElementById('app-main').scrollTop=0;
 }
 
@@ -2213,15 +2290,17 @@ function renderTable(){
       '</div>'+
       '<div class="patrol-card-actions">'+
       '<button class="count-pill" onclick="showTroopsModal(\''+p.id+'\')">'+(p.troops||[]).length+' trp</button>'+
+      '<button class="btn btn-ghost btn-sm" onclick="editPatrol(\''+p.id+'\')" style="font-size:9px;padding:3px 7px;min-height:28px;">✎</button>'+
       '<button class="del-btn" onclick="confirmDel(\'patrol\',\''+p.id+'\')">×</button>'+
       '</div></div>'+
+      (p.commander&&troopById(p.commander)?'<div style="font-size:11px;color:var(--tan);margin-top:4px;font-weight:700;">⭐ Cdr: '+upLabel(troopById(p.commander).rank,troopById(p.commander).name)+'</div>':'')+
       (p.remarks?'<div style="font-size:11px;color:var(--text-muted);margin-top:5px;font-style:italic;">'+p.remarks+'</div>':'')+
       (p.route?'<div style="font-size:10px;color:var(--text-muted);margin-top:3px;">📍 '+p.route+'</div>':'')+
       '</div>';
   }).join('');
 }
 function clearFilters(){ ['fs','ft','fa','ff','fto'].forEach(function(id){document.getElementById(id).value='';}); document.getElementById('fsort').value='date-desc'; renderTable(); }
-function showTroopsModal(patrolId){ var p=D.patrols.find(function(x){return x.id===patrolId;}); if(!p) return; document.getElementById('troops-modal-title').textContent=(p.ptlId||'')+' — '+fmtDateLong(p.date)+' — '+p.type; var list=(p.troops||[]).map(troopById).filter(Boolean); document.getElementById('troops-modal-body').innerHTML=list.length===0?'<div class="empty">No troops.</div>':sortTroops(list).map(function(t){ return '<div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:14px;">'+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong> <span style="color:var(--text-muted);font-size:11px;">('+t.unit+')</span></div>'; }).join(''); document.getElementById('troops-modal').classList.add('open'); }
+function showTroopsModal(patrolId){ var p=D.patrols.find(function(x){return x.id===patrolId;}); if(!p) return; document.getElementById('troops-modal-title').textContent=(p.ptlId||'')+' — '+fmtDateLong(p.date)+' — '+p.type; var list=(p.troops||[]).map(troopById).filter(Boolean); var sorted=sortTroops(list); if(p.commander){ sorted=sorted.slice().sort(function(a,b){ if(a.id===p.commander) return -1; if(b.id===p.commander) return 1; return 0; }); } document.getElementById('troops-modal-body').innerHTML=list.length===0?'<div class="empty">No troops.</div>':sorted.map(function(t){ var isCdr=t.id===p.commander; return '<div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:14px;'+(isCdr?'background:rgba(200,184,122,0.12);border-left:3px solid var(--tan);padding-left:8px;':'')+'">'+'<strong style="'+(isCdr?'color:var(--tan);':'')+'">'+(isCdr?'⭐ ':'')+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong> '+(isCdr?'<span class="badge" style="background:var(--tan);color:#1a1a1a;font-size:9px;">COMMANDER</span> ':'')+'<span style="color:var(--text-muted);font-size:11px;">('+t.unit+')</span></div>'; }).join(''); document.getElementById('troops-modal').classList.add('open'); }
 
 // =====================================================================
 // TROOPS
@@ -2408,7 +2487,7 @@ function showProfile(id, fromArch){
 }
 
 function printProfile(){ var title=document.getElementById('profile-title').textContent; var body=document.getElementById('profile-body').innerHTML; var s=D.settings; var win=window.open('','_blank','width=900,height=700'); win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+title+'</title><style>body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:14px;}.print-hdr{text-align:center;border-bottom:2px solid #333;padding-bottom:12px;margin-bottom:20px;}.print-hdr h2{margin:0 0 4px;font-size:18px;}.section-hdr{font-family:\'Courier New\',monospace;font-size:10px;color:#2d5a3d;letter-spacing:2px;text-transform:uppercase;margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid #ccc;}.stat{background:#f5f5f5;border:1px solid #ccc;border-radius:4px;padding:8px;text-align:center;}.stat-num{font-size:20px;font-weight:700;color:#2d5a3d;font-family:\'Courier New\',monospace;}.stat-label{font-size:9px;color:#666;letter-spacing:1px;text-transform:uppercase;margin-top:2px;}.badge{display:inline-block;padding:2px 6px;border-radius:2px;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;font-family:\'Courier New\',monospace;background:#eee;border:1px solid #999;color:#333;}.notes-field{background:#f9f9f9;border:1px solid #ddd;border-radius:3px;padding:8px 10px;font-size:12px;color:#555;margin-top:6px;font-style:italic;}a,button{display:none!important;}@media print{body{padding:10px;}@page{margin:1cm;}}</style></head><body>'+
-  '<div class="print-hdr"><div style="font-size:10px;color:#999;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">'+(s.classification||'')+(s.classification?' — ':'')+''+(s.pob||'POB Mobaye')+'</div><h2>'+title+'</h2><p style="font-size:11px;color:#555;">Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p></div>'+body+'</body></html>'); win.document.close(); win.focus(); setTimeout(function(){win.print();},400); }
+  '<div class="print-hdr"><div style="font-size:10px;color:#999;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">'+(s.classification||'')+(s.classification?' — ':'')+''+(s.pob||'POB Mobaye')+'</div><h2>'+title+'</h2><p style="font-size:11px;color:#555;">Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p></div>'+body+'</body></html>'); win.document.close(); win.focus(); }
 
 function viewFullRecord(){
   var id=document.getElementById('profile-modal').dataset.troopId;
@@ -2471,8 +2550,7 @@ function renderInactive(days){
       '<div class="ic-meta">Last: '+(lp?fmtDateLong(lp):'Never')+'</div></div>';
   }).join('');
 }
-function showInactiveModal(){ var list=D.troops.filter(function(t){return isAvailable(t)&&daysSince(lastPatrol(t.id))>7;}); document.getElementById('inactive-modal-body').innerHTML=list.length===0?'<div class="empty">No inactive troops.</div>':list.map(function(t){var lp=lastPatrol(t.id),ds=daysSince(lp);return '<div style="padding:10px 0;border-bottom:1px solid var(--border);"><div style="font-weight:700;">'+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>'+'</div><div style="font-size:12px;color:var(--text-muted);">Unit: '+(t.unit||'—')+' · Last: '+(lp?fmtDateLong(lp):'Never')+' · <span style="color:#ff8888;">'+(ds===9999?'Never patrolled':ds+' days ago')+'</span></div></div>';}).join(''); document.getElementById('inactive-modal').classList.add('open'); }
-function printInactive(){ var filterLbl=document.getElementById('inactive-filter-label')?document.getElementById('inactive-filter-label').textContent:''; var cards=document.getElementById('inactive-list').querySelectorAll('.inactive-card'); var s=D.settings; var rows=''; cards.forEach(function(card){var name=card.querySelector('.ic-name')?card.querySelector('.ic-name').textContent:'';var unit=card.querySelector('.ic-unit')?card.querySelector('.ic-unit').textContent:'';var meta=card.querySelector('.ic-meta')?card.querySelector('.ic-meta').textContent:'';var badge=card.querySelector('.badge')?card.querySelector('.badge').textContent:'';rows+='<tr><td>'+name+'</td><td>'+unit+'</td><td>'+meta+'</td><td><strong>'+badge+'</strong></td></tr>';}); var win=window.open('','_blank','width=900,height=700'); win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Inactive Troops Report</title><style>body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:14px;}.hdr{text-align:center;border-bottom:2px solid #2d5a3d;padding-bottom:12px;margin-bottom:20px;}.hdr h2{margin:0 0 4px;font-size:18px;color:#1a3a2a;}.hdr p{margin:2px 0;font-size:11px;color:#555;}table{width:100%;border-collapse:collapse;font-size:13px;}th{background:#2d5a3d;color:#fff;font-family:\'Courier New\',monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:8px 10px;text-align:left;}td{padding:7px 10px;border-bottom:1px solid #e0e8e0;}tr:nth-child(even) td{background:#f8f8f8;}.footer{margin-top:16px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}@media print{@page{margin:1.5cm;size:A4;}button{display:none!important;}}</style></head><body><div class="hdr"><div style="font-size:10px;color:#999;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">'+(s.classification||'')+(s.classification?' — ':'')+''+(s.pob||'POB Mobaye')+'</div><h2>INACTIVE TROOPS REPORT</h2><p>'+filterLbl+'</p><p>Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p></div><table><thead><tr><th>Name &amp; Rank</th><th>Unit / Hours</th><th>Last Patrol</th><th>Inactivity</th></tr></thead><tbody>'+rows+'</tbody></table><div class="footer">'+(s.pob||'POB Mobaye')+' Patrol Tracker · Inactive Troops Report · '+nowStr()+'</div><div style="margin-top:16px;text-align:center;"><button onclick="window.print()" style="padding:10px 24px;background:#2d5a3d;color:#fff;border:none;border-radius:4px;font-size:13px;cursor:pointer;font-weight:700;">🖨 Print</button></div></body></html>'); win.document.close(); win.focus(); setTimeout(function(){win.print();},400); }
+function printInactive(){ var filterLbl=document.getElementById('inactive-filter-label')?document.getElementById('inactive-filter-label').textContent:''; var cards=document.getElementById('inactive-list').querySelectorAll('.inactive-card'); var s=D.settings; var rows=''; cards.forEach(function(card){var name=card.querySelector('.ic-name')?card.querySelector('.ic-name').textContent:'';var unit=card.querySelector('.ic-unit')?card.querySelector('.ic-unit').textContent:'';var meta=card.querySelector('.ic-meta')?card.querySelector('.ic-meta').textContent:'';var badge=card.querySelector('.badge')?card.querySelector('.badge').textContent:'';rows+='<tr><td>'+name+'</td><td>'+unit+'</td><td>'+meta+'</td><td><strong>'+badge+'</strong></td></tr>';}); var win=window.open('','_blank','width=900,height=700'); win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Inactive Troops Report</title><style>body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:14px;}.hdr{text-align:center;border-bottom:2px solid #2d5a3d;padding-bottom:12px;margin-bottom:20px;}.hdr h2{margin:0 0 4px;font-size:18px;color:#1a3a2a;}.hdr p{margin:2px 0;font-size:11px;color:#555;}table{width:100%;border-collapse:collapse;font-size:13px;}th{background:#2d5a3d;color:#fff;font-family:\'Courier New\',monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:8px 10px;text-align:left;}td{padding:7px 10px;border-bottom:1px solid #e0e8e0;}tr:nth-child(even) td{background:#f8f8f8;}tr{page-break-inside:avoid;}.footer{margin-top:16px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}@media print{@page{margin:1.5cm;size:A4;}button{display:none!important;}thead{display:table-header-group;}}</style></head><body><div class="hdr"><div style="font-size:10px;color:#999;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">'+(s.classification||'')+(s.classification?' — ':'')+''+(s.pob||'POB Mobaye')+'</div><h2>INACTIVE TROOPS REPORT</h2><p>'+filterLbl+'</p><p>Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p></div><table><thead><tr><th>Name &amp; Rank</th><th>Unit / Hours</th><th>Last Patrol</th><th>Inactivity</th></tr></thead><tbody>'+rows+'</tbody></table><div class="footer">'+(s.pob||'POB Mobaye')+' Patrol Tracker · Inactive Troops Report · '+nowStr()+'</div><div style="margin-top:16px;text-align:center;"><button onclick="window.print()" style="padding:10px 24px;background:#2d5a3d;color:#fff;border:none;border-radius:4px;font-size:13px;cursor:pointer;font-weight:700;">🖨 Print</button></div></body></html>'); win.document.close(); win.focus(); }
 
 // =====================================================================
 // REPORT
@@ -2539,6 +2617,81 @@ function genReport(){
   }
   rc.innerHTML=html;
 }
+// Builds a clean, printer-friendly popup for the current Report period (weekly/monthly/total),
+// mirroring genReport()'s filtering so the PDF/print matches what's on screen — using real table
+// markup with page-break rules so it paginates properly instead of screenshotting the live app shell.
+function printReport(){
+  var mode=document.getElementById('report-mode')?document.getElementById('report-mode').value:'weekly';
+  var moNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var s=D.settings, cmdR=document.getElementById('cmd-remarks').value.trim();
+  var periodLabel='',patrols=[],periodStart='',periodEnd='';
+  if(mode==='total'){ patrols=D.patrols.slice(); if(patrols.length>0){var sorted=patrols.slice().sort(function(a,b){return a.date.localeCompare(b.date);});periodStart=fmtDateLong(sorted[0].date);periodEnd=fmtDateLong(sorted[sorted.length-1].date);}else{periodStart='N/A';periodEnd='N/A';} periodLabel='Total Up To Date'; }
+  else if(mode==='monthly'){ var selMo=parseInt(document.getElementById('report-month-sel').value)||new Date().getMonth()+1; var selYr=parseInt(document.getElementById('report-year-sel')?document.getElementById('report-year-sel').value:new Date().getFullYear())||new Date().getFullYear(); patrols=D.patrols.filter(function(p){var d=new Date(p.date+'T12:00:00');return d.getMonth()===(selMo-1)&&d.getFullYear()===selYr;}); periodLabel='Monthly — '+moNames[selMo-1]+' '+selYr; periodStart=moNames[selMo-1]+' '+selYr; periodEnd=moNames[selMo-1]+' '+selYr; }
+  else { var ws=parseDate(document.getElementById('week-start').value); if(!ws){alert('Select a week start date.');return;} var mon=new Date(ws+'T12:00:00');mon.setHours(0,0,0,0); var sun=new Date(mon);sun.setDate(mon.getDate()+6);sun.setHours(23,59,59,999); patrols=D.patrols.filter(function(p){var pd=new Date(p.date+'T12:00:00');return pd>=mon&&pd<=sun;}); var sunDate=new Date(ws+'T12:00:00');sunDate.setDate(sunDate.getDate()+6); var sunISO=sunDate.toISOString().slice(0,10); periodLabel='Weekly Patrol Report'; periodStart=fmtDateLong(ws); periodEnd=fmtDateLong(sunISO); }
+
+  var totalH=patrols.reduce(function(sum,p){return sum+(parseFloat(p.duration)||0);},0);
+  var deployed=new Set(patrols.reduce(function(a,p){return a.concat(p.troops||[]);},[]));
+  var notDep=D.troops.filter(function(t){return !deployed.has(t.id);});
+
+  var patrolRows=patrols.slice().sort(function(a,b){return a.date.localeCompare(b.date);}).map(function(p){
+    var cdr=p.commander&&troopById(p.commander)?upLabel(troopById(p.commander).rank,troopById(p.commander).name):'—';
+    return '<tr><td><strong>'+(p.ptlId||'—')+'</strong></td><td>'+fmtDate(p.date)+'</td><td>'+p.type+'</td><td>'+(p.area||'—')+'</td><td style="font-size:10.5px;">'+cdr+'</td><td style="text-align:center;">'+(p.duration?p.duration+'h':'—')+'</td><td style="font-size:10.5px;font-style:italic;">'+(p.remarks||p.route||'—')+'</td></tr>';
+  }).join('');
+
+  var allT=sortTroops(D.troops);
+  var troopRows=allT.map(function(t){
+    var tp=patrols.filter(function(p){return (p.troops||[]).indexOf(t.id)>=0;});
+    var tH=tp.reduce(function(sum,p){return sum+(parseFloat(p.duration)||0);},0);
+    var part=tp.length>0;
+    var cdrCount=tp.filter(function(p){return p.commander===t.id;}).length;
+    return '<tr><td>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+(cdrCount>0?' <span style="color:#8a6d1f;font-weight:700;">('+cdrCount+'x CDR)</span>':'')+'</td><td>'+(t.unit||'—')+'</td><td style="text-align:center;">'+tp.length+'</td><td style="text-align:center;">'+(tH>0?tH.toFixed(1):'—')+'</td><td style="text-align:center;"><strong style="color:'+(part?'#2d5a3d':'#8b1a1a')+';">'+(part?'DEPLOYED':'NOT DEP.')+'</strong></td></tr>';
+  }).join('');
+
+  var win=window.open('','_blank','width=980,height=760');
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Patrol Report</title><style>'+
+    'body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:13px;}'+
+    '.hdr{text-align:center;border-bottom:2px solid #2d5a3d;padding-bottom:14px;margin-bottom:18px;}'+
+    '.hdr h2{margin:0 0 4px;font-size:20px;color:#1a3a2a;}'+
+    '.hdr p{margin:2px 0;font-size:11px;color:#555;}'+
+    '.info-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;}'+
+    '.info-box{background:#f5f5f5;border:1px solid #ccc;border-radius:4px;padding:10px;text-align:center;}'+
+    '.info-num{font-size:22px;font-weight:700;color:#2d5a3d;font-family:\'Courier New\',monospace;}'+
+    '.info-lbl{font-size:10px;color:#666;letter-spacing:1px;text-transform:uppercase;margin-top:3px;}'+
+    '.sub-hdr{font-family:\'Courier New\',monospace;font-size:10px;color:#2d5a3d;letter-spacing:2px;text-transform:uppercase;margin:16px 0 8px;padding-bottom:5px;border-bottom:1px solid #ccc;}'+
+    '.remarks-box{margin-top:10px;padding:8px 10px;background:#fbf8ee;border-left:3px solid #c8b87a;font-size:12px;}'+
+    'table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;}'+
+    'th{background:#2d5a3d;color:#fff;font-family:\'Courier New\',monospace;font-size:9.5px;letter-spacing:0.5px;text-transform:uppercase;padding:8px 8px;text-align:left;}'+
+    'td{padding:6px 8px;border-bottom:1px solid #e0e8e0;word-wrap:break-word;vertical-align:top;}'+
+    'tr:nth-child(even) td{background:#f8fff8;}'+
+    'tr{page-break-inside:avoid;}'+
+    '.footer{margin-top:20px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}'+
+    'a,button.no-print{display:none!important;}'+
+    '@media print{body{padding:12px;}@page{margin:1cm;size:A4;}button{display:none!important;}thead{display:table-header-group;}}'+
+    '</style></head><body>'+
+    '<div class="hdr">'+
+    (s.classification?'<div style="font-size:10px;color:#999;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">'+s.classification+' — '+(s.pob||'POB Mobaye')+'</div>':'')+
+    '<h2>PATROL REPORT</h2>'+
+    '<p>'+periodLabel+' · '+periodStart+(periodEnd&&periodEnd!==periodStart?' — '+periodEnd:'')+'</p>'+
+    '<p>Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p>'+
+    '</div>'+
+    '<div class="info-grid">'+
+    '<div class="info-box"><div class="info-num">'+patrols.length+'</div><div class="info-lbl">Patrols</div></div>'+
+    '<div class="info-box"><div class="info-num">'+deployed.size+'</div><div class="info-lbl">Deployed</div></div>'+
+    '<div class="info-box"><div class="info-num">'+(totalH>0?totalH.toFixed(1):'—')+'</div><div class="info-lbl">Hours</div></div>'+
+    '<div class="info-box"><div class="info-num">'+notDep.length+'</div><div class="info-lbl">Not Deployed</div></div>'+
+    '</div>'+
+    (cmdR?'<div class="remarks-box"><div style="font-size:9px;color:#8a6d1f;font-family:\'Courier New\',monospace;letter-spacing:1px;margin-bottom:3px;">COMMANDER\'S REMARKS</div>'+cmdR+'</div>':'')+
+    '<div class="sub-hdr">Patrol Detail</div>'+
+    (patrolRows?'<table><colgroup><col style="width:11%"><col style="width:10%"><col style="width:11%"><col style="width:15%"><col style="width:16%"><col style="width:8%"><col style="width:29%"></colgroup>'+
+    '<thead><tr><th>Ptl ID</th><th>Date</th><th>Type</th><th>Sector</th><th>Commander</th><th>Hrs</th><th>Remarks / Route</th></tr></thead><tbody>'+patrolRows+'</tbody></table>':'<div style="color:#888;font-size:12px;">No patrols in this period.</div>')+
+    '<div class="sub-hdr">Troop Participation</div>'+
+    '<table><colgroup><col style="width:38%"><col style="width:20%"><col style="width:14%"><col style="width:14%"><col style="width:14%"></colgroup>'+
+    '<thead><tr><th>Name &amp; Rank</th><th>Unit</th><th>Patrols</th><th>Hours</th><th>Status</th></tr></thead><tbody>'+troopRows+'</tbody></table>'+
+    '<div class="footer">'+(s.pob||'POB Mobaye')+' Patrol Tracker · Patrol Report · '+nowStr()+'</div>'+
+    '<div style="margin-top:16px;text-align:center;" class="no-print"><button onclick="window.print()" style="padding:10px 24px;background:#2d5a3d;color:#fff;border:none;border-radius:4px;font-size:13px;cursor:pointer;font-weight:700;">🖨 Print / Save PDF</button></div>'+
+    '</body></html>');
+  win.document.close(); win.focus();
+}
 function exportCSV(){ var ws=parseDate(document.getElementById('week-start').value); if(!ws){alert('Select a week start date.');return;} var mon=new Date(ws+'T12:00:00');mon.setHours(0,0,0,0); var sun=new Date(mon);sun.setDate(mon.getDate()+6);sun.setHours(23,59,59,999); var wk=D.patrols.filter(function(p){var pd=new Date(p.date+'T12:00:00');return pd>=mon&&pd<=sun;}); var csv='Patrol ID,Date,Type,Sector,Route,Duration(h),Troops,Remarks\n'; wk.forEach(function(p){var troops=(p.troops||[]).map(troopLabel).join(' | ');csv+='"'+(p.ptlId||'')+'","'+fmtDate(p.date)+'","'+p.type+'","'+(p.area||'')+'","'+(p.route||'')+'","'+(p.duration||'')+'","'+troops+'","'+((p.remarks||'').replace(/"/g,'""'))+'"\n';}); dlFile(csv,'text/csv','POB_Mobaye_WeeklyReport_'+ws+'.csv'); }
 function exportCSVFull(){ var csv='Patrol ID,Date,Type,Sector,Route,Duration(h),Troops,Remarks\n'; D.patrols.slice().sort(function(a,b){return b.date.localeCompare(a.date);}).forEach(function(p){var troops=(p.troops||[]).map(troopLabel).join(' | ');csv+='"'+(p.ptlId||'')+'","'+fmtDate(p.date)+'","'+p.type+'","'+(p.area||'')+'","'+(p.route||'')+'","'+(p.duration||'')+'","'+troops+'","'+((p.remarks||'').replace(/"/g,'""'))+'"\n';}); dlFile(csv,'text/csv','POB_Mobaye_AllPatrols.csv'); }
 
@@ -2566,11 +2719,13 @@ function printPatrolSummary(){
   var dateRange=rows.length?(fmtDate(rows.reduce(function(m,p){return p.date<m?p.date:m;},rows[0].date))+' – '+fmtDate(rows.reduce(function(m,p){return p.date>m?p.date:m;},rows[0].date))):'—';
 
   var rowsHtml=rows.map(function(p){
+    var cdr=p.commander&&troopById(p.commander)?upLabel(troopById(p.commander).rank,troopById(p.commander).name):'—';
     return '<tr>'+
       '<td><strong>'+(p.ptlId||'—')+'</strong></td>'+
       '<td>'+fmtDate(p.date)+'</td>'+
       '<td>'+p.type+'</td>'+
       '<td>'+(p.area||'—')+'</td>'+
+      '<td style="font-size:11px;">'+cdr+'</td>'+
       '<td style="text-align:center;">'+(p.duration?p.duration+'h':'—')+'</td>'+
       '<td style="text-align:center;">'+(p.troops||[]).length+'</td>'+
       '<td style="font-size:11px;font-style:italic;">'+(p.remarks||p.route||'—')+'</td>'+
@@ -2595,7 +2750,7 @@ function printPatrolSummary(){
     'tr{page-break-inside:avoid;}'+
     '.footer{margin-top:20px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}'+
     'a,button.no-print{display:none!important;}'+
-    '@media print{body{padding:12px;}@page{margin:1cm;size:A4;}button{display:none!important;}}'+
+    '@media print{body{padding:12px;}@page{margin:1cm;size:A4;}button{display:none!important;}thead{display:table-header-group;}}'+
     '</style></head><body>'+
     '<div class="hdr">'+
     (s.classification?'<div style="font-size:10px;color:#999;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">'+s.classification+' — '+(s.pob||'POB Mobaye')+'</div>':'')+
@@ -2610,13 +2765,13 @@ function printPatrolSummary(){
     '<div class="info-box"><div class="info-num" style="font-size:14px;">'+dateRange+'</div><div class="info-lbl">Range</div></div>'+
     '</div>'+
     '<div class="sub-hdr">Patrol Detail</div>'+
-    '<table><colgroup><col style="width:11%"><col style="width:11%"><col style="width:11%"><col style="width:16%"><col style="width:8%"><col style="width:9%"><col style="width:34%"></colgroup>'+
-    '<thead><tr><th>Ptl ID</th><th>Date</th><th>Type</th><th>Sector</th><th>Hrs</th><th>Trp #</th><th>Remarks / Route</th></tr></thead>'+
+    '<table><colgroup><col style="width:10%"><col style="width:9%"><col style="width:9%"><col style="width:12%"><col style="width:13%"><col style="width:7%"><col style="width:8%"><col style="width:32%"></colgroup>'+
+    '<thead><tr><th>Ptl ID</th><th>Date</th><th>Type</th><th>Sector</th><th>Commander</th><th>Hrs</th><th>Trp #</th><th>Remarks / Route</th></tr></thead>'+
     '<tbody>'+rowsHtml+'</tbody></table>'+
     '<div class="footer">'+(s.pob||'POB Mobaye')+' Patrol Tracker · Patrol Log Summary · '+nowStr()+'</div>'+
     '<div style="margin-top:16px;text-align:center;" class="no-print"><button onclick="window.print()" style="padding:10px 24px;background:#2d5a3d;color:#fff;border:none;border-radius:4px;font-size:13px;cursor:pointer;font-weight:700;">🖨 Print / Save PDF</button></div>'+
     '</body></html>');
-  win.document.close(); win.focus(); setTimeout(function(){win.print();},400);
+  win.document.close(); win.focus();
 }
 
 // =====================================================================
@@ -2644,13 +2799,81 @@ function renderHandover(){
     '</div>'+
     '<div style="font-size:12px;color:var(--text-muted);">Sectors: <strong style="color:var(--text);">'+(sectors.join(', ')||'None')+'</strong></div></div>'+
     '<div class="lh-block"><div class="lh-title">Troop Performance</div>'+
-    sortTroops(D.troops).map(function(t){var c30=recentPats.filter(function(p){return (p.troops||[]).indexOf(t.id)>=0;}).length;var h30=recentPats.filter(function(p){return (p.troops||[]).indexOf(t.id)>=0;}).reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0);var lp=lastPatrol(t.id),ds=daysSince(lp);return '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:1px solid rgba(100,130,100,0.15);font-size:13px;flex-wrap:wrap;gap:4px;cursor:pointer;" onclick="showProfile(\''+t.id+'\')"><div>'+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong> '+statusBadge(t.status||'available')+'</div><div style="font-size:11px;color:var(--text-muted);">30d: <strong style="color:var(--text);">'+c30+'ptl/'+h30.toFixed(1)+'h</strong> · Last: <strong style="color:'+(ds>14?'#ff8888':'var(--text)');'">'+(lp?fmtDateLong(lp):'Never')+'</strong></div></div>';}).join('')+'</div>'+
+    '<div class="lh-person-grid">'+sortTroops(D.troops).map(function(t){var c30=recentPats.filter(function(p){return (p.troops||[]).indexOf(t.id)>=0;}).length;var h30=recentPats.filter(function(p){return (p.troops||[]).indexOf(t.id)>=0;}).reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0);var lp=lastPatrol(t.id),ds=daysSince(lp);return '<div class="lh-person-card" onclick="showProfile(\''+t.id+'\')"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:4px;flex-wrap:wrap;">'+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong> '+statusBadge(t.status||'available')+'</div><div style="font-size:11px;color:var(--text-muted);margin-top:3px;">30d: <strong style="color:var(--text);">'+c30+'ptl/'+h30.toFixed(1)+'h</strong> · Last: <strong style="color:'+(ds>14?'#ff8888':'var(--text)')+';">'+(lp?fmtDateLong(lp):'Never')+'</strong></div></div>';}).join('')+'</div></div>'+
     '<div class="lh-block"><div class="lh-title">Inactive Troops (Action Required)</div>'+
-    (function(){var inn=sortTroops(D.troops.filter(function(t){return isAvailable(t)&&daysSince(lastPatrol(t.id))>7;}));if(inn.length===0) return '<div style="color:var(--text-muted);font-size:13px;">All available troops patrolled within 7 days.</div>';return inn.map(function(t){var ds=daysSince(lastPatrol(t.id));return '<div style="padding:8px 0;border-bottom:1px solid rgba(100,130,100,0.15);font-size:13px;">'+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong> — <span style="color:#ff8888;">'+(ds===9999?'Never patrolled':ds+' days inactive')+'</span></div>';}).join('');})()+
+    (function(){var inn=sortTroops(D.troops.filter(function(t){return isAvailable(t)&&daysSince(lastPatrol(t.id))>7;}));if(inn.length===0) return '<div style="color:var(--text-muted);font-size:13px;">All available troops patrolled within 7 days.</div>';return '<div class="lh-person-grid">'+inn.map(function(t){var ds=daysSince(lastPatrol(t.id));return '<div class="lh-person-card"><strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong><div style="font-size:11px;color:#ff8888;margin-top:3px;">'+(ds===9999?'Never patrolled':ds+' days inactive')+'</div></div>';}).join('')+'</div>';})()+
     '</div>'+
     '<div class="lh-block"><div class="lh-title">Commander\'s Handover Notes</div>'+
     '<textarea style="width:100%;min-height:80px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:10px;border-radius:8px;font-family:\'Segoe UI\',Arial,sans-serif;font-size:14px;" placeholder="Enter handover remarks, pending tasks, outstanding issues..."></textarea></div>';
   document.getElementById('handover-content').innerHTML=html;
+}
+// Clean popup print for Command Handover — same pattern as printPatrolSummary()/printReport(),
+// avoiding the raw window.print() of the live app shell which paginates poorly.
+function printHandover(){
+  var now=new Date(); var last30=new Date(now); last30.setDate(now.getDate()-30); var last30ISO=last30.toISOString().slice(0,10);
+  var recentPats=D.patrols.filter(function(p){return p.date>=last30ISO;});
+  var totalH=recentPats.reduce(function(sum,p){return sum+(parseFloat(p.duration)||0);},0);
+  var s=D.settings; var smap={};recentPats.forEach(function(p){if(p.area)smap[p.area]=(smap[p.area]||0)+1;});
+  var sectors=Object.keys(smap).sort(function(a,b){return smap[b]-smap[a];});
+  var unavailable=sortTroops(D.troops.filter(function(t){return !isAvailable(t);}));
+  var perfRows=sortTroops(D.troops).map(function(t){
+    var c30=recentPats.filter(function(p){return (p.troops||[]).indexOf(t.id)>=0;}).length;
+    var h30=recentPats.filter(function(p){return (p.troops||[]).indexOf(t.id)>=0;}).reduce(function(sum,p){return sum+(parseFloat(p.duration)||0);},0);
+    var lp=lastPatrol(t.id),ds=daysSince(lp);
+    return '<tr><td>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</td><td style="text-align:center;">'+c30+'</td><td style="text-align:center;">'+h30.toFixed(1)+'</td><td style="text-align:center;">'+(lp?fmtDateLong(lp):'Never')+'</td></tr>';
+  }).join('');
+  var inactive=sortTroops(D.troops.filter(function(t){return isAvailable(t)&&daysSince(lastPatrol(t.id))>7;}));
+  var handoverNotes=(document.querySelector('#handover-content textarea')?document.querySelector('#handover-content textarea').value.trim():'');
+
+  var win=window.open('','_blank','width=980,height=760');
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Command Handover</title><style>'+
+    'body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:13px;}'+
+    '.hdr{text-align:center;border-bottom:2px solid #2d5a3d;padding-bottom:14px;margin-bottom:18px;}'+
+    '.hdr h2{margin:0 0 4px;font-size:20px;color:#1a3a2a;}'+
+    '.hdr p{margin:2px 0;font-size:11px;color:#555;}'+
+    '.info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;}'+
+    '.info-box{background:#f5f5f5;border:1px solid #ccc;border-radius:4px;padding:10px;text-align:center;}'+
+    '.info-num{font-size:20px;font-weight:700;color:#2d5a3d;font-family:\'Courier New\',monospace;}'+
+    '.info-lbl{font-size:10px;color:#666;letter-spacing:1px;text-transform:uppercase;margin-top:3px;}'+
+    '.sub-hdr{font-family:\'Courier New\',monospace;font-size:10px;color:#2d5a3d;letter-spacing:2px;text-transform:uppercase;margin:16px 0 8px;padding-bottom:5px;border-bottom:1px solid #ccc;}'+
+    '.remarks-box{margin-top:6px;padding:8px 10px;background:#fbf8ee;border-left:3px solid #c8b87a;font-size:12px;white-space:pre-wrap;}'+
+    'table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;}'+
+    'th{background:#2d5a3d;color:#fff;font-family:\'Courier New\',monospace;font-size:9.5px;letter-spacing:0.5px;text-transform:uppercase;padding:8px 8px;text-align:left;}'+
+    'td{padding:6px 8px;border-bottom:1px solid #e0e8e0;word-wrap:break-word;vertical-align:top;}'+
+    'tr:nth-child(even) td{background:#f8fff8;}'+
+    'tr{page-break-inside:avoid;}'+
+    '.footer{margin-top:20px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}'+
+    'a,button.no-print{display:none!important;}'+
+    '@media print{body{padding:12px;}@page{margin:1cm;size:A4;}button{display:none!important;}thead{display:table-header-group;}}'+
+    '</style></head><body>'+
+    '<div class="hdr">'+
+    (s.classification?'<div style="font-size:10px;color:#999;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">'+s.classification+' — '+(s.pob||'POB Mobaye')+'</div>':'')+
+    '<h2>COMMAND HANDOVER</h2>'+
+    '<p>Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p>'+
+    '</div>'+
+    '<div class="info-grid">'+
+    '<div class="info-box"><div class="info-num">'+D.troops.length+'</div><div class="info-lbl">Strength</div></div>'+
+    '<div class="info-box"><div class="info-num">'+D.troops.filter(isAvailable).length+'</div><div class="info-lbl">Available</div></div>'+
+    '<div class="info-box"><div class="info-num">'+unavailable.length+'</div><div class="info-lbl">Unavailable</div></div>'+
+    '</div>'+
+    (unavailable.length>0?'<div style="font-size:12px;margin-bottom:6px;"><strong>Unavailable:</strong> '+unavailable.map(function(t){return t.rank.toUpperCase()+' '+t.name.toUpperCase()+' ('+(t.status||'—')+')';}).join(', ')+'</div>':'')+
+    '<div class="sub-hdr">Patrol Activity — Last 30 Days</div>'+
+    '<div class="info-grid">'+
+    '<div class="info-box"><div class="info-num">'+recentPats.length+'</div><div class="info-lbl">Patrols</div></div>'+
+    '<div class="info-box"><div class="info-num">'+totalH.toFixed(0)+'</div><div class="info-lbl">Hours</div></div>'+
+    '<div class="info-box"><div class="info-num">'+sectors.length+'</div><div class="info-lbl">Sectors</div></div>'+
+    '</div>'+
+    '<div style="font-size:12px;color:#555;margin-bottom:6px;">Sectors: <strong>'+(sectors.join(', ')||'None')+'</strong></div>'+
+    '<div class="sub-hdr">Troop Performance</div>'+
+    '<table><colgroup><col style="width:40%"><col style="width:20%"><col style="width:20%"><col style="width:20%"></colgroup>'+
+    '<thead><tr><th>Name &amp; Rank</th><th>30d Patrols</th><th>30d Hours</th><th>Last Patrol</th></tr></thead><tbody>'+perfRows+'</tbody></table>'+
+    '<div class="sub-hdr">Inactive Troops (Action Required)</div>'+
+    (inactive.length===0?'<div style="color:#888;font-size:12px;">All available troops patrolled within 7 days.</div>':'<div style="font-size:12px;">'+inactive.map(function(t){var ds=daysSince(lastPatrol(t.id));return t.rank.toUpperCase()+' '+t.name.toUpperCase()+' ('+(ds===9999?'Never patrolled':ds+'d inactive')+')';}).join(', ')+'</div>')+
+    (handoverNotes?'<div class="sub-hdr">Commander\'s Handover Notes</div><div class="remarks-box">'+handoverNotes+'</div>':'')+
+    '<div class="footer">'+(s.pob||'POB Mobaye')+' Patrol Tracker · Command Handover · '+nowStr()+'</div>'+
+    '<div style="margin-top:16px;text-align:center;" class="no-print"><button onclick="window.print()" style="padding:10px 24px;background:#2d5a3d;color:#fff;border:none;border-radius:4px;font-size:13px;cursor:pointer;font-weight:700;">🖨 Print / Save PDF</button></div>'+
+    '</body></html>');
+  win.document.close(); win.focus();
 }
 
 // =====================================================================
@@ -2670,7 +2893,7 @@ function renderSysInfo(){ var sz=JSON.stringify(D).length; document.getElementBy
 var pendingDel=null;
 function confirmDel(type,id){ requirePin(function(){ pendingDel={type:type,id:id}; document.getElementById('del-modal').classList.add('open'); document.getElementById('del-confirm').onclick=function(){ if(pendingDel.type==='patrol'){var p=D.patrols.find(function(x){return x.id===pendingDel.id;});if(p) audit('Patrol deleted: '+(p.ptlId||p.id));D.patrols=D.patrols.filter(function(p){return p.id!==pendingDel.id;});remoteDeletePatrol(pendingDel.id);}else{var t=D.troops.find(function(x){return x.id===pendingDel.id;});if(t) audit('Troop deleted: '+upLabel(t.rank,t.name));D.troops=D.troops.filter(function(t){return t.id!==pendingDel.id;});D.patrols.forEach(function(p){p.troops=(p.troops||[]).filter(function(id){return id!==pendingDel.id;});});remoteDeleteTroop(pendingDel.id);} saveData(); closeModal('del-modal'); pendingDel=null; var active=document.querySelector('.section.active'); if(active){var aid=active.id;if(aid==='dashboard') renderDash();if(aid==='patrol-log') renderTable();if(aid==='troops') renderRoster();if(aid==='report') genReport();if(aid==='inactive') renderInactive(0);} }; }); }
 
-['del-modal','troops-modal','profile-modal','inactive-modal'].forEach(function(id){ document.getElementById(id).addEventListener('click',function(e){if(e.target===this)closeModal(id);}); });
+['del-modal','troops-modal','profile-modal'].forEach(function(id){ document.getElementById(id).addEventListener('click',function(e){if(e.target===this)closeModal(id);}); });
 document.getElementById('edit-confirm-modal').addEventListener('click',function(e){if(e.target===this)closeConfirmEdit();});
 document.getElementById('pin-modal').addEventListener('click',function(e){if(e.target===this)closePinModal();});
 document.getElementById('pin-setup-modal').addEventListener('click',function(e){if(e.target===this)closePinSetupModal();});
