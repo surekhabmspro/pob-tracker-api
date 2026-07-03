@@ -100,10 +100,15 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--te
 .header-right{display:flex;align-items:center;gap:8px;flex-shrink:0;}
 .sync-dot-btn{display:flex;align-items:center;justify-content:center;cursor:pointer;
   width:36px;height:36px;border-radius:50%;border:1.5px solid var(--border);
-  background:var(--surface2);transition:all 0.25s;user-select:none;flex-shrink:0;}
+  background:var(--surface2);transition:all 0.25s;user-select:none;flex-shrink:0;
+  position:relative;}
 .sync-dot-btn:active{transform:scale(0.92);}
 .sync-dot{width:11px;height:11px;border-radius:50%;background:var(--text-muted);display:inline-block;
   transition:background 0.3s,box-shadow 0.3s;}
+.pending-badge{position:absolute;top:-5px;right:-5px;min-width:16px;height:16px;padding:0 4px;
+  border-radius:9px;background:var(--orange);color:#1a1005;font-size:10px;font-weight:900;
+  display:flex;align-items:center;justify-content:center;border:1.5px solid var(--surface);
+  font-family:'Courier New',monospace;}
 .sync-status-strip{position:fixed;top:var(--header-h);left:0;right:0;z-index:99;
   text-align:center;padding:5px 0;font-size:11.5px;font-weight:700;letter-spacing:1.5px;
   font-family:'Courier New',monospace;text-transform:uppercase;
@@ -689,6 +694,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
   <div class="header-right">
     <button class="sync-dot-btn" id="sync-pill" onclick="manualSync()" title="Sync status — tap to sync now">
       <span class="sync-dot" id="sync-dot"></span>
+      <span class="pending-badge" id="pending-badge" style="display:none;"></span>
     </button>
     <button class="icon-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle Theme">☀</button>
   </div>
@@ -1331,6 +1337,43 @@ var D = {
   security:{pinHash:'',securityQ:'',securityAHash:''}
 };
 
+// ── OFFLINE OUTBOX (queues writes made while offline so nothing is lost) ──
+var OUTBOX_KEY = SK+'_outbox';
+function loadOutbox(){ try{ return JSON.parse(localStorage.getItem(OUTBOX_KEY)||'[]'); }catch(e){ return []; } }
+function saveOutbox(q){ localStorage.setItem(OUTBOX_KEY, JSON.stringify(q)); updatePendingBadge(); }
+function queueOp(kind,payload){ var q=loadOutbox(); q.push({kind:kind,payload:payload,ts:Date.now()}); saveOutbox(q); }
+function updatePendingBadge(){
+  var n=loadOutbox().length;
+  var badge=document.getElementById('pending-badge');
+  if(badge){ badge.textContent=n; badge.style.display=n>0?'flex':'none'; }
+}
+function replayOp(op){
+  switch(op.kind){
+    case 'saveTroop': return apiFetch('/troops',{method:'POST',body:JSON.stringify(op.payload)});
+    case 'deleteTroop': return apiFetch('/troops/'+op.payload.id,{method:'DELETE'});
+    case 'archiveTroop': return apiFetch('/troops/'+op.payload.id+'/archive',{method:'PATCH',body:JSON.stringify({archived:op.payload.archived})});
+    case 'savePatrol': return apiFetch('/patrols',{method:'POST',body:JSON.stringify(op.payload)});
+    case 'deletePatrol': return apiFetch('/patrols/'+op.payload.id,{method:'DELETE'});
+    case 'saveConfig': return apiFetch('/config',{method:'POST',body:JSON.stringify(op.payload)});
+    case 'saveAudit': return apiFetch('/audit',{method:'POST',body:JSON.stringify(op.payload)});
+    default: return Promise.resolve();
+  }
+}
+// Replays queued ops one-by-one, oldest first. Stops (keeping the rest queued) the moment one fails,
+// since that almost always means connectivity dropped again mid-flush.
+function flushOutbox(){
+  var q=loadOutbox();
+  if(q.length===0) return Promise.resolve(true);
+  var op=q[0];
+  return replayOp(op).then(function(){
+    var q2=loadOutbox(); q2.shift(); saveOutbox(q2);
+    return flushOutbox();
+  }).catch(function(e){
+    console.warn('Outbox flush paused (offline?)',e);
+    return false;
+  });
+}
+
 // ── API helpers ────────────────────────────────────────────────────────
 function apiFetch(path, opts) {
   return fetch(API_URL + path, Object.assign({headers:{'Content-Type':'application/json'}}, opts||{}))
@@ -1382,6 +1425,7 @@ function setSyncState(state) {
   _syncState = state;
   var dot = document.getElementById('sync-dot');
   if (!dot) return;
+  var pending=loadOutbox().length;
   if (state==='online') {
     dot.style.background='#3fcf7a';dot.style.boxShadow='0 0 6px #3fcf7a';
     if(prevState!=='online'){ var t=_lastSyncTime?_lastSyncTime.getHours().toString().padStart(2,'0')+':'+_lastSyncTime.getMinutes().toString().padStart(2,'0'):''; showSyncStrip('Synced'+(t?' at '+t:''),'#3fcf7a'); }
@@ -1390,10 +1434,11 @@ function setSyncState(state) {
     showSyncStrip('Syncing…','#e0954a');
   } else if (state==='offline') {
     dot.style.background='#e44141';dot.style.boxShadow='0 0 6px #e44141';
-    showSyncStrip('Offline — using local data','#e44141');
+    showSyncStrip(pending>0?('Offline — '+pending+' change'+(pending===1?'':'s')+' saved locally, will sync later'):'Offline — using local data','#e44141');
   } else {
     dot.style.background='var(--text-muted)';dot.style.boxShadow='none';
   }
+  updatePendingBadge();
 }
 
 function startCountdown() {
@@ -1406,9 +1451,9 @@ function startCountdown() {
   }, 1000);
 }
 
-function backgroundSync() {
-  if (_syncState==='syncing') return;
-  setSyncState('syncing');
+// Pulls fresh data from the server and replaces local state with it.
+// Only ever called once the outbox is confirmed empty, so a pull can never clobber unsent local edits.
+function pullFromServer(){
   return Promise.all([
     apiFetch('/troops'),apiFetch('/archived'),apiFetch('/patrols'),apiFetch('/audit'),apiFetch('/config')
   ]).then(function(results){
@@ -1442,22 +1487,46 @@ function backgroundSync() {
       }
     } catch(e){}
     return true;
+  });
+}
+
+// Full sync cycle: (1) skip entirely if the device reports no connection at all — no point waiting
+// on a fetch that can't succeed; (2) push any queued offline edits first; (3) only pull fresh server
+// data once nothing is left unsent, so offline work is never silently overwritten.
+function backgroundSync() {
+  if (_syncState==='syncing') return Promise.resolve(false);
+  if (typeof navigator!=='undefined' && navigator.onLine===false) { setSyncState('offline'); return Promise.resolve(false); }
+  setSyncState('syncing');
+  return flushOutbox().then(function(){
+    if (loadOutbox().length>0) { setSyncState('offline'); _syncCountdown=_autoSyncSeconds; return false; }
+    return pullFromServer();
   }).catch(function(err){
     console.warn('Sync failed:',err); setSyncState('offline'); _syncCountdown=_autoSyncSeconds; return false;
   });
 }
 function manualSync(){ _syncCountdown=_autoSyncSeconds; backgroundSync(); }
-function loadData(){ setSyncState('connecting'); return backgroundSync().then(function(ok){ if(!ok) loadLocalFallback(); return ok; }); }
+// Loads local/cached data FIRST and synchronously, so the app is immediately usable (view + edit)
+// with no network at all, then tries a background sync without blocking the UI.
+function loadData(){
+  loadLocalFallback();
+  return Promise.resolve(true);
+}
 function saveData(){ localStorage.setItem(SK,JSON.stringify(D)); }
 
 // ── Remote write helpers ───────────────────────────────────────────────
-function remoteSaveTroop(t){ saveData(); return apiFetch('/troops',{method:'POST',body:JSON.stringify(t)}).catch(function(e){console.error('saveTroop failed',e);}); }
-function remoteDeleteTroop(id){ saveData(); return apiFetch('/troops/'+id,{method:'DELETE'}).catch(function(e){console.error(e);}); }
-function remoteArchiveTroop(id,archived){ saveData(); return apiFetch('/troops/'+id+'/archive',{method:'PATCH',body:JSON.stringify({archived:archived})}).catch(function(e){console.error(e);}); }
-function remoteSavePatrol(p){ saveData(); return apiFetch('/patrols',{method:'POST',body:JSON.stringify({id:p.id,ptl_id:p.ptlId,date:p.date,type:p.type,troops:p.troops,area:p.area,duration:p.duration,route:p.route,remarks:p.remarks})}).catch(function(e){console.error(e);}); }
-function remoteDeletePatrol(id){ saveData(); return apiFetch('/patrols/'+id,{method:'DELETE'}).catch(function(e){console.error(e);}); }
-function remoteSaveAudit(entry){ return apiFetch('/audit',{method:'POST',body:JSON.stringify(entry)}).catch(function(e){console.error(e);}); }
-function remoteSaveConfig(){ saveData(); return Promise.all([apiFetch('/config',{method:'POST',body:JSON.stringify({key:'settings',value:D.settings})}),apiFetch('/config',{method:'POST',body:JSON.stringify({key:'config',value:D.config})}),apiFetch('/config',{method:'POST',body:JSON.stringify({key:'counter',value:D.counter})}),apiFetch('/config',{method:'POST',body:JSON.stringify({key:'security',value:D.security})})]).catch(function(e){console.error(e);}); }
+function remoteSaveTroop(t){ saveData(); return apiFetch('/troops',{method:'POST',body:JSON.stringify(t)}).catch(function(e){console.error('saveTroop failed',e); queueOp('saveTroop',t);}); }
+function remoteDeleteTroop(id){ saveData(); return apiFetch('/troops/'+id,{method:'DELETE'}).catch(function(e){console.error(e); queueOp('deleteTroop',{id:id});}); }
+function remoteArchiveTroop(id,archived){ saveData(); return apiFetch('/troops/'+id+'/archive',{method:'PATCH',body:JSON.stringify({archived:archived})}).catch(function(e){console.error(e); queueOp('archiveTroop',{id:id,archived:archived});}); }
+function remoteSavePatrol(p){ saveData(); var body={id:p.id,ptl_id:p.ptlId,date:p.date,type:p.type,troops:p.troops,area:p.area,duration:p.duration,route:p.route,remarks:p.remarks}; return apiFetch('/patrols',{method:'POST',body:JSON.stringify(body)}).catch(function(e){console.error(e); queueOp('savePatrol',body);}); }
+function remoteDeletePatrol(id){ saveData(); return apiFetch('/patrols/'+id,{method:'DELETE'}).catch(function(e){console.error(e); queueOp('deletePatrol',{id:id});}); }
+function remoteSaveAudit(entry){ return apiFetch('/audit',{method:'POST',body:JSON.stringify(entry)}).catch(function(e){console.error(e); queueOp('saveAudit',entry);}); }
+function remoteSaveConfig(){
+  saveData();
+  var jobs=[{key:'settings',value:D.settings},{key:'config',value:D.config},{key:'counter',value:D.counter},{key:'security',value:D.security}];
+  return Promise.all(jobs.map(function(j){
+    return apiFetch('/config',{method:'POST',body:JSON.stringify(j)}).catch(function(e){console.error(e); queueOp('saveConfig',j);});
+  }));
+}
 
 // =====================================================================
 // HELPERS
@@ -2687,8 +2756,17 @@ var LOGO_DATA_URI='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAAC
       renderInactive(0);
       document.getElementById('print-date-line').textContent='Generated: '+nowStr();
       startCountdown();
+      updatePendingBadge();
     }catch(e){console.error('Init error:',e);}
+    // App is already fully usable offline at this point. Now try to reach the server —
+    // this pushes any queued offline edits and pulls fresh data, but never blocks the UI above.
+    setSyncState((typeof navigator!=='undefined'&&navigator.onLine===false)?'offline':'connecting');
+    backgroundSync();
   });
+  if(typeof window!=='undefined'){
+    window.addEventListener('online',function(){ manualSync(); });
+    window.addEventListener('offline',function(){ setSyncState('offline'); });
+  }
 })();
 function wirePinInputs(){
   function numericOnly(el){ if(!el) return; el.addEventListener('input',function(){ this.value=this.value.replace(/[^0-9]/g,'').slice(0,4); }); }
