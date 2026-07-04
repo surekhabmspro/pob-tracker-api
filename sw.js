@@ -1,6 +1,5 @@
 // Patrol Tracker — offline app shell service worker
-// Bump this version any time index.html changes, so returning devices pick up the new copy.
-var CACHE_NAME = 'patrol-tracker-shell-v1';
+var CACHE_NAME = 'patrol-tracker-shell-v2';
 var SHELL_FILES = [
   './',
   './index.html',
@@ -11,7 +10,10 @@ self.addEventListener('install', function(evt){
   self.skipWaiting();
   evt.waitUntil(
     caches.open(CACHE_NAME).then(function(cache){
-      return cache.addAll(SHELL_FILES);
+      var reqs = SHELL_FILES.map(function(u){ return new Request(u, {cache:'reload'}); });
+      return Promise.all(reqs.map(function(r){
+        return fetch(r).then(function(res){ if(res && res.ok) return cache.put(r.url, res); }).catch(function(){});
+      }));
     })
   );
 });
@@ -24,10 +26,6 @@ self.addEventListener('activate', function(evt){
   );
 });
 
-// Cache-first for the app shell itself (so it opens instantly offline),
-// but always try the network first for anything under /api/ or similar
-// data endpoints so live data is never served stale from this cache —
-// the app's own outbox/localStorage logic already handles that layer.
 self.addEventListener('fetch', function(evt){
   var req = evt.request;
   if(req.method !== 'GET') return;
@@ -37,21 +35,18 @@ self.addEventListener('fetch', function(evt){
     (url.pathname.endsWith('/') || url.pathname.endsWith('index.html') || url.pathname.endsWith('site.webmanifest'));
 
   if(!isShellRequest){
-    // Let data/API requests pass straight through to the network as normal.
     return;
   }
 
   evt.respondWith(
-    caches.match(req).then(function(cached){
-      var network = fetch(req).then(function(res){
-        if(res && res.ok){
-          var copy = res.clone();
-          caches.open(CACHE_NAME).then(function(cache){ cache.put(req, copy); });
-        }
-        return res;
-      }).catch(function(){ return cached; });
-      // Serve cached shell immediately if we have it, refresh in the background.
-      return cached || network;
+    fetch(req, {cache:'no-store'}).then(function(res){
+      if(res && res.ok){
+        var copy = res.clone();
+        caches.open(CACHE_NAME).then(function(cache){ cache.put(req, copy); });
+      }
+      return res;
+    }).catch(function(){
+      return caches.match(req);
     })
   );
 });
