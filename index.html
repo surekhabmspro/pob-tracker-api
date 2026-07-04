@@ -1382,7 +1382,7 @@ function dbToTroop(r) {
 }
 function dbToPatrol(r) {
   return {id:r.id,ptlId:r.ptl_id,date:(r.date||'').slice(0,10),type:r.type,
-    troops:r.troops||[],area:r.area||'',duration:r.duration||'',route:r.route||'',remarks:r.remarks||'',commander:r.commander||null};
+    troops:r.troops||[],area:r.area||'',duration:r.duration||'',route:r.route||'',remarks:r.remarks||'',commander:r.commander||null,commanderAuto:r.commander_auto===false?false:(r.commander_auto===true?true:null)};
 }
 function loadLocalFallback() {
   try {
@@ -1518,17 +1518,20 @@ function saveData(){ localStorage.setItem(SK,JSON.stringify(D)); }
 function remoteSaveTroop(t){ saveData(); return apiFetch('/troops',{method:'POST',body:JSON.stringify(t)}).catch(function(e){console.error('saveTroop failed',e); queueOp('saveTroop',t);}); }
 function remoteDeleteTroop(id){ saveData(); return apiFetch('/troops/'+id,{method:'DELETE'}).catch(function(e){console.error(e); queueOp('deleteTroop',{id:id});}); }
 function remoteArchiveTroop(id,archived){ saveData(); return apiFetch('/troops/'+id+'/archive',{method:'PATCH',body:JSON.stringify({archived:archived})}).catch(function(e){console.error(e); queueOp('archiveTroop',{id:id,archived:archived});}); }
-function remoteSavePatrol(p){ saveData(); var body={id:p.id,ptl_id:p.ptlId,date:p.date,type:p.type,troops:p.troops,area:p.area,duration:p.duration,route:p.route,remarks:p.remarks,commander:p.commander||null}; return apiFetch('/patrols',{method:'POST',body:JSON.stringify(body)}).catch(function(e){console.error(e); queueOp('savePatrol',body);}); }
+function remoteSavePatrol(p){ saveData(); var body={id:p.id,ptl_id:p.ptlId,date:p.date,type:p.type,troops:p.troops,area:p.area,duration:p.duration,route:p.route,remarks:p.remarks,commander:p.commander||null,commander_auto:p.commanderAuto===false?false:(p.commanderAuto===true?true:null)}; return apiFetch('/patrols',{method:'POST',body:JSON.stringify(body)}).catch(function(e){console.error(e); queueOp('savePatrol',body);}); }
 function migrateCommanders(){
-  // Backfills the Commander field on older patrol records that predate this feature,
-  // assigning the senior-most participating troop (lowest service number) as commander.
+  // Assigns/corrects the Commander field using the current (rank-first, service-number-second)
+  // seniority rule for every patrol EXCEPT ones where a person explicitly chose the commander
+  // (commanderAuto===false). This makes the auto-assignment self-healing: if the seniority
+  // logic itself is ever fixed or improved, this re-check corrects previously wrong
+  // system-assigned commanders on the next load — without ever overriding a manual choice.
   // Purely additive metadata — never touches troops, patrol counts, or hour totals.
   var changed=[];
   (D.patrols||[]).forEach(function(p){
-    if(p.commander===undefined||p.commander===null||p.commander===''){
-      var senior=pickSeniorTroopId(p.troops);
-      if(senior){ p.commander=senior; changed.push(p); }
-    }
+    if(p.commanderAuto===false) return; // explicitly chosen by a person — permanently protected
+    var senior=pickSeniorTroopId(p.troops);
+    if(!senior) return;
+    if(p.commander!==senior||p.commanderAuto!==true){ p.commander=senior; p.commanderAuto=true; changed.push(p); }
   });
   if(changed.length>0){
     saveData();
@@ -2204,7 +2207,7 @@ function logPatrol(){
     var ep=D.patrols.find(function(x){return x.id===editingPatrolId;});
     if(!ep){editingPatrolId=null;showAlert('log-alert','Patrol no longer exists.','danger');return;}
     ep.date=date; ep.type=type; ep.area=area; ep.duration=dur; ep.route=route; ep.remarks=rem;
-    ep.troops=selectedTroops.slice(); ep.commander=selectedCommander||null;
+    ep.troops=selectedTroops.slice(); ep.commander=selectedCommander||null; ep.commanderAuto=selectedCommander?false:ep.commanderAuto;
     remoteSavePatrol(ep);
     audit('Patrol edited: '+ep.ptlId+' | '+type+' | '+(area||'No sector'));
     showAlert('log-alert','Patrol '+ep.ptlId+' updated successfully!','success');
@@ -2214,7 +2217,7 @@ function logPatrol(){
   } else {
     var dup=D.patrols.find(function(p){if(p.date!==date||p.type!==type)return false;return (p.troops||[]).some(function(tid){return selectedTroops.indexOf(tid)>=0;});});
     var ptlId=nextPtlId();
-    var newPatrol={id:uid('p'),ptlId:ptlId,date:date,type:type,troops:selectedTroops.slice(),duration:dur,area:area,route:route,remarks:rem,commander:selectedCommander||null};
+    var newPatrol={id:uid('p'),ptlId:ptlId,date:date,type:type,troops:selectedTroops.slice(),duration:dur,area:area,route:route,remarks:rem,commander:selectedCommander||null,commanderAuto:selectedCommander?false:null};
     D.patrols.push(newPatrol);
     remoteSavePatrol(newPatrol);
     remoteSaveConfig();

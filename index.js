@@ -85,15 +85,15 @@ app.get('/patrols', async (req, res) => {
 // ── UPSERT PATROL ─────────────────────────────────────────────────────
 app.post('/patrols', async (req, res) => {
   try {
-    const { id, ptl_id, date, type, troops, area, duration, route, remarks, commander } = req.body;
+    const { id, ptl_id, date, type, troops, area, duration, route, remarks, commander, commander_auto } = req.body;
     await pool.query(
-      `INSERT INTO patrols (id, ptl_id, date, type, troops, area, duration, route, remarks, commander)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      `INSERT INTO patrols (id, ptl_id, date, type, troops, area, duration, route, remarks, commander, commander_auto)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        ON CONFLICT (id) DO UPDATE
          SET ptl_id=$2, date=$3, type=$4, troops=$5, area=$6,
-             duration=$7, route=$8, remarks=$9, commander=$10`,
+             duration=$7, route=$8, remarks=$9, commander=$10, commander_auto=$11`,
       [id, ptl_id || '', date, type || '', troops || [], area || '',
-       parseFloat(duration) || null, route || '', remarks || '', commander || null]
+       parseFloat(duration) || null, route || '', remarks || '', commander || null, (commander_auto === null || commander_auto === undefined) ? null : !!commander_auto]
     );
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
