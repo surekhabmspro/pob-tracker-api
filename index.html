@@ -351,6 +351,14 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--green-li
 select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239bb5a4' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat:no-repeat;background-position:right 12px center;padding-right:32px;}
 .fg{margin-bottom:12px;position:relative;}
+.subsection-hdr{font-size:10.5px;font-weight:700;color:var(--tan);letter-spacing:1.5px;text-transform:uppercase;font-family:'Courier New',monospace;margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border);}
+.form-2col{display:grid;grid-template-columns:1fr;gap:0 24px;}
+.form-2col>.form-col{min-width:0;}
+@media (min-width:860px){.form-2col{grid-template-columns:1fr 1fr;}.form-2col>.form-col+.form-col{border-left:1px solid var(--border);padding-left:24px;}}
+.toolbar-box{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:14px;}
+.id-badge{font-family:'Courier New',monospace;font-size:10px;color:var(--tan);background:rgba(240,205,106,0.1);border:1px solid var(--tan-dark);border-radius:5px;padding:3px 8px;white-space:nowrap;}
+.two-col-blocks{display:grid;grid-template-columns:1fr;}
+@media (min-width:860px){.two-col-blocks{grid-template-columns:1fr 1fr;gap:0 14px;align-items:start;}}
 .fr{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 select option{background:var(--surface2);color:var(--text);}
 
@@ -827,53 +835,63 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 <!-- ===== LOG PATROL ===== -->
 <div id="log-patrol" class="section">
   <div class="card">
-    <div class="card-title">Log New Patrol</div>
+    <div class="card-title">
+      <span>Log New Patrol</span>
+      <span class="id-badge" id="ptl-preview">Next: --</span>
+    </div>
     <div id="log-alert"></div>
-    <div class="fr">
-      <div class="fg cal-field">
-        <label class="field-label">Date (DD/MM/YYYY)</label>
-        <input type="text" id="p-date" placeholder="DD/MM/YYYY" maxlength="10" oninput="fmtDateInp(this)" autocomplete="off" readonly onclick="toggleCal('cal-p-date',this)" style="padding-right:36px;">
-        <span class="cal-icon" onclick="toggleCal('cal-p-date',document.getElementById('p-date'))">📅</span>
-        <div class="cal-wrap" id="cal-p-date"></div>
+    <div class="form-2col">
+      <div class="form-col">
+        <div class="subsection-hdr">Patrol Details</div>
+        <div class="fr">
+          <div class="fg cal-field">
+            <label class="field-label">Date (DD/MM/YYYY)</label>
+            <input type="text" id="p-date" placeholder="DD/MM/YYYY" maxlength="10" oninput="fmtDateInp(this)" autocomplete="off" readonly onclick="toggleCal('cal-p-date',this)" style="padding-right:36px;">
+            <span class="cal-icon" onclick="toggleCal('cal-p-date',document.getElementById('p-date'))">📅</span>
+            <div class="cal-wrap" id="cal-p-date"></div>
+          </div>
+          <div class="fg">
+            <label class="field-label">Patrol Type</label>
+            <select id="p-type"></select>
+          </div>
+        </div>
+        <div class="fr">
+          <div class="fg">
+            <label class="field-label">Area / Sector</label>
+            <select id="p-area"><option value="">-- Sector --</option></select>
+          </div>
+          <div class="fg">
+            <label class="field-label">Duration (h)</label>
+            <input type="number" id="p-dur" min="0.5" max="24" step="0.5" placeholder="e.g. 2.5">
+          </div>
+        </div>
+        <div class="fg">
+          <label class="field-label">Route / Waypoints (optional)</label>
+          <input type="text" id="p-route" placeholder="e.g. Main Gate - Market - Base">
+        </div>
+        <div class="fg">
+          <label class="field-label">Remarks (optional)</label>
+          <textarea id="p-rem" rows="2" placeholder="Any notes..."></textarea>
+        </div>
       </div>
-      <div class="fg">
-        <label class="field-label">Patrol Type</label>
-        <select id="p-type"></select>
+      <div class="form-col">
+        <div class="subsection-hdr">Personnel</div>
+        <div class="fg" style="position:relative;">
+          <label class="field-label">Search &amp; Add Troops</label>
+          <input type="text" id="troop-search" placeholder="Type name or rank..." oninput="troopSuggest(this.value)" autocomplete="off">
+          <div class="suggest-box" id="troop-suggest" style="display:none;"></div>
+        </div>
+        <div class="fg">
+          <label class="field-label">Selected Troops</label>
+          <div id="selected-troops"></div>
+        </div>
+        <div class="fg" id="commander-field-wrap" style="display:none;">
+          <label class="field-label">⭐ Commander (optional)</label>
+          <select id="p-commander" onchange="selectedCommander=this.value||null;"><option value="">-- None --</option></select>
+        </div>
       </div>
     </div>
-    <div class="fr">
-      <div class="fg">
-        <label class="field-label">Area / Sector</label>
-        <select id="p-area"><option value="">-- Sector --</option></select>
-      </div>
-      <div class="fg">
-        <label class="field-label">Duration (h)</label>
-        <input type="number" id="p-dur" min="0.5" max="24" step="0.5" placeholder="e.g. 2.5">
-      </div>
-    </div>
-    <div class="fg">
-      <label class="field-label">Route / Waypoints (optional)</label>
-      <input type="text" id="p-route" placeholder="e.g. Main Gate - Market - Base">
-    </div>
-    <div class="fg" style="position:relative;">
-      <label class="field-label">Search &amp; Add Troops</label>
-      <input type="text" id="troop-search" placeholder="Type name or rank..." oninput="troopSuggest(this.value)" autocomplete="off">
-      <div class="suggest-box" id="troop-suggest" style="display:none;"></div>
-    </div>
-    <div class="fg">
-      <label class="field-label">Selected Troops</label>
-      <div id="selected-troops"></div>
-    </div>
-    <div class="fg" id="commander-field-wrap" style="display:none;">
-      <label class="field-label">⭐ Commander (optional)</label>
-      <select id="p-commander" onchange="selectedCommander=this.value||null;"><option value="">-- None --</option></select>
-    </div>
-    <div class="fg">
-      <label class="field-label">Remarks (optional)</label>
-      <textarea id="p-rem" rows="2" placeholder="Any notes..."></textarea>
-    </div>
-    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-family:'Courier New',monospace;font-size:12px;color:var(--tan);margin-bottom:12px;" id="ptl-preview">Next Patrol ID: --</div>
-    <div style="display:flex;gap:8px;">
+    <div style="display:flex;gap:8px;margin-top:4px;">
       <button class="btn btn-primary btn-full" id="p-submit-btn" onclick="logPatrol()">⚡ Log Patrol</button>
       <button class="btn btn-ghost" id="p-cancel-edit-btn" onclick="cancelEditPatrol()" style="display:none;">Cancel</button>
     </div>
@@ -1010,36 +1028,40 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
         <button class="btn btn-ghost btn-sm" onclick="printReport()" style="font-size:9px;padding:3px 7px;min-height:28px;">PDF</button>
       </div>
     </div>
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
-      <select id="report-mode" onchange="onReportModeChange()" style="flex:1;min-width:100px;font-size:13px;">
-        <option value="weekly">Weekly</option>
-        <option value="monthly">Monthly</option>
-        <option value="total">All Time</option>
-      </select>
-    </div>
-    <div id="report-week-wrap" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
-      <div style="position:relative;flex:1;">
-        <input type="text" id="week-start" placeholder="DD/MM/YYYY" maxlength="10" oninput="fmtDateInp(this);genReport();" autocomplete="off" readonly onclick="toggleCal('cal-week-start',this)" style="padding-right:36px;">
-        <span class="cal-icon" onclick="toggleCal('cal-week-start',document.getElementById('week-start'))">📅</span>
-        <div class="cal-wrap" id="cal-week-start"></div>
+    <div class="toolbar-box">
+      <div class="subsection-hdr" style="margin-bottom:8px;">Report Period</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+        <select id="report-mode" onchange="onReportModeChange()" style="flex:1;min-width:100px;font-size:13px;">
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+          <option value="total">All Time</option>
+        </select>
       </div>
-      <button class="btn btn-ghost btn-sm" onclick="thisWeek()">This Week</button>
-    </div>
-    <div id="report-month-wrap" style="display:none;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
-      <select id="report-month-sel" onchange="genReport()" style="flex:1;font-size:13px;">
-        <option value="1">January</option><option value="2">February</option>
-        <option value="3">March</option><option value="4">April</option>
-        <option value="5">May</option><option value="6">June</option>
-        <option value="7">July</option><option value="8">August</option>
-        <option value="9">September</option><option value="10">October</option>
-        <option value="11">November</option><option value="12">December</option>
-      </select>
-      <select id="report-year-sel" onchange="genReport()" style="flex:1;font-size:13px;"></select>
+      <div id="report-week-wrap" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <div style="position:relative;flex:1;">
+          <input type="text" id="week-start" placeholder="DD/MM/YYYY" maxlength="10" oninput="fmtDateInp(this);genReport();" autocomplete="off" readonly onclick="toggleCal('cal-week-start',this)" style="padding-right:36px;">
+          <span class="cal-icon" onclick="toggleCal('cal-week-start',document.getElementById('week-start'))">📅</span>
+          <div class="cal-wrap" id="cal-week-start"></div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="thisWeek()">This Week</button>
+      </div>
+      <div id="report-month-wrap" style="display:none;gap:8px;align-items:center;flex-wrap:wrap;">
+        <select id="report-month-sel" onchange="genReport()" style="flex:1;font-size:13px;">
+          <option value="1">January</option><option value="2">February</option>
+          <option value="3">March</option><option value="4">April</option>
+          <option value="5">May</option><option value="6">June</option>
+          <option value="7">July</option><option value="8">August</option>
+          <option value="9">September</option><option value="10">October</option>
+          <option value="11">November</option><option value="12">December</option>
+        </select>
+        <select id="report-year-sel" onchange="genReport()" style="flex:1;font-size:13px;"></select>
+      </div>
     </div>
     <div class="fg">
       <label class="field-label">Commander's Remarks</label>
       <textarea id="cmd-remarks" rows="2" placeholder="Operational summary..." oninput="genReport();"></textarea>
     </div>
+    <div class="subsection-hdr">Summary</div>
     <div class="rep-summary-grid" id="rep-summary"></div>
     <div id="rep-content"></div>
   </div>
@@ -2763,6 +2785,7 @@ function renderHandover(){
   var s=D.settings; var smap={};recentPats.forEach(function(p){if(p.area)smap[p.area]=(smap[p.area]||0)+1;});
   var sectors=Object.keys(smap).sort(function(a,b){return smap[b]-smap[a];});
   var html=
+    '<div class="two-col-blocks">'+
     '<div class="lh-block"><div class="lh-title">Unit Status — '+nowStr()+'</div>'+
     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">'+
     '<div class="stat"><div class="stat-num">'+D.troops.length+'</div><div class="stat-label">Strength</div></div>'+
@@ -2777,6 +2800,7 @@ function renderHandover(){
     '<div class="stat"><div class="stat-num">'+sectors.length+'</div><div class="stat-label">Sectors</div></div>'+
     '</div>'+
     '<div style="font-size:12px;color:var(--text-muted);">Sectors: <strong style="color:var(--text);">'+(sectors.join(', ')||'None')+'</strong></div></div>'+
+    '</div>'+
     '<div class="lh-block"><div class="lh-title">Troop Performance</div>'+
     '<div class="lh-person-grid">'+sortTroops(D.troops).map(function(t){var c30=recentPats.filter(function(p){return (p.troops||[]).indexOf(t.id)>=0;}).length;var h30=recentPats.filter(function(p){return (p.troops||[]).indexOf(t.id)>=0;}).reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0);var lp=lastPatrol(t.id),ds=daysSince(lp);return '<div class="lh-person-card" onclick="showProfile(\''+t.id+'\')"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:4px;flex-wrap:wrap;">'+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong> '+statusBadge(t.status||'available')+'</div><div style="font-size:11px;color:var(--text-muted);margin-top:3px;">30d: <strong style="color:var(--text);">'+c30+'ptl/'+h30.toFixed(1)+'h</strong> · Last: <strong style="color:'+(ds>14?'#ff8888':'var(--text)')+';">'+(lp?fmtDateLong(lp):'Never')+'</strong></div></div>';}).join('')+'</div></div>'+
     '<div class="lh-block"><div class="lh-title">Inactive Troops (Action Required)</div>'+
