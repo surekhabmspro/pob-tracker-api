@@ -328,6 +328,30 @@ body.light-mode{background:
   /* ── Audit ── */
   .audit-time{min-width:130px;font-size:12px;}
   .audit-msg{font-size:14px;}
+
+  /* ── Modals: centered dialog instead of full-width bottom sheet.
+       On desktop the bottom-sheet was stretching edge-to-edge (2500px+ wide
+       on large monitors), so 2/4-column info grids inside spread their short
+       text across huge empty gutters. Capping + centering fixes that without
+       touching the mobile bottom-sheet behavior (this rule only applies here). ── */
+  .modal-ov{align-items:center;padding:30px;box-sizing:border-box;}
+  .modal{width:100%;max-width:680px;border-radius:16px;max-height:85vh;}
+  .modal-handle{display:none;}
+
+  /* ── Profile info grid: 3 columns fit the 9 fields evenly, and with the
+       modal now a sane width, larger label/value text stays readable
+       without leaving dead space ── */
+  .pf-grid{grid-template-columns:repeat(3,1fr);gap:14px 22px;}
+  .pf-label{font-size:10.5px;}
+  .pf-value{font-size:16px;}
+
+  /* ── Patrol history rows inside profile/full-record: a bit more room
+       and larger text now that the modal isn't stretched full-width ── */
+  .ph-row{padding:11px 0;}
+  .ph-id{font-size:12px;}
+  .ph-date{font-size:14px;}
+  .ph-area,.ph-remarks{font-size:12.5px;}
+  .ph-dur{font-size:13px;}
 }
 
 /* ── Extra wide: 5-col stats ── */
@@ -376,13 +400,6 @@ body.light-mode #sidebar-nav{background:var(--surface);border-right-color:var(--
 body.light-mode .sidebar-item:hover{background:#e6f0e6;}
 body.light-mode .sidebar-item.active{background:#f5e8cc;color:var(--tan);}
 
-/* ── DASHBOARD: 2-up row (Monthly Overview / Recent Patrols) ── */
-.dash-row-2col{display:flex;flex-direction:column;gap:14px;}
-.dash-row-2col>.card{margin-bottom:0;min-width:0;}
-@media (min-width:900px) and (pointer:fine),(min-width:1024px){
-  .dash-row-2col{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;}
-}
-
 /* ── CARDS ── */
 .card{background:linear-gradient(180deg,var(--surface) 0%,var(--surface2) 130%);border:var(--card-border);border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:var(--card-bevel),var(--shadow-md);max-width:100%;overflow:hidden;transition:box-shadow 0.25s var(--ease),transform 0.25s var(--ease),border-color 0.25s;}
 .card-title{font-size:12.5px;font-weight:700;color:var(--tan);letter-spacing:2px;text-transform:uppercase;
@@ -405,6 +422,20 @@ body.light-mode .sidebar-item.active{background:#f5e8cc;color:var(--tan);}
   border-radius:8px;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:8px;}
 .tag-pill span{color:var(--text);}
 .tag-pill strong{color:var(--tan);}
+
+/* ── PROFILE INFO GRID (troop profile modal) ── */
+.pf-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;}
+.pf-label{font-size:9px;color:var(--text-muted);font-family:'Courier New',monospace;letter-spacing:0.5px;}
+.pf-value{font-size:15px;font-weight:700;margin-top:2px;}
+
+/* ── PATROL HISTORY ROW (profile modal + full record print) ── */
+.ph-row{padding:8px 0;border-bottom:1px solid rgba(100,130,100,0.15);}
+.ph-top{display:flex;justify-content:space-between;align-items:flex-start;gap:4px;}
+.ph-id{font-family:'Courier New',monospace;color:var(--tan);font-size:10px;}
+.ph-date{font-size:12px;}
+.ph-area,.ph-remarks{font-size:11px;color:var(--text-muted);}
+.ph-remarks{font-style:italic;}
+.ph-dur{font-family:'Courier New',monospace;color:var(--text-muted);font-size:11px;flex-shrink:0;}
 
 /* ── STAT GRID ── */
 .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;}
@@ -636,17 +667,6 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 .modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px;}
 .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap;}
 
-/* ── MODALS: desktop — float as a centered card instead of a full-width
-     bottom sheet, so content isn't stretched thin across empty space ── */
-@media (min-width:900px) and (pointer:fine){
-  .modal-ov{align-items:center;padding:32px;}
-  .modal{max-width:640px;max-height:85vh;border-radius:16px;}
-  /* Data-dense modals (profile, troop list, drill-down details) get more room */
-  #profile-modal .modal,#troops-modal .modal,#dash-detail-modal .modal{max-width:920px;}
-  .modal-title{font-size:16.5px;}
-  .section-hdr{font-size:13.5px;}
-}
-
 /* ── CONFIRM MODAL ── */
 .confirm-modal-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:400;
   align-items:center;justify-content:center;padding:16px;}
@@ -729,49 +749,13 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 .cal-year-nav .cal-nav{font-size:20px;min-width:38px;min-height:38px;}
 .cal-year-range-lbl{font-family:'Courier New',monospace;font-size:14px;color:var(--text-muted);letter-spacing:1px;}
 @media (min-width:900px) and (pointer:fine){
-  .cal-wrap{position:absolute;left:0;top:calc(100% + 4px);transform:none;width:300px;max-height:420px;}
+  .cal-wrap{position:fixed;left:0;top:0;transform:none;width:300px;max-height:420px;}
   .cal-backdrop{display:none!important;}
 }
 
 /* ── NOTES ── */
 .notes-field{background:var(--surface2);border:1px solid var(--border);border-radius:6px;
   padding:8px 10px;font-size:14.5px;color:var(--text-muted);margin-top:6px;font-style:italic;}
-
-/* ── PROFILE: field grid (rank/status/unit/blood group/etc.) ── */
-.pf-block{margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border);}
-.pf-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;margin-bottom:8px;}
-.pf-item{min-width:0;}
-.pf-label{font-size:9px;color:var(--text-muted);font-family:'Courier New',monospace;letter-spacing:0.5px;}
-.pf-value{font-size:15px;margin-top:2px;overflow-wrap:break-word;word-break:break-word;}
-.pf-strong{font-weight:700;}
-.pf-meta-line{font-size:12px;color:var(--text-muted);margin-bottom:6px;}
-.pf-meta-line:last-of-type{margin-bottom:12px;}
-.stat-grid-2{grid-template-columns:1fr 1fr;}
-
-/* ── PROFILE: patrol history rows ── */
-.ph-row{padding:8px 0;border-bottom:1px solid rgba(100,130,100,0.15);}
-.ph-head{display:flex;justify-content:space-between;align-items:flex-start;gap:4px;}
-.ph-main{min-width:0;}
-.ph-id{font-family:'Courier New',monospace;color:var(--tan);font-size:10px;}
-.ph-date{font-size:12px;}
-.ph-type{font-size:9px;}
-.ph-area{font-size:11px;color:var(--text-muted);}
-.ph-remarks{font-size:11px;color:var(--text-muted);font-style:italic;}
-.ph-duration{font-family:'Courier New',monospace;color:var(--text-muted);font-size:11px;flex-shrink:0;}
-
-@media (min-width:900px) and (pointer:fine){
-  .pf-grid{grid-template-columns:repeat(3,1fr);gap:16px 28px;}
-  .pf-label{font-size:11px;letter-spacing:1px;}
-  .pf-value{font-size:17px;}
-  .pf-meta-line{font-size:13.5px;}
-  .ph-row{padding:11px 0;}
-  .ph-id{font-size:12.5px;}
-  .ph-date{font-size:14px;}
-  .ph-type{font-size:11px;}
-  .ph-area{font-size:13px;}
-  .ph-remarks{font-size:13px;}
-  .ph-duration{font-size:13px;}
-}
 
 /* ── AUDIT ── */
 .audit-row{display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid rgba(100,130,100,0.15);font-size:14.5px;}
@@ -975,24 +959,22 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     <div id="dash-participation"></div>
   </div>
 
-  <!-- Monthly Overview + Recent Patrols — stacked on mobile, side by side
-       on desktop (reduces scrolling since both fit in one row) -->
-  <div class="dash-row-2col">
-    <div class="card">
-      <div class="card-title">
-        📅 Monthly Overview
-        <span style="font-size:11px;color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0;" id="month-year-lbl"></span>
-      </div>
-      <div id="monthly-stats"></div>
+  <!-- Monthly Stats -->
+  <div class="card">
+    <div class="card-title">
+      📅 Monthly Overview
+      <span style="font-size:11px;color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0;" id="month-year-lbl"></span>
     </div>
+    <div id="monthly-stats"></div>
+  </div>
 
-    <div class="card">
-      <div class="card-title">
-        🗂 Recent Patrols
-        <button class="btn btn-ghost btn-sm" onclick="showTab('patrol-log')">View All →</button>
-      </div>
-      <ul class="recent-list" id="recent-list"></ul>
+  <!-- Recent Patrols — full width -->
+  <div class="card" style="margin-bottom:0;">
+    <div class="card-title">
+      🗂 Recent Patrols
+      <button class="btn btn-ghost btn-sm" onclick="showTab('patrol-log')">View All →</button>
     </div>
+    <ul class="recent-list" id="recent-list"></ul>
   </div>
 
   <!-- Credit — Dashboard bottom (do not remove; footer credit) -->
@@ -2805,22 +2787,22 @@ function showProfile(id, fromArch){
   document.getElementById('profile-title').innerHTML='<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>';
   document.getElementById('profile-modal').dataset.troopId=id;
   var html=
-    '<div class="pf-block">'+
+    '<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border);">'+
     '<div class="pf-grid">'+
-    '<div class="pf-item"><div class="pf-label">RANK</div><div class="pf-value pf-strong">'+t.rank+'</div></div>'+
-    '<div class="pf-item"><div class="pf-label">STATUS</div><div class="pf-value" style="margin-top:2px;">'+statusBadge(t.status||'available')+'</div></div>'+
-    '<div class="pf-item"><div class="pf-label">UNIT</div><div class="pf-value">'+(t.unit||'—')+'</div></div>'+
-    '<div class="pf-item"><div class="pf-label">SVC NO.</div><div class="pf-value">'+(t.sn||'—')+'</div></div>'+
-    '<div class="pf-item"><div class="pf-label">🩸 BLOOD GROUP</div><div class="pf-value pf-strong" style="'+(t.bloodGroup?'color:var(--red-light);':'')+'">'+(t.bloodGroup||'Not recorded')+'</div></div>'+
-    '<div class="pf-item"><div class="pf-label">DEPLOYMENT DATE</div><div class="pf-value">'+(t.deploymentDate?fmtDateLong(t.deploymentDate):'Not recorded')+'</div></div>'+
-    '<div class="pf-item"><div class="pf-label">🔫 WEAPON NO.</div><div class="pf-value">'+(t.weaponNumber||'Not recorded')+'</div></div>'+
-    '<div class="pf-item"><div class="pf-label">📞 LOCAL NO.</div><div class="pf-value">'+(t.phoneLocal?'<a href="tel:'+t.phoneLocal.replace(/\s+/g,'')+'" style="color:var(--tan);text-decoration:none;">'+t.phoneLocal+'</a>':'—')+'</div></div>'+
-    '<div class="pf-item"><div class="pf-label">💬 WHATSAPP NO.</div><div class="pf-value">'+(t.phoneWa?'<a href="https://wa.me/'+t.phoneWa.replace(/[^0-9]/g,'')+'" target="_blank" style="color:var(--tan);text-decoration:none;">'+t.phoneWa+'</a>':'—')+'</div></div>'+
+    '<div><div class="pf-label">RANK</div><div class="pf-value">'+t.rank+'</div></div>'+
+    '<div><div class="pf-label">STATUS</div><div style="margin-top:2px;">'+statusBadge(t.status||'available')+'</div></div>'+
+    '<div><div class="pf-label">UNIT</div><div class="pf-value">'+(t.unit||'—')+'</div></div>'+
+    '<div><div class="pf-label">SVC NO.</div><div class="pf-value">'+(t.sn||'—')+'</div></div>'+
+    '<div><div class="pf-label">🩸 BLOOD GROUP</div><div class="pf-value" style="'+(t.bloodGroup?'color:var(--red-light);':'')+'">'+(t.bloodGroup||'Not recorded')+'</div></div>'+
+    '<div><div class="pf-label">DEPLOYMENT DATE</div><div class="pf-value">'+(t.deploymentDate?fmtDateLong(t.deploymentDate):'Not recorded')+'</div></div>'+
+    '<div><div class="pf-label">🔫 WEAPON NO.</div><div class="pf-value">'+(t.weaponNumber||'Not recorded')+'</div></div>'+
+    '<div><div class="pf-label">📞 LOCAL NO.</div><div class="pf-value">'+(t.phoneLocal?'<a href="tel:'+t.phoneLocal.replace(/\s+/g,'')+'" style="color:var(--tan);text-decoration:none;">'+t.phoneLocal+'</a>':'—')+'</div></div>'+
+    '<div><div class="pf-label">💬 WHATSAPP NO.</div><div class="pf-value">'+(t.phoneWa?'<a href="https://wa.me/'+t.phoneWa.replace(/[^0-9]/g,'')+'" target="_blank" style="color:var(--tan);text-decoration:none;">'+t.phoneWa+'</a>':'—')+'</div></div>'+
     '</div>'+
     (t.notes?'<div class="notes-field">'+t.notes+'</div>':'')+
     '</div>'+
     '<div class="section-hdr">Statistics</div>'+
-    '<div class="stat-grid">'+
+    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;">'+
     '<div class="stat"><div class="stat-num">'+tp.length+'</div><div class="stat-label">Patrols</div></div>'+
     '<div class="stat"><div class="stat-num">'+totalH.toFixed(0)+'</div><div class="stat-label">Hours</div></div>'+
     '<div class="stat"><div class="stat-num">'+sectors.length+'</div><div class="stat-label">Sectors</div></div>'+
@@ -2828,25 +2810,25 @@ function showProfile(id, fromArch){
     '<div class="stat-num" style="'+(ds>7?'color:#ff6666;':'')+'">'+(ds===9999?'—':ds+'d')+'</div>'+
     '<div class="stat-label">Inactive</div></div></div>'+
     '<div class="section-hdr">This Month</div>'+
-    '<div class="stat-grid stat-grid-2">'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px;">'+
     '<div class="stat"><div class="stat-num">'+moPats.length+'</div><div class="stat-label">Patrols</div></div>'+
     '<div class="stat"><div class="stat-num">'+moH.toFixed(1)+'</div><div class="stat-label">Hours</div></div>'+
     '</div>'+
-    (sectors.length>0?'<div class="pf-meta-line">Sectors: <strong style="color:var(--text);">'+sectors.join(', ')+'</strong></div>':'')+
-    (Object.keys(types).length>0?'<div class="pf-meta-line">Types: '+Object.entries(types).sort(function(a,b){return b[1]-a[1];}).map(function(kv){return '<span class="badge b-gray" style="margin-right:3px;margin-bottom:3px;">'+kv[0]+': '+kv[1]+'</span>';}).join('')+'</div>':'')+
+    (sectors.length>0?'<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Sectors: <strong style="color:var(--text);">'+sectors.join(', ')+'</strong></div>':'')+
+    (Object.keys(types).length>0?'<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Types: '+Object.entries(types).sort(function(a,b){return b[1]-a[1];}).map(function(kv){return '<span class="badge b-gray" style="margin-right:3px;margin-bottom:3px;">'+kv[0]+': '+kv[1]+'</span>';}).join('')+'</div>':'')+
     '<div class="section-hdr">Patrol History ('+tp.length+')</div>'+
     (tp.length===0?'<div class="empty">No patrols yet.</div>':
       tp.map(function(p){
         return '<div class="ph-row">'+
-          '<div class="ph-head">'+
-          '<div class="ph-main">'+
+          '<div class="ph-top">'+
+          '<div>'+
           '<span class="ph-id">'+(p.ptlId||'')+'</span> '+
           '<span class="ph-date">'+fmtDate(p.date)+'</span> '+
-          '<span class="'+typeBadge(p.type)+' ph-type">'+p.type+'</span>'+
+          '<span class="'+typeBadge(p.type)+'" style="font-size:9px;">'+p.type+'</span>'+
           (p.area?'<div class="ph-area">'+p.area+'</div>':'')+
           (p.remarks?'<div class="ph-remarks">'+p.remarks+'</div>':'')+
           '</div>'+
-          '<span class="ph-duration">'+(p.duration?p.duration+'h':'—')+'</span>'+
+          '<span class="ph-dur">'+(p.duration?p.duration+'h':'—')+'</span>'+
           '</div></div>';
       }).join(''));
   document.getElementById('profile-body').innerHTML=html;
@@ -3386,7 +3368,29 @@ function relocateCalendarsToBody(){
     document.body.insertBefore(cal, backdrop.nextSibling);
   });
 }
-function toggleCal(calId,inputEl){ var wrap=document.getElementById(calId); if(!wrap) return; var isOpen=wrap.classList.contains('open'); document.querySelectorAll('.cal-wrap.open').forEach(function(w){w.classList.remove('open');}); if(isOpen){ document.getElementById('cal-backdrop').classList.remove('open'); return; } var val=inputEl?inputEl.value:''; var parsed=parseDate(val); var now=new Date(); var yr=now.getFullYear(),mo=now.getMonth(); if(parsed){var dt=new Date(parsed+'T12:00:00');yr=dt.getFullYear();mo=dt.getMonth();} _calState[calId]={year:yr,month:mo,inputId:inputEl?inputEl.id:null,view:'days',yearRangeStart:Math.floor(yr/12)*12}; renderCal(calId); wrap.classList.add('open'); document.getElementById('cal-backdrop').classList.add('open'); }
+function toggleCal(calId,inputEl){ var wrap=document.getElementById(calId); if(!wrap) return; var isOpen=wrap.classList.contains('open'); document.querySelectorAll('.cal-wrap.open').forEach(function(w){w.classList.remove('open');}); if(isOpen){ document.getElementById('cal-backdrop').classList.remove('open'); return; } var val=inputEl?inputEl.value:''; var parsed=parseDate(val); var now=new Date(); var yr=now.getFullYear(),mo=now.getMonth(); if(parsed){var dt=new Date(parsed+'T12:00:00');yr=dt.getFullYear();mo=dt.getMonth();} _calState[calId]={year:yr,month:mo,inputId:inputEl?inputEl.id:null,view:'days',yearRangeStart:Math.floor(yr/12)*12}; renderCal(calId); wrap.classList.add('open'); document.getElementById('cal-backdrop').classList.add('open'); positionCalDesktop(wrap,inputEl); }
+// On desktop (fine pointer, ≥900px) the calendar drops down anchored to the
+// field that opened it. Since relocateCalendarsToBody() moves every .cal-wrap
+// to be a direct child of <body> (needed on mobile to escape any clipping
+// ancestor), CSS alone can no longer position it relative to its original
+// input — so we measure the input's actual screen position with
+// getBoundingClientRect() and place the calendar there directly, clamped so
+// it never runs off the right or bottom edge of the viewport.
+function positionCalDesktop(wrap,inputEl){
+  var mq=window.matchMedia('(min-width:900px) and (pointer:fine)');
+  if(!mq.matches){ wrap.style.left=''; wrap.style.top=''; return; }
+  if(!inputEl){ return; }
+  var r=inputEl.getBoundingClientRect();
+  var w=wrap.offsetWidth||300;
+  var left=r.left;
+  var maxLeft=window.innerWidth-w-12;
+  if(left>maxLeft) left=Math.max(12,maxLeft);
+  var top=r.bottom+4;
+  var maxTop=window.innerHeight-12;
+  if(top+300>maxTop && r.top>320){ top=r.top-4-Math.min(420,wrap.offsetHeight||360); }
+  wrap.style.left=left+'px';
+  wrap.style.top=top+'px';
+}
 function closeAllCalendars(){ document.querySelectorAll('.cal-wrap.open').forEach(function(w){w.classList.remove('open');}); document.getElementById('cal-backdrop').classList.remove('open'); }
 
 function renderCal(calId){
