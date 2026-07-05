@@ -1100,65 +1100,6 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
   </div>
 </div>
 
-<!-- Add/Edit Troop — modal (was an always-visible form; roster now shows immediately) -->
-<div class="modal-ov" id="troop-form-modal">
-  <div class="modal">
-    <div class="modal-handle"></div>
-    <div class="card-title" id="t-form-title" style="border-bottom:none;margin-bottom:10px;">Add Troop</div>
-    <div id="t-alert"></div>
-    <input type="hidden" id="t-edit-id">
-    <div class="fg"><label class="field-label">Full Name</label><input type="text" id="t-name" placeholder="Surname, Firstname" list="dl-names" autocomplete="off"></div>
-    <div class="fg">
-      <label class="field-label">Deployment Date <span style="color:var(--red-light);">*</span></label>
-      <div style="position:relative;">
-        <input type="text" id="t-deploy-date" placeholder="DD/MM/YYYY" maxlength="10" oninput="fmtDateInp(this)" autocomplete="off" readonly onclick="toggleCal('cal-t-deploy',this)" style="padding-right:36px;">
-        <span class="cal-icon" onclick="toggleCal('cal-t-deploy',document.getElementById('t-deploy-date'))">📅</span>
-        <div class="cal-wrap" id="cal-t-deploy"></div>
-      </div>
-      <div style="font-size:11.5px;color:var(--text-muted);margin-top:4px;">Used to calculate this troop's patrol participation fairly against their own time in service.</div>
-    </div>
-    <div class="fr">
-      <div class="fg"><label class="field-label">Rank</label><select id="t-rank"></select></div>
-      <div class="fg"><label class="field-label">Unit / Section</label><input type="text" id="t-unit" placeholder="e.g. Alpha" list="dl-units" autocomplete="off"></div>
-    </div>
-    <div class="fr">
-      <div class="fg"><label class="field-label">Service Number</label><input type="text" id="t-sn" placeholder="e.g. SN-0042" list="dl-sns" autocomplete="off"></div>
-      <div class="fg"><label class="field-label">Status</label>
-        <select id="t-status">
-          <option value="available">Available</option>
-          <option value="leave">On Leave</option>
-          <option value="sick">Sick</option>
-          <option value="detached">Detached</option>
-        </select>
-      </div>
-    </div>
-    <div class="fr">
-      <div class="fg"><label class="field-label">🩸 Blood Group</label>
-        <select id="t-blood">
-          <option value="">Not recorded</option>
-          <option value="A+">A+</option>
-          <option value="A-">A-</option>
-          <option value="B+">B+</option>
-          <option value="B-">B-</option>
-          <option value="AB+">AB+</option>
-          <option value="AB-">AB-</option>
-          <option value="O+">O+</option>
-          <option value="O-">O-</option>
-        </select>
-      </div>
-      <div class="fg"><label class="field-label">🔫 Weapon Number</label><input type="text" id="t-weapon" placeholder="e.g. W-2291" list="dl-weapons" autocomplete="off"></div>
-    </div>
-    <div class="fr">
-      <div class="fg"><label class="field-label">📞 Local No.</label><input type="tel" id="t-phone-local" placeholder="e.g. 981-234-5678" list="dl-phones" autocomplete="off"></div>
-      <div class="fg"><label class="field-label">💬 WhatsApp No.</label><input type="tel" id="t-phone-wa" placeholder="e.g. +977-981-234-5678" list="dl-phones" autocomplete="off"></div>
-    </div>
-    <div class="fg"><label class="field-label">Notes / Skills / Restrictions</label><textarea id="t-notes" rows="2" placeholder="e.g. Medic trained, No night ops..."></textarea></div>
-    <div class="modal-actions" style="justify-content:stretch;">
-      <button class="btn btn-primary" id="t-submit-btn" onclick="saveTroop()" style="flex:1;">Add Troop</button>
-      <button class="btn btn-ghost" id="t-cancel-btn" onclick="cancelEdit()" style="flex:1;">Cancel</button>
-    </div>
-  </div>
-</div>
 <!-- Lightweight client-side auto-suggestion sources — populated from existing roster data -->
 <datalist id="dl-names"></datalist>
 <datalist id="dl-units"></datalist>
@@ -1391,6 +1332,68 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 </div>
 
 </main>
+
+<!-- Add/Edit Troop — modal (moved outside #app-main so this fixed overlay is no longer
+     clipped by app-main's scroll/positioning box — that clipping was cutting off the
+     bottom of the modal on phones and its left edge on desktop, behind the sidebar) -->
+<div class="modal-ov" id="troop-form-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="card-title" id="t-form-title" style="border-bottom:none;margin-bottom:10px;">Add Troop</div>
+    <div id="t-alert"></div>
+    <input type="hidden" id="t-edit-id">
+    <div class="fg"><label class="field-label">Full Name</label><input type="text" id="t-name" placeholder="Surname, Firstname" list="dl-names" autocomplete="off"></div>
+    <div class="fg">
+      <label class="field-label">Deployment Date <span style="color:var(--red-light);">*</span></label>
+      <div style="position:relative;">
+        <input type="text" id="t-deploy-date" placeholder="DD/MM/YYYY" maxlength="10" oninput="fmtDateInp(this)" autocomplete="off" readonly onclick="toggleCal('cal-t-deploy',this)" style="padding-right:36px;">
+        <span class="cal-icon" onclick="toggleCal('cal-t-deploy',document.getElementById('t-deploy-date'))">📅</span>
+        <div class="cal-wrap" id="cal-t-deploy"></div>
+      </div>
+      <div style="font-size:11.5px;color:var(--text-muted);margin-top:4px;">Used to calculate this troop's patrol participation fairly against their own time in service.</div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="field-label">Rank</label><select id="t-rank"></select></div>
+      <div class="fg"><label class="field-label">Unit / Section</label><input type="text" id="t-unit" placeholder="e.g. Alpha" list="dl-units" autocomplete="off"></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="field-label">Service Number</label><input type="text" id="t-sn" placeholder="e.g. SN-0042" list="dl-sns" autocomplete="off"></div>
+      <div class="fg"><label class="field-label">Status</label>
+        <select id="t-status">
+          <option value="available">Available</option>
+          <option value="leave">On Leave</option>
+          <option value="sick">Sick</option>
+          <option value="detached">Detached</option>
+        </select>
+      </div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="field-label">🩸 Blood Group</label>
+        <select id="t-blood">
+          <option value="">Not recorded</option>
+          <option value="A+">A+</option>
+          <option value="A-">A-</option>
+          <option value="B+">B+</option>
+          <option value="B-">B-</option>
+          <option value="AB+">AB+</option>
+          <option value="AB-">AB-</option>
+          <option value="O+">O+</option>
+          <option value="O-">O-</option>
+        </select>
+      </div>
+      <div class="fg"><label class="field-label">🔫 Weapon Number</label><input type="text" id="t-weapon" placeholder="e.g. W-2291" list="dl-weapons" autocomplete="off"></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="field-label">📞 Local No.</label><input type="tel" id="t-phone-local" placeholder="e.g. 981-234-5678" list="dl-phones" autocomplete="off"></div>
+      <div class="fg"><label class="field-label">💬 WhatsApp No.</label><input type="tel" id="t-phone-wa" placeholder="e.g. +977-981-234-5678" list="dl-phones" autocomplete="off"></div>
+    </div>
+    <div class="fg"><label class="field-label">Notes / Skills / Restrictions</label><textarea id="t-notes" rows="2" placeholder="e.g. Medic trained, No night ops..."></textarea></div>
+    <div class="modal-actions" style="justify-content:stretch;">
+      <button class="btn btn-primary" id="t-submit-btn" onclick="saveTroop()" style="flex:1;">Add Troop</button>
+      <button class="btn btn-ghost" id="t-cancel-btn" onclick="cancelEdit()" style="flex:1;">Cancel</button>
+    </div>
+  </div>
+</div>
 
 <!-- BOTTOM NAV -->
 <nav id="bottom-nav">
