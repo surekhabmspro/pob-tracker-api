@@ -296,7 +296,7 @@ body.light-mode{background:
   .stat{padding:18px 12px;border-radius:12px;}
 
   /* ── Dashboard 2-col layout ── */
-  .dash-row2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px;}
+  .dash-row2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px;align-items:start;}
 
   /* ── Cards ── */
   .card{border-radius:12px;padding:22px;margin-bottom:18px;}
@@ -650,11 +650,10 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
   text-transform:uppercase;margin:14px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--border);}
 
 /* ── CAL PICKER ── */
-.cal-wrap{position:fixed;left:50%;top:50%;margin-left:calc(min(94vw,360px) / -2);
-  width:min(94vw,360px);z-index:9999;background:var(--surface);
+.cal-wrap{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:92vw;max-width:360px;z-index:9999;background:var(--surface);
   border:1px solid var(--tan);border-radius:14px;padding:14px;
-  box-shadow:0 12px 40px rgba(0,0,0,0.7);display:none;max-height:86vh;overflow-y:auto;
-  margin-top:-43vh;}
+  box-shadow:0 12px 40px rgba(0,0,0,0.7);display:none;max-height:86vh;overflow-y:auto;}
 .cal-wrap.open{display:block;}
 .cal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9998;}
 .cal-backdrop.open{display:block;}
@@ -932,6 +931,10 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
       <button class="btn btn-ghost btn-sm" onclick="showTab('patrol-log')">View All →</button>
     </div>
     <ul class="recent-list" id="recent-list"></ul>
+    <div id="recent-extra-wrap" style="display:none;">
+      <ul class="recent-list" id="recent-extra" style="display:none;"></ul>
+      <button class="btn btn-ghost btn-sm" id="recent-toggle-btn" onclick="toggleRecentExtra()" style="width:100%;margin-top:6px;">▼ Show More</button>
+    </div>
   </div>
 
   <!-- Credit — Dashboard bottom (do not remove; footer credit) -->
@@ -2323,7 +2326,7 @@ function renderDash(){
   // ── DEPLOYMENT FAIRNESS ─────────────────────────────────────────────
   var moTotalPatrols=Math.max(1,moPats.length);
   var sorted=sortTroops(D.troops);
-  var top10=sorted.slice(0,10),rest=sorted.slice(10);
+  var top10=sorted.slice(0,5),rest=sorted.slice(5);
   function fairnessRow(t){
     var c=monthlyPatrolCount(t.id);var pct=Math.round(c/moTotalPatrols*100);
     var color=pct>70?'var(--green-light)':pct>30?'var(--orange)':'var(--red-light)';
@@ -2339,19 +2342,33 @@ function renderDash(){
   document.getElementById('fairness-view').innerHTML=fairHTML||'<div class="empty">No troop data.</div>';
 
   // ── RECENT PATROLS ──────────────────────────────────────────────────
-  var recent=D.patrols.slice().sort(function(a,b){return b.date.localeCompare(a.date);}).slice(0,8);
-  document.getElementById('recent-list').innerHTML=recent.length===0?'<li class="empty">No patrols logged yet.</li>':
-    recent.map(function(p){
-      return '<li class="recent-item">'+
-        '<div style="min-width:0;flex:1;">'+
-        '<div style="font-weight:700;color:var(--text);font-size:15px;">'+(p.ptlId||'')+
-        ' <button class="count-pill" onclick="showTroopsModal(\''+p.id+'\')">'+(p.troops||[]).length+' trp</button></div>'+
-        '<div style="font-size:13px;color:var(--text-muted);margin-top:2px;">'+fmtDateLong(p.date)+(p.area?' · <strong style="color:var(--text);">'+p.area+'</strong>':'')+(p.duration?' · '+p.duration+'h':'')+'</div>'+
-        (p.remarks?'<div style="font-size:12px;color:var(--text-muted);margin-top:1px;font-style:italic;">'+p.remarks+'</div>':'')+
-        '</div>'+
-        '<span class="'+typeBadge(p.type)+'" style="flex-shrink:0;">'+p.type+'</span></li>';
-    }).join('');
+  var recentAll=D.patrols.slice().sort(function(a,b){return b.date.localeCompare(a.date);}).slice(0,8);
+  var recent=recentAll.slice(0,5),recentRest=recentAll.slice(5);
+  function recentRow(p){
+    return '<li class="recent-item">'+
+      '<div style="min-width:0;flex:1;">'+
+      '<div style="font-weight:700;color:var(--text);font-size:15px;">'+(p.ptlId||'')+
+      ' <button class="count-pill" onclick="showTroopsModal(\''+p.id+'\')">'+(p.troops||[]).length+' trp</button></div>'+
+      '<div style="font-size:13px;color:var(--text-muted);margin-top:2px;">'+fmtDateLong(p.date)+(p.area?' · <strong style="color:var(--text);">'+p.area+'</strong>':'')+(p.duration?' · '+p.duration+'h':'')+'</div>'+
+      (p.remarks?'<div style="font-size:12px;color:var(--text-muted);margin-top:1px;font-style:italic;">'+p.remarks+'</div>':'')+
+      '</div>'+
+      '<span class="'+typeBadge(p.type)+'" style="flex-shrink:0;">'+p.type+'</span></li>';
+  }
+  var recentHTML=recentAll.length===0?'<li class="empty">No patrols logged yet.</li>':recent.map(recentRow).join('');
+  document.getElementById('recent-list').innerHTML=recentHTML;
+  var recentExtraWrap=document.getElementById('recent-extra-wrap');
+  if(recentExtraWrap){
+    if(recentRest.length>0){
+      recentExtraWrap.style.display='';
+      document.getElementById('recent-extra').innerHTML=recentRest.map(recentRow).join('');
+      document.getElementById('recent-extra').style.display='none';
+      document.getElementById('recent-toggle-btn').textContent='▼ Show '+recentRest.length+' More';
+    } else {
+      recentExtraWrap.style.display='none';
+    }
+  }
 }
+function toggleRecentExtra(){ var extra=document.getElementById('recent-extra'); var btn=document.getElementById('recent-toggle-btn'); if(!extra||!btn) return; if(extra.style.display==='none'){extra.style.display='block';btn.textContent='▲ Show Less';}else{extra.style.display='none';btn.textContent='▼ Show More';} }
 // Shows a quick detail modal for a clicked dashboard stat/tile, so the person
 // doesn't have to navigate away just to see what's behind a number.
 function dashDetailRow(main,sub){ return '<div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:14px;"><strong>'+main+'</strong><div style="font-size:12px;color:var(--text-muted);margin-top:2px;">'+sub+'</div></div>'; }
