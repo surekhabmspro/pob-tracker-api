@@ -548,12 +548,23 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
    visual focus, actions are available but don't compete for attention. */
 .rb-btn{padding:5px 11px;font-size:12px;font-weight:600;border-radius:7px;border:1px solid;
   background:transparent;cursor:pointer;transition:all 0.15s var(--ease);text-transform:none;
-  letter-spacing:0;min-height:30px;font-family:'Segoe UI',Arial,sans-serif;}
+  letter-spacing:0;min-height:30px;font-family:'Segoe UI',Arial,sans-serif;
+  display:inline-flex;align-items:center;gap:4px;}
 .rb-btn.rb-info{color:var(--blue);border-color:rgba(91,141,239,0.35);background:rgba(91,141,239,0.07);}
 .rb-btn.rb-primary{color:var(--tan);border-color:rgba(230,179,74,0.35);background:rgba(230,179,74,0.07);}
 .rb-btn.rb-warning{color:var(--orange);border-color:rgba(240,160,75,0.35);background:rgba(240,160,75,0.07);}
+.rb-btn.rb-danger-soft{color:var(--red-light);border-color:rgba(242,73,90,0.35);background:rgba(242,73,90,0.07);}
 .rb-btn:active{transform:scale(0.94);}
 @media (min-width:900px) and (hover:hover){.rb-btn:hover{filter:brightness(1.3);}}
+/* Sticky top-right action cluster for Profile modal — stays visible while
+   scrolling long patrol histories, on both mobile and desktop. */
+.profile-sticky-header{position:sticky;top:-20px;margin:-20px -20px 14px;padding:16px 20px 12px;
+  background:var(--surface);z-index:10;border-bottom:1px solid var(--border);border-radius:16px 16px 0 0;}
+.mini-close-btn{width:30px;height:30px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);
+  color:var(--text-muted);font-size:18px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:all 0.15s;flex-shrink:0;}
+.mini-close-btn:active{background:var(--red-light);color:#fff;border-color:var(--red-light);}
+@media (min-width:900px) and (hover:hover){.mini-close-btn:hover{background:var(--red-light);color:#fff;border-color:var(--red-light);}}
 .troop-card-btns{display:flex;gap:6px;flex-wrap:wrap;}
 
 /* ── INACTIVE CARDS ── */
@@ -1076,12 +1087,27 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 
 <!-- ===== TROOPS ===== -->
 <div id="troops" class="section">
-  <!-- Add/Edit Form -->
+  <!-- Roster (shown immediately, no scrolling past the form) -->
   <div class="card">
-    <div class="card-title" id="t-form-title">Add Troop</div>
+    <div class="card-title">
+      <span>Roster (<span id="troop-count">0</span>)</span>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-primary btn-sm" onclick="openTroopForm()">+ Add Troop</button>
+        <button class="btn btn-ghost btn-sm" onclick="showTab('archived-troops')" style="font-size:11px;">📁 Archived (<span id="arch-count-btn">0</span>) →</button>
+      </div>
+    </div>
+    <div id="roster"></div>
+  </div>
+</div>
+
+<!-- Add/Edit Troop — modal (was an always-visible form; roster now shows immediately) -->
+<div class="modal-ov" id="troop-form-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="card-title" id="t-form-title" style="border-bottom:none;margin-bottom:10px;">Add Troop</div>
     <div id="t-alert"></div>
     <input type="hidden" id="t-edit-id">
-    <div class="fg"><label class="field-label">Full Name</label><input type="text" id="t-name" placeholder="Surname, Firstname"></div>
+    <div class="fg"><label class="field-label">Full Name</label><input type="text" id="t-name" placeholder="Surname, Firstname" list="dl-names" autocomplete="off"></div>
     <div class="fg">
       <label class="field-label">Deployment Date <span style="color:var(--red-light);">*</span></label>
       <div style="position:relative;">
@@ -1093,10 +1119,10 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     </div>
     <div class="fr">
       <div class="fg"><label class="field-label">Rank</label><select id="t-rank"></select></div>
-      <div class="fg"><label class="field-label">Unit / Section</label><input type="text" id="t-unit" placeholder="e.g. Alpha"></div>
+      <div class="fg"><label class="field-label">Unit / Section</label><input type="text" id="t-unit" placeholder="e.g. Alpha" list="dl-units" autocomplete="off"></div>
     </div>
     <div class="fr">
-      <div class="fg"><label class="field-label">Service Number</label><input type="text" id="t-sn" placeholder="e.g. SN-0042"></div>
+      <div class="fg"><label class="field-label">Service Number</label><input type="text" id="t-sn" placeholder="e.g. SN-0042" list="dl-sns" autocomplete="off"></div>
       <div class="fg"><label class="field-label">Status</label>
         <select id="t-status">
           <option value="available">Available</option>
@@ -1106,38 +1132,39 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
         </select>
       </div>
     </div>
-    <div class="fg"><label class="field-label">🩸 Blood Group</label>
-      <select id="t-blood">
-        <option value="">Not recorded</option>
-        <option value="A+">A+</option>
-        <option value="A-">A-</option>
-        <option value="B+">B+</option>
-        <option value="B-">B-</option>
-        <option value="AB+">AB+</option>
-        <option value="AB-">AB-</option>
-        <option value="O+">O+</option>
-        <option value="O-">O-</option>
-      </select>
+    <div class="fr">
+      <div class="fg"><label class="field-label">🩸 Blood Group</label>
+        <select id="t-blood">
+          <option value="">Not recorded</option>
+          <option value="A+">A+</option>
+          <option value="A-">A-</option>
+          <option value="B+">B+</option>
+          <option value="B-">B-</option>
+          <option value="AB+">AB+</option>
+          <option value="AB-">AB-</option>
+          <option value="O+">O+</option>
+          <option value="O-">O-</option>
+        </select>
+      </div>
+      <div class="fg"><label class="field-label">🔫 Weapon Number</label><input type="text" id="t-weapon" placeholder="e.g. W-2291" list="dl-weapons" autocomplete="off"></div>
     </div>
     <div class="fr">
-      <div class="fg"><label class="field-label">📞 Local No.</label><input type="tel" id="t-phone-local" placeholder="e.g. 981-234-5678"></div>
-      <div class="fg"><label class="field-label">💬 WhatsApp No.</label><input type="tel" id="t-phone-wa" placeholder="e.g. +977-981-234-5678"></div>
+      <div class="fg"><label class="field-label">📞 Local No.</label><input type="tel" id="t-phone-local" placeholder="e.g. 981-234-5678" list="dl-phones" autocomplete="off"></div>
+      <div class="fg"><label class="field-label">💬 WhatsApp No.</label><input type="tel" id="t-phone-wa" placeholder="e.g. +977-981-234-5678" list="dl-phones" autocomplete="off"></div>
     </div>
     <div class="fg"><label class="field-label">Notes / Skills / Restrictions</label><textarea id="t-notes" rows="2" placeholder="e.g. Medic trained, No night ops..."></textarea></div>
-    <div style="display:flex;gap:8px;">
+    <div class="modal-actions" style="justify-content:stretch;">
       <button class="btn btn-primary" id="t-submit-btn" onclick="saveTroop()" style="flex:1;">Add Troop</button>
-      <button class="btn btn-ghost" id="t-cancel-btn" onclick="cancelEdit()" style="display:none;">Cancel</button>
+      <button class="btn btn-ghost" id="t-cancel-btn" onclick="cancelEdit()" style="flex:1;">Cancel</button>
     </div>
-  </div>
-  <!-- Roster -->
-  <div class="card">
-    <div class="card-title">
-      <span>Roster (<span id="troop-count">0</span>)</span>
-      <button class="btn btn-ghost btn-sm" onclick="showTab('archived-troops')" style="font-size:11px;">📁 Archived (<span id="arch-count-btn">0</span>) →</button>
-    </div>
-    <div id="roster"></div>
   </div>
 </div>
+<!-- Lightweight client-side auto-suggestion sources — populated from existing roster data -->
+<datalist id="dl-names"></datalist>
+<datalist id="dl-units"></datalist>
+<datalist id="dl-sns"></datalist>
+<datalist id="dl-weapons"></datalist>
+<datalist id="dl-phones"></datalist>
 
 <!-- ===== ARCHIVED TROOPS ===== -->
 <div id="archived-troops" class="section">
@@ -1518,13 +1545,27 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 
 <div class="modal-ov" id="profile-modal">
   <div class="modal">
-    <div class="modal-handle"></div>
-    <div class="modal-title" id="profile-title">Troop Profile</div>
-    <div id="profile-body"></div>
-    <div class="modal-actions">
-      <button class="btn btn-ghost btn-sm" onclick="viewFullRecord()">📄 Full Record (Print/PDF)</button>
-      <button class="btn btn-ghost" onclick="closeModal('profile-modal')">Close</button>
+    <div class="profile-sticky-header">
+      <div class="modal-handle"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+        <div class="modal-title" id="profile-title" style="margin-bottom:0;">Troop Profile</div>
+        <div style="display:flex;gap:6px;flex-shrink:0;align-items:center;">
+          <button class="rb-btn rb-danger-soft" onclick="showCompatibleDonors()" title="Compatible Blood Donors">🩸 Donors</button>
+          <button class="rb-btn rb-primary" onclick="viewFullRecord()" title="Full Record (Print/PDF)">📄 Record</button>
+          <button class="mini-close-btn" onclick="closeModal('profile-modal')" title="Close">×</button>
+        </div>
+      </div>
     </div>
+    <div id="profile-body"></div>
+  </div>
+</div>
+
+<div class="modal-ov" id="donors-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="donors-title">Compatible Blood Donors</div>
+    <div id="donors-body" style="max-height:60vh;overflow-y:auto;"></div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('donors-modal')">Close</button></div>
   </div>
 </div>
 
@@ -1591,7 +1632,7 @@ function apiFetch(path, opts) {
     .then(function(r){ return r.json(); });
 }
 function dbToTroop(r) {
-  return {id:r.id,name:r.name,rank:r.rank,unit:r.unit,sn:r.sn||'',status:r.status||'available',notes:r.notes||'',phoneLocal:r.phone_local||'',phoneWa:r.phone_wa||'',bloodGroup:r.blood_group||'',deploymentDate:r.deployment_date?String(r.deployment_date).slice(0,10):''};
+  return {id:r.id,name:r.name,rank:r.rank,unit:r.unit,sn:r.sn||'',status:r.status||'available',notes:r.notes||'',phoneLocal:r.phone_local||'',phoneWa:r.phone_wa||'',bloodGroup:r.blood_group||'',deploymentDate:r.deployment_date?String(r.deployment_date).slice(0,10):'',weaponNumber:r.weapon_number||''};
 }
 function dbToPatrol(r) {
   return {id:r.id,ptlId:r.ptl_id,date:(r.date||'').slice(0,10),type:r.type,
@@ -1772,6 +1813,19 @@ function fmtDateLong(d){ if(!d) return ''; try{ var dt=new Date(d+'T12:00:00'); 
 function fmtDateInp(inp){ var v=inp.value.replace(/[^0-9]/g,''); if(v.length>2) v=v.slice(0,2)+'/'+v.slice(2); if(v.length>5) v=v.slice(0,5)+'/'+v.slice(5); if(v.length>10) v=v.slice(0,10); inp.value=v; }
 function nowStr(){ var n=new Date(); return String(n.getDate()).padStart(2,'0')+'/'+String(n.getMonth()+1).padStart(2,'0')+'/'+n.getFullYear()+' '+String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0'); }
 function todayDMY(){ var n=new Date(); return String(n.getDate()).padStart(2,'0')+'/'+String(n.getMonth()+1).padStart(2,'0')+'/'+n.getFullYear(); }
+// Lightweight, instant auto-suggestions built from the roster already loaded
+// in memory — no network round-trip needed since the full troop list is
+// already local. Populates <datalist> options that the form inputs reference.
+function populateAutoSuggestLists(){
+  var all=(D.troops||[]).concat(D.archived||[]);
+  function uniq(arr){ var seen={},out=[]; arr.forEach(function(v){ v=(v||'').trim(); if(v&&!seen[v]){seen[v]=1;out.push(v);} }); return out; }
+  function fillList(elId,values){ var el=document.getElementById(elId); if(!el) return; el.innerHTML=values.map(function(v){return '<option value="'+v.replace(/"/g,'&quot;')+'">';}).join(''); }
+  fillList('dl-names',uniq(all.map(function(t){return t.name;})));
+  fillList('dl-units',uniq(all.map(function(t){return t.unit;})));
+  fillList('dl-sns',uniq(all.map(function(t){return t.sn;})));
+  fillList('dl-weapons',uniq(all.map(function(t){return t.weaponNumber;})));
+  fillList('dl-phones',uniq(all.reduce(function(a,t){return a.concat([t.phoneLocal,t.phoneWa]);},[])));
+}
 function dmyFromISO(iso){ if(!iso) return ''; var p=iso.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
 // Effective deployment date per the participation rules: the troop's own
 // recorded deployment date, or — if never recorded — the earliest patrol
@@ -2573,6 +2627,7 @@ function saveTroop(){
   var sn=document.getElementById('t-sn').value.trim();
   var status=document.getElementById('t-status').value;
   var bloodGroup=document.getElementById('t-blood').value;
+  var weaponNumber=document.getElementById('t-weapon').value.trim();
   var deployDateRaw=document.getElementById('t-deploy-date').value.trim();
   var deploymentDate=parseDate(deployDateRaw);
   var phoneLocal=document.getElementById('t-phone-local').value.trim();
@@ -2583,25 +2638,32 @@ function saveTroop(){
   if(!deploymentDate){showAlert('t-alert','Please enter a valid Deployment Date (DD/MM/YYYY).','danger');return;}
   if(editId){
     var t=D.troops.find(function(x){return x.id===editId;});
-    if(t){t.name=name;t.rank=rank;t.unit=unit;t.sn=sn;t.status=status;t.bloodGroup=bloodGroup;t.deploymentDate=deploymentDate;t.phoneLocal=phoneLocal;t.phoneWa=phoneWa;t.notes=notes;}
-    remoteSaveTroop(t); renderRoster();
+    if(t){t.name=name;t.rank=rank;t.unit=unit;t.sn=sn;t.status=status;t.bloodGroup=bloodGroup;t.weaponNumber=weaponNumber;t.deploymentDate=deploymentDate;t.phoneLocal=phoneLocal;t.phoneWa=phoneWa;t.notes=notes;}
+    remoteSaveTroop(t); renderRoster(); populateAutoSuggestLists();
     showAlert('t-alert',rank+' '+name+' updated!','success');
     audit('Troop updated: '+rank+' '+name); cancelEdit();
   } else {
     if(D.troops.find(function(t){return t.name.toLowerCase()===name.toLowerCase();})){showAlert('t-alert','Troop already exists.','danger');return;}
-    var newT={id:uid('t'),name:name,rank:rank,unit:unit,sn:sn,status:status,bloodGroup:bloodGroup,deploymentDate:deploymentDate,phoneLocal:phoneLocal,phoneWa:phoneWa,notes:notes};
-    D.troops.push(newT); remoteSaveTroop(newT); renderRoster();
+    var newT={id:uid('t'),name:name,rank:rank,unit:unit,sn:sn,status:status,bloodGroup:bloodGroup,weaponNumber:weaponNumber,deploymentDate:deploymentDate,phoneLocal:phoneLocal,phoneWa:phoneWa,notes:notes};
+    D.troops.push(newT); remoteSaveTroop(newT); renderRoster(); populateAutoSuggestLists();
     showAlert('t-alert',rank+' '+name+' added!','success');
     audit('Troop added: '+rank+' '+name);
-    ['t-name','t-unit','t-sn','t-phone-local','t-phone-wa','t-notes'].forEach(function(id){document.getElementById(id).value='';});
+    ['t-name','t-unit','t-sn','t-weapon','t-phone-local','t-phone-wa','t-notes'].forEach(function(id){document.getElementById(id).value='';});
     document.getElementById('t-deploy-date').value=todayDMY();
   }
+}
+// Opens the Add Troop modal fresh (roster now shows immediately on the page,
+// this is the single entry point for adding a new troop).
+function openTroopForm(){
+  cancelEdit();
+  document.getElementById('troop-form-modal').classList.add('open');
+  setTimeout(function(){document.getElementById('t-name').focus();},150);
 }
 var _pendingEditId=null;
 function confirmEditTroop(id){ requirePin(function(){ _pendingEditId=id; document.getElementById('edit-confirm-modal').classList.add('open'); document.getElementById('edit-confirm-btn').onclick=function(){closeConfirmEdit();editTroop(_pendingEditId);_pendingEditId=null;}; }); }
 function closeConfirmEdit(){ document.getElementById('edit-confirm-modal').classList.remove('open'); }
-function editTroop(id){ var t=D.troops.find(function(x){return x.id===id;}); if(!t) return; document.getElementById('t-name').value=t.name; document.getElementById('t-rank').value=t.rank; document.getElementById('t-unit').value=t.unit||''; document.getElementById('t-sn').value=t.sn||''; document.getElementById('t-status').value=t.status||'available'; document.getElementById('t-blood').value=t.bloodGroup||''; document.getElementById('t-deploy-date').value=t.deploymentDate?dmyFromISO(t.deploymentDate):(effectiveDeploymentDate(t)?dmyFromISO(effectiveDeploymentDate(t)):todayDMY()); document.getElementById('t-phone-local').value=t.phoneLocal||''; document.getElementById('t-phone-wa').value=t.phoneWa||''; document.getElementById('t-notes').value=t.notes||''; document.getElementById('t-edit-id').value=id; document.getElementById('t-form-title').textContent='Edit Troop'; document.getElementById('t-submit-btn').textContent='Save Changes'; document.getElementById('t-cancel-btn').style.display=''; document.getElementById('app-main').scrollTop=0; }
-function cancelEdit(){ document.getElementById('t-edit-id').value=''; ['t-name','t-unit','t-sn','t-phone-local','t-phone-wa','t-notes'].forEach(function(id){document.getElementById(id).value='';}); document.getElementById('t-status').value='available'; document.getElementById('t-blood').value=''; document.getElementById('t-deploy-date').value=todayDMY(); document.getElementById('t-form-title').textContent='Add Troop'; document.getElementById('t-submit-btn').textContent='Add Troop'; document.getElementById('t-cancel-btn').style.display='none'; }
+function editTroop(id){ var t=D.troops.find(function(x){return x.id===id;}); if(!t) return; document.getElementById('t-name').value=t.name; document.getElementById('t-rank').value=t.rank; document.getElementById('t-unit').value=t.unit||''; document.getElementById('t-sn').value=t.sn||''; document.getElementById('t-status').value=t.status||'available'; document.getElementById('t-blood').value=t.bloodGroup||''; document.getElementById('t-weapon').value=t.weaponNumber||''; document.getElementById('t-deploy-date').value=t.deploymentDate?dmyFromISO(t.deploymentDate):(effectiveDeploymentDate(t)?dmyFromISO(effectiveDeploymentDate(t)):todayDMY()); document.getElementById('t-phone-local').value=t.phoneLocal||''; document.getElementById('t-phone-wa').value=t.phoneWa||''; document.getElementById('t-notes').value=t.notes||''; document.getElementById('t-edit-id').value=id; document.getElementById('t-form-title').textContent='Edit Troop'; document.getElementById('t-submit-btn').textContent='Save Changes'; document.getElementById('troop-form-modal').classList.add('open'); }
+function cancelEdit(){ document.getElementById('t-edit-id').value=''; ['t-name','t-unit','t-sn','t-weapon','t-phone-local','t-phone-wa','t-notes'].forEach(function(id){document.getElementById(id).value='';}); document.getElementById('t-status').value='available'; document.getElementById('t-blood').value=''; document.getElementById('t-deploy-date').value=todayDMY(); document.getElementById('t-form-title').textContent='Add Troop'; document.getElementById('t-submit-btn').textContent='Add Troop'; document.getElementById('t-alert').innerHTML=''; document.getElementById('troop-form-modal').classList.remove('open'); }
 function archiveTroop(id){
   var t=D.troops.find(function(x){return x.id===id;}); if(!t) return;
   document.activeElement&&document.activeElement.blur&&document.activeElement.blur();
@@ -2715,6 +2777,7 @@ function showProfile(id, fromArch){
     '<div><div style="font-size:9px;color:var(--text-muted);font-family:\'Courier New\',monospace;">SVC NO.</div><div>'+(t.sn||'—')+'</div></div>'+
     '<div><div style="font-size:9px;color:var(--text-muted);font-family:\'Courier New\',monospace;">🩸 BLOOD GROUP</div><div style="font-weight:700;'+(t.bloodGroup?'color:var(--red-light);':'')+'">'+(t.bloodGroup||'Not recorded')+'</div></div>'+
     '<div><div style="font-size:9px;color:var(--text-muted);font-family:\'Courier New\',monospace;">DEPLOYMENT DATE</div><div>'+(t.deploymentDate?fmtDateLong(t.deploymentDate):'Not recorded')+'</div></div>'+
+    '<div><div style="font-size:9px;color:var(--text-muted);font-family:\'Courier New\',monospace;">🔫 WEAPON NO.</div><div>'+(t.weaponNumber||'Not recorded')+'</div></div>'+
     '<div><div style="font-size:9px;color:var(--text-muted);font-family:\'Courier New\',monospace;">📞 LOCAL NO.</div><div>'+(t.phoneLocal?'<a href="tel:'+t.phoneLocal.replace(/\s+/g,'')+'" style="color:var(--tan);text-decoration:none;">'+t.phoneLocal+'</a>':'—')+'</div></div>'+
     '<div><div style="font-size:9px;color:var(--text-muted);font-family:\'Courier New\',monospace;">💬 WHATSAPP NO.</div><div>'+(t.phoneWa?'<a href="https://wa.me/'+t.phoneWa.replace(/[^0-9]/g,'')+'" target="_blank" style="color:var(--tan);text-decoration:none;">'+t.phoneWa+'</a>':'—')+'</div></div>'+
     '</div>'+
@@ -2752,6 +2815,39 @@ function showProfile(id, fromArch){
       }).join(''));
   document.getElementById('profile-body').innerHTML=html;
   document.getElementById('profile-modal').classList.add('open');
+}
+
+// Compatible Blood Donors: uses the blood group of whichever troop's profile
+// is currently open, and lists other currently-deployed troops sharing that
+// exact blood group — for fast emergency donor identification.
+function showCompatibleDonors(){
+  var id=document.getElementById('profile-modal').dataset.troopId;
+  var t=D.troops.find(function(x){return x.id===id;})||D.archived.find(function(x){return x.id===id;});
+  if(!t) return;
+  document.getElementById('donors-title').textContent='Compatible Donors — '+(t.bloodGroup||'Unknown')+' ('+t.rank.toUpperCase()+' '+t.name.toUpperCase()+')';
+  var body='';
+  if(!t.bloodGroup){
+    body='<div class="alert al-info">This troop has no blood group recorded yet. Add it via Edit Troop to enable donor matching.</div>';
+  } else {
+    var matches=D.troops.filter(function(x){return x.id!==t.id&&x.bloodGroup===t.bloodGroup;});
+    if(matches.length===0){
+      body='<div class="empty">No other currently deployed troops share blood group '+t.bloodGroup+'.</div>';
+    } else {
+      body=sortTroops(matches).map(function(x){
+        var contact=x.phoneLocal||x.phoneWa||'';
+        return '<div class="pp-row" data-accent="b-red" onclick="showProfile(\''+x.id+'\')">'+
+          '<div class="pp-flag-dot b-red"></div>'+
+          '<div style="min-width:0;flex:1;">'+
+          '<div style="font-size:14.5px;"><strong>'+x.rank.toUpperCase()+' '+x.name.toUpperCase()+'</strong></div>'+
+          '<div style="font-size:11.5px;color:var(--text-muted);">'+(x.sn?('SN '+x.sn):'No SN recorded')+'</div>'+
+          '</div>'+
+          (contact?'<a href="tel:'+contact.replace(/\s+/g,'')+'" onclick="event.stopPropagation();" class="rb-btn rb-danger-soft" style="text-decoration:none;">📞 '+contact+'</a>':'<span style="font-size:11.5px;color:var(--text-muted);">No contact</span>')+
+          '</div>';
+      }).join('');
+    }
+  }
+  document.getElementById('donors-body').innerHTML=body;
+  document.getElementById('donors-modal').classList.add('open');
 }
 
 function viewFullRecord(){
@@ -3127,11 +3223,12 @@ function renderHandover(){
       '<div class="lh-perf-num">'+cAll+'<span class="lh-perf-unit">ptl</span></div>'+
       '<div style="min-width:0;flex:1;"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:4px;flex-wrap:wrap;">'+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong> '+statusBadge(t.status||'available')+'</div>'+
       '<div class="pc-chiprow" style="margin-top:5px;"><span class="pc-chip">⏱ <strong>'+hAll.toFixed(1)+'h</strong></span><span class="pc-chip">🕒 '+(lp?fmtDateLong(lp):'Never')+'</span></div></div></div>';}).join('')+'</div></div>'+
-    '<div class="lh-block"><div class="lh-title">Personnel Info (Blood Group &amp; Deployment)</div>'+
+    '<div class="lh-block"><div class="lh-title">Personnel Info (Blood Group, Weapon &amp; Deployment)</div>'+
     '<div class="lh-person-grid">'+sortTroops(D.troops).map(function(t){return '<div class="lh-person-card" data-accent="'+statusAccentCls(t.status||'available')+'" onclick="showProfile(\''+t.id+'\')">'+
       '<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>'+
       '<div class="pc-chiprow" style="margin-top:5px;">'+
       '<span class="pc-chip">🩸 <strong>'+(t.bloodGroup||'N/A')+'</strong></span>'+
+      '<span class="pc-chip">🔫 '+(t.weaponNumber||'N/A')+'</span>'+
       '<span class="pc-chip">📅 '+(t.deploymentDate?fmtDateLong(t.deploymentDate):'N/A')+'</span>'+
       '</div></div>';}).join('')+'</div></div>'+
     '<div class="lh-block"><div class="lh-title">Inactive Troops (Action Required)</div>'+
@@ -3157,7 +3254,7 @@ function printHandover(){
     return '<tr><td>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</td><td style="text-align:center;">'+cAll+'</td><td style="text-align:center;">'+hAll.toFixed(1)+'</td><td style="text-align:center;">'+(lp?fmtDateLong(lp):'Never')+'</td></tr>';
   }).join('');
   var personnelRows=sortTroops(D.troops).map(function(t){
-    return '<tr><td>'+(t.sn||'—')+'</td><td>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</td><td style="text-align:center;">'+(t.bloodGroup||'N/A')+'</td><td style="text-align:center;">'+(t.deploymentDate?fmtDateLong(t.deploymentDate):'N/A')+'</td></tr>';
+    return '<tr><td>'+(t.sn||'—')+'</td><td>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</td><td style="text-align:center;">'+(t.bloodGroup||'N/A')+'</td><td style="text-align:center;">'+(t.weaponNumber||'N/A')+'</td><td style="text-align:center;">'+(t.deploymentDate?fmtDateLong(t.deploymentDate):'N/A')+'</td></tr>';
   }).join('');
   var inactive=sortTroops(D.troops.filter(function(t){return isAvailable(t)&&daysSince(lastPatrol(t.id))>7;}));
   var handoverNotes=(document.querySelector('#handover-content textarea')?document.querySelector('#handover-content textarea').value.trim():'');
@@ -3204,9 +3301,9 @@ function printHandover(){
     '<div class="sub-hdr">Troop Performance (Total Since Deployment)</div>'+
     '<table><colgroup><col style="width:40%"><col style="width:20%"><col style="width:20%"><col style="width:20%"></colgroup>'+
     '<thead><tr><th>Name &amp; Rank</th><th>Total Patrols</th><th>Total Hours</th><th>Last Patrol</th></tr></thead><tbody>'+perfRows+'</tbody></table>'+
-    '<div class="sub-hdr">Personnel Info (Blood Group &amp; Deployment)</div>'+
-    '<table><colgroup><col style="width:20%"><col style="width:40%"><col style="width:20%"><col style="width:20%"></colgroup>'+
-    '<thead><tr><th>SN</th><th>Name &amp; Rank</th><th>Blood Group</th><th>Deployment Date</th></tr></thead><tbody>'+personnelRows+'</tbody></table>'+
+    '<div class="sub-hdr">Personnel Info (Blood Group, Weapon &amp; Deployment)</div>'+
+    '<table><colgroup><col style="width:15%"><col style="width:35%"><col style="width:15%"><col style="width:15%"><col style="width:20%"></colgroup>'+
+    '<thead><tr><th>SN</th><th>Name &amp; Rank</th><th>Blood Group</th><th>Weapon No.</th><th>Deployment Date</th></tr></thead><tbody>'+personnelRows+'</tbody></table>'+
     '<div class="sub-hdr">Inactive Troops (Action Required)</div>'+
     (inactive.length===0?'<div style="color:#888;font-size:12px;">All available troops patrolled within 7 days.</div>':'<div style="font-size:12px;">'+inactive.map(function(t){var ds=daysSince(lastPatrol(t.id));return t.rank.toUpperCase()+' '+t.name.toUpperCase()+' ('+(ds===9999?'Never patrolled':ds+'d inactive')+')';}).join(', ')+'</div>')+
     (handoverNotes?'<div class="sub-hdr">Commander\'s Handover Notes</div><div class="remarks-box">'+handoverNotes+'</div>':'')+
@@ -3233,7 +3330,7 @@ function renderSysInfo(){ var sz=JSON.stringify(D).length; document.getElementBy
 var pendingDel=null;
 function confirmDel(type,id){ requirePin(function(){ pendingDel={type:type,id:id}; document.getElementById('del-modal').classList.add('open'); document.getElementById('del-confirm').onclick=function(){ if(pendingDel.type==='patrol'){var p=D.patrols.find(function(x){return x.id===pendingDel.id;});if(p) audit('Patrol deleted: '+(p.ptlId||p.id));D.patrols=D.patrols.filter(function(p){return p.id!==pendingDel.id;});remoteDeletePatrol(pendingDel.id);}else{var t=D.troops.find(function(x){return x.id===pendingDel.id;});if(t) audit('Troop deleted: '+upLabel(t.rank,t.name));D.troops=D.troops.filter(function(t){return t.id!==pendingDel.id;});D.patrols.forEach(function(p){p.troops=(p.troops||[]).filter(function(id){return id!==pendingDel.id;});});remoteDeleteTroop(pendingDel.id);} saveData(); closeModal('del-modal'); pendingDel=null; var active=document.querySelector('.section.active'); if(active){var aid=active.id;if(aid==='dashboard') renderDash();if(aid==='patrol-log') renderTable();if(aid==='troops') renderRoster();if(aid==='report') genReport();if(aid==='inactive') renderInactive(0);} }; }); }
 
-['del-modal','troops-modal','profile-modal','dash-detail-modal'].forEach(function(id){ document.getElementById(id).addEventListener('click',function(e){if(e.target===this)closeModal(id);}); });
+['del-modal','troops-modal','profile-modal','dash-detail-modal','troop-form-modal','donors-modal'].forEach(function(id){ document.getElementById(id).addEventListener('click',function(e){if(e.target===this)closeModal(id);}); });
 document.getElementById('edit-confirm-modal').addEventListener('click',function(e){if(e.target===this)closeConfirmEdit();});
 document.getElementById('pin-modal').addEventListener('click',function(e){if(e.target===this)closePinModal();});
 document.getElementById('pin-setup-modal').addEventListener('click',function(e){if(e.target===this)closePinSetupModal();});
@@ -3348,6 +3445,7 @@ document.addEventListener('DOMContentLoaded',resetSearchFields);
       populateRankDropdowns();
       populateReportYears();
       if(document.getElementById('t-deploy-date')&&!document.getElementById('t-deploy-date').value) document.getElementById('t-deploy-date').value=todayDMY();
+      populateAutoSuggestLists();
       var _nowM=new Date().getMonth()+1;
       if(document.getElementById('report-month-sel')) document.getElementById('report-month-sel').value=_nowM;
       updatePtlPreview();

@@ -18,7 +18,8 @@ async function migrateSchema() {
   try {
     await pool.query('ALTER TABLE troops ADD COLUMN IF NOT EXISTS blood_group TEXT');
     await pool.query('ALTER TABLE troops ADD COLUMN IF NOT EXISTS deployment_date DATE');
-    console.log('Schema check OK: blood_group, deployment_date present on troops table.');
+    await pool.query('ALTER TABLE troops ADD COLUMN IF NOT EXISTS weapon_number TEXT');
+    console.log('Schema check OK: blood_group, deployment_date, weapon_number present on troops table.');
   } catch (e) {
     console.error('Schema migration failed:', e.message);
   }
@@ -54,13 +55,13 @@ app.get('/archived', async (req, res) => {
 // ── UPSERT TROOP ──────────────────────────────────────────────────────
 app.post('/troops', async (req, res) => {
   try {
-    const { id, name, rank, unit, sn, status, notes, phoneLocal, phoneWa, bloodGroup, deploymentDate } = req.body;
+    const { id, name, rank, unit, sn, status, notes, phoneLocal, phoneWa, bloodGroup, deploymentDate, weaponNumber } = req.body;
     await pool.query(
-      `INSERT INTO troops (id, name, rank, unit, sn, status, notes, phone_local, phone_wa, blood_group, deployment_date)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      `INSERT INTO troops (id, name, rank, unit, sn, status, notes, phone_local, phone_wa, blood_group, deployment_date, weapon_number)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        ON CONFLICT (id) DO UPDATE
-         SET name=$2, rank=$3, unit=$4, sn=$5, status=$6, notes=$7, phone_local=$8, phone_wa=$9, blood_group=$10, deployment_date=$11`,
-      [id, name, rank || '', unit || '', sn || '', status || 'available', notes || '', phoneLocal || '', phoneWa || '', bloodGroup || null, deploymentDate || null]
+         SET name=$2, rank=$3, unit=$4, sn=$5, status=$6, notes=$7, phone_local=$8, phone_wa=$9, blood_group=$10, deployment_date=$11, weapon_number=$12`,
+      [id, name, rank || '', unit || '', sn || '', status || 'available', notes || '', phoneLocal || '', phoneWa || '', bloodGroup || null, deploymentDate || null, weaponNumber || null]
     );
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
