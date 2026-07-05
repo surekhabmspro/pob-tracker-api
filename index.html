@@ -361,7 +361,7 @@ body.light-mode{background:
 }
 @media (min-width:900px) and (hover:hover){
   .card:hover{box-shadow:var(--card-bevel),var(--shadow-lg);border-color:var(--tan-dark);transform:translateY(-2px);}
-  .btn-primary:hover,.btn-danger:hover,.btn-warning:hover{filter:brightness(1.08);transform:translateY(-1px);box-shadow:0 6px 16px rgba(0,0,0,0.3);}
+  .btn-primary:hover,.btn-danger:hover,.btn-warning:hover,.btn-info:hover{filter:brightness(1.08);transform:translateY(-1px);box-shadow:0 6px 16px rgba(0,0,0,0.3);}
   .btn-ghost:hover{border-color:var(--tan-dark);color:var(--tan);transform:translateY(-1px);}
   .stat.clickable:hover{transform:translateY(-2px);box-shadow:var(--card-bevel),var(--shadow-md);border-color:var(--tan-dark);}
   .patrol-card,.troop-card,.inactive-card,.troop-row,.lh-block{transition:transform 0.15s,box-shadow 0.15s,border-color 0.15s;}
@@ -448,6 +448,7 @@ select option{background:var(--surface2);color:var(--text);}
 .btn-primary:active{background:var(--tan-dark);box-shadow:0 1px 4px rgba(230,179,74,0.3);}
 .btn-danger{background:linear-gradient(155deg,var(--red-light),var(--red));color:#ffffff;box-shadow:0 3px 10px rgba(168,40,40,0.35),inset 0 1px 0 rgba(255,255,255,0.15);}
 .btn-warning{background:linear-gradient(155deg,var(--orange),#b8681f);color:#ffffff;box-shadow:0 3px 10px rgba(240,160,75,0.35),inset 0 1px 0 rgba(255,255,255,0.15);}
+.btn-info{background:linear-gradient(155deg,var(--blue),#3a5fc0);color:#ffffff;box-shadow:0 3px 10px rgba(91,141,239,0.35),inset 0 1px 0 rgba(255,255,255,0.15);}
 .btn-ghost{background:var(--surface2);border:1.5px solid var(--border);color:var(--text);}
 .btn-ghost:active{border-color:var(--tan);color:var(--text);}
 .btn-sm{padding:8px 13px;font-size:13.5px;min-height:36px;}
@@ -577,6 +578,28 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 .lh-perf-unit{display:block;font-size:10px;color:var(--text-muted);font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-top:2px;}
 @media (max-width:600px){.lh-person-grid{grid-template-columns:1fr;}}
 .troop-row{background:linear-gradient(155deg,var(--surface2),var(--surface));border:var(--card-border);border-radius:12px;padding:12px 12px 12px 14px;margin-bottom:8px;box-shadow:var(--card-bevel),var(--shadow-sm);}
+
+/* ── HOURS RANKING PERIOD TABS ── */
+.hr-mode-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;}
+.hr-mode-tab{flex:1;min-width:120px;padding:9px 10px;border-radius:9px;border:1px solid var(--border);
+  background:var(--surface);color:var(--text-muted);font-family:var(--font-display);font-weight:600;
+  font-size:13px;letter-spacing:0.3px;cursor:pointer;transition:all 0.18s var(--ease);text-align:center;}
+.hr-mode-tab:hover{border-color:var(--tan-dark);color:var(--text);}
+.hr-mode-tab.active{background:linear-gradient(155deg,var(--tan),var(--tan-dark));color:#1a1206;border-color:var(--tan-dark);
+  box-shadow:0 3px 10px rgba(230,179,74,0.35),inset 0 1px 0 rgba(255,255,255,0.25);}
+
+/* ── HOURS RANKING ROWS (colorful red/yellow/green tertile flagging) ── */
+.hr-row{display:flex;gap:12px;align-items:flex-start;border:var(--card-border);border-left:4px solid var(--border);
+  border-radius:12px;padding:12px 14px;margin-bottom:8px;box-shadow:var(--card-bevel),var(--shadow-sm);transition:transform 0.15s var(--ease),box-shadow 0.15s;}
+.hr-row[data-accent="b-red"]{background:linear-gradient(155deg,rgba(242,73,90,0.13),var(--surface2) 60%);border-left-color:var(--red-light);}
+.hr-row[data-accent="b-orange"]{background:linear-gradient(155deg,rgba(240,160,75,0.13),var(--surface2) 60%);border-left-color:var(--orange);}
+.hr-row[data-accent="b-green"]{background:linear-gradient(155deg,rgba(52,211,153,0.13),var(--surface2) 60%);border-left-color:var(--green-light);}
+.hr-rank-badge{flex-shrink:0;width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-mono);font-weight:700;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.2);}
+.hr-rank-badge.b-red{background:linear-gradient(155deg,var(--red-light),var(--red));color:#fff;}
+.hr-rank-badge.b-orange{background:linear-gradient(155deg,var(--orange),#b8681f);color:#1a1206;}
+.hr-rank-badge.b-green{background:linear-gradient(155deg,var(--green-light),var(--green-mid));color:#0a1f14;}
+@media (min-width:900px) and (hover:hover){.hr-row:hover{transform:translateY(-2px);box-shadow:var(--card-bevel),var(--shadow-md);}}
 
 /* ── PROGRESS BAR ── */
 .pbar{background:var(--surface);border-radius:4px;height:6px;overflow:hidden;margin-top:3px;box-shadow:inset 0 1px 2px rgba(0,0,0,0.3);}
@@ -1135,13 +1158,11 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;">Troops ranked lowest → highest total patrol hours for the selected period. Use this to spot who needs more deployment opportunities.</div>
     <div class="toolbar-box">
       <div class="subsection-hdr" style="margin-bottom:8px;">Period</div>
-      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
-        <select id="hr-mode" onchange="onHRModeChange()" style="flex:1;min-width:140px;font-size:13px;">
-          <option value="current">Current Month</option>
-          <option value="previous">Previous Month</option>
-          <option value="custom">Custom Range</option>
-          <option value="all">Entire History</option>
-        </select>
+      <div class="hr-mode-tabs">
+        <button class="hr-mode-tab active" data-mode="current" onclick="setHRMode('current',this)">📅 Current Month</button>
+        <button class="hr-mode-tab" data-mode="previous" onclick="setHRMode('previous',this)">🗓 Previous Month</button>
+        <button class="hr-mode-tab" data-mode="custom" onclick="setHRMode('custom',this)">🔧 Custom Range</button>
+        <button class="hr-mode-tab" data-mode="all" onclick="setHRMode('all',this)">📚 All Time</button>
       </div>
       <div id="hr-month-wrap" style="display:none;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
         <select id="hr-month-sel" onchange="renderHoursRanking()" style="flex:1;font-size:13px;">
@@ -1476,6 +1497,15 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     <div class="modal-title" id="troops-modal-title">Troops</div>
     <div id="troops-modal-body"></div>
     <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('troops-modal')">Close</button></div>
+  </div>
+</div>
+
+<div class="modal-ov" id="dash-detail-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="dash-detail-title">Details</div>
+    <div id="dash-detail-body" style="max-height:60vh;overflow-y:auto;"></div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('dash-detail-modal')">Close</button></div>
   </div>
 </div>
 
@@ -2199,9 +2229,9 @@ function renderDash(){
 
   // ── STAT CARDS ──────────────────────────────────────────────────────
   document.getElementById('dash-stats').innerHTML=
-    '<div class="stat"><div class="stat-icon">🪖</div><div class="stat-num">'+D.troops.length+'</div><div class="stat-label">Total Troops</div></div>'+
-    '<div class="stat clickable" onclick="showTab(\'troops\')"><div class="stat-icon">✅</div><div class="stat-num" style="color:var(--green-light);">'+availTroops.length+'</div><div class="stat-label">Available</div></div>'+
-    '<div class="stat"><div class="stat-icon">🛡</div><div class="stat-num">'+moPats.length+'</div><div class="stat-label">Patrols This Month</div></div>'+
+    '<div class="stat clickable" onclick="showDashDetail(\'total\')"><div class="stat-icon">🪖</div><div class="stat-num">'+D.troops.length+'</div><div class="stat-label">Total Troops</div></div>'+
+    '<div class="stat clickable" onclick="showDashDetail(\'available\')"><div class="stat-icon">✅</div><div class="stat-num" style="color:var(--green-light);">'+availTroops.length+'</div><div class="stat-label">Available</div></div>'+
+    '<div class="stat clickable" onclick="showDashDetail(\'mo-patrols\')"><div class="stat-icon">🛡</div><div class="stat-num">'+moPats.length+'</div><div class="stat-label">Patrols This Month</div></div>'+
     '<div class="stat clickable" onclick="showTab(\'inactive\')" style="'+(inactive7.length>0?'border-color:var(--red-light);':'')+'">'+
     '<div class="stat-icon">'+(inactive7.length>0?'⚠':'🕒')+'</div><div class="stat-num" style="color:'+(inactive7.length>0?'var(--red-light)':'var(--tan)')+';">'+inactive7.length+'</div>'+
     '<div class="stat-label">Inactive &gt;7 Days</div></div>';
@@ -2236,15 +2266,15 @@ function renderDash(){
     '<span style="font-family:var(--font-mono);font-size:11px;color:var(--tan);letter-spacing:1.5px;text-transform:uppercase;">'+moAbbr[mo]+' '+yr+'</span>'+
     '</div>'+
     '<div class="mini-tile-grid">'+
-    '<div class="mini-tile"><div class="mini-tile-icon">🛡</div><div class="mini-tile-num">'+moPats.length+'</div>'+
+    '<div class="mini-tile clickable" onclick="showDashDetail(\'mo-patrols\')"><div class="mini-tile-icon">🛡</div><div class="mini-tile-num">'+moPats.length+'</div>'+
     '<div class="mini-tile-label">Patrols</div></div>'+
     '<div class="mini-tile"><div class="mini-tile-icon">⏱</div><div class="mini-tile-num">'+moH.toFixed(1)+'</div>'+
     '<div class="mini-tile-label">Hours</div></div>'+
-    '<div class="mini-tile"><div class="mini-tile-icon">👥</div><div class="mini-tile-num">'+moTroops.size+'</div>'+
+    '<div class="mini-tile clickable" onclick="showDashDetail(\'mo-deployed\')"><div class="mini-tile-icon">👥</div><div class="mini-tile-num">'+moTroops.size+'</div>'+
     '<div class="mini-tile-label">Troops Deployed</div></div>'+
     '<div class="mini-tile clickable" onclick="showTab(\'hours-ranking\')" title="Lowest patrol hours this month — tap for full ranking">'+
     '<div class="mini-tile-icon">📉</div><div class="mini-tile-num" style="color:var(--red-light);">'+(lowestTroop?(moHoursByTroop[lowestTroop.id]||0).toFixed(1):'—')+'</div>'+
-    '<div class="mini-tile-label">Lowest Hrs</div></div>'+
+    '<div class="mini-tile-label">Hours Ranking</div></div>'+
     '</div>'+
     mostActiveBlockHTML(moPats,false)+
     (topSector?'<div class="tag-pill"><span>📍 Top Sector</span><strong>'+topSector+'</strong></div>':'');
@@ -2303,6 +2333,34 @@ function renderDash(){
         '</div>'+
         '<span class="'+typeBadge(p.type)+'" style="flex-shrink:0;">'+p.type+'</span></li>';
     }).join('');
+}
+// Shows a quick detail modal for a clicked dashboard stat/tile, so the person
+// doesn't have to navigate away just to see what's behind a number.
+function dashDetailRow(main,sub){ return '<div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:14px;"><strong>'+main+'</strong><div style="font-size:12px;color:var(--text-muted);margin-top:2px;">'+sub+'</div></div>'; }
+function showDashDetail(kind){
+  var now=new Date(),mo=now.getMonth(),yr=now.getFullYear();
+  var moPats=D.patrols.filter(function(p){var d=new Date(p.date+'T12:00:00');return d.getMonth()===mo&&d.getFullYear()===yr;});
+  var title='',body='';
+  if(kind==='total'){
+    title='All Troops ('+D.troops.length+')';
+    body=sortTroops(D.troops).map(function(t){return dashDetailRow(t.rank.toUpperCase()+' '+t.name.toUpperCase(),(t.unit||'')+' · '+patrolCount(t.id)+' patrols total');}).join('');
+  } else if(kind==='available'){
+    var av=sortTroops(D.troops.filter(isAvailable));
+    title='Available Troops ('+av.length+')';
+    body=av.map(function(t){var lp=lastPatrol(t.id);return dashDetailRow(t.rank.toUpperCase()+' '+t.name.toUpperCase(),(t.unit||'')+' · Last patrol: '+(lp?fmtDateLong(lp):'Never'));}).join('');
+  } else if(kind==='mo-patrols'){
+    title='Patrols This Month ('+moPats.length+')';
+    var sorted=moPats.slice().sort(function(a,b){return b.date.localeCompare(a.date);});
+    body=sorted.length?sorted.map(function(p){return dashDetailRow((p.ptlId||'—')+' — '+fmtDateLong(p.date),p.type+' · '+(p.troops||[]).length+' troops'+(p.duration?' · '+p.duration+'h':''));}).join(''):'';
+  } else if(kind==='mo-deployed'){
+    var ids=new Set(moPats.reduce(function(a,p){return a.concat(p.troops||[]);},[]));
+    var list=sortTroops(D.troops.filter(function(t){return ids.has(t.id);}));
+    title='Troops Deployed This Month ('+list.length+')';
+    body=list.length?list.map(function(t){var cnt=moPats.filter(function(p){return (p.troops||[]).indexOf(t.id)>=0;}).length;return dashDetailRow(t.rank.toUpperCase()+' '+t.name.toUpperCase(),(t.unit||'')+' · '+cnt+' patrol'+(cnt!==1?'s':'')+' this month');}).join(''):'';
+  }
+  document.getElementById('dash-detail-title').textContent=title;
+  document.getElementById('dash-detail-body').innerHTML=body||'<div class="empty">Nothing to show.</div>';
+  document.getElementById('dash-detail-modal').classList.add('open');
 }
 
 function toggleFairnessExtra(){ var extra=document.getElementById('fairness-extra'); var btn=document.getElementById('fairness-toggle-btn'); if(!extra||!btn) return; if(extra.style.display==='none'){extra.style.display='block';btn.textContent='▲ Show Less';}else{extra.style.display='none';btn.textContent='▼ Show More';} }
@@ -2567,9 +2625,9 @@ function renderRoster(){
       '</div>'+
       (t.notes?'<div class="notes-field">'+t.notes+'</div>':'')+
       '<div class="troop-card-btns">'+
-      '<button class="btn btn-ghost btn-sm" onclick="showProfile(\''+t.id+'\')">Profile</button>'+
-      '<button class="btn btn-ghost btn-sm" onclick="confirmEditTroop(\''+t.id+'\')">Edit</button>'+
-      '<button class="btn btn-ghost btn-sm" onclick="archiveTroop(\''+t.id+'\')">Archive</button>'+
+      '<button class="btn btn-info btn-sm" onclick="showProfile(\''+t.id+'\')">Profile</button>'+
+      '<button class="btn btn-primary btn-sm" onclick="confirmEditTroop(\''+t.id+'\')">Edit</button>'+
+      '<button class="btn btn-warning btn-sm" onclick="archiveTroop(\''+t.id+'\')">Archive</button>'+
       '<button class="del-btn" onclick="confirmDel(\'troop\',\''+t.id+'\')">×</button>'+
       '</div></div>';
   }).join('');
@@ -2724,6 +2782,7 @@ function printInactive(){ var filterLbl=document.getElementById('inactive-filter
 // PATROL HOURS RANKING (analytical tool — independent of Inactive Troops
 // and Most Active Troop logic; does not read or modify their state)
 // =====================================================================
+var _hrMode='current';
 function initHRFilters(){
   var msel=document.getElementById('hr-month-sel');
   if(msel&&!msel.dataset.init){
@@ -2746,8 +2805,10 @@ function populateHRYears(){
   if(prevSelected&&sorted.indexOf(parseInt(prevSelected))>=0){ sel.value=prevSelected; }
   else { var defYr=now.getMonth()===0?now.getFullYear()-1:now.getFullYear(); if(sorted.indexOf(defYr)>=0) sel.value=String(defYr); }
 }
-function onHRModeChange(){
-  var mode=document.getElementById('hr-mode').value;
+function setHRMode(mode,btnEl){
+  _hrMode=mode;
+  document.querySelectorAll('.hr-mode-tab').forEach(function(b){b.classList.remove('active');});
+  if(btnEl) btnEl.classList.add('active');
   document.getElementById('hr-month-wrap').style.display=mode==='previous'?'flex':'none';
   document.getElementById('hr-custom-wrap').style.display=mode==='custom'?'flex':'none';
   if(mode==='previous') populateHRYears();
@@ -2756,7 +2817,7 @@ function onHRModeChange(){
 // Computes the ranking dataset for the currently selected period/filter.
 // Returns null if a custom range is incomplete (caller shows a prompt instead).
 function hoursRankingData(){
-  var mode=document.getElementById('hr-mode')?document.getElementById('hr-mode').value:'current';
+  var mode=_hrMode;
   var moNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
   var now=new Date(); var todayISO=now.toISOString().slice(0,10);
   var startISO=null,endISO=null,label='';
@@ -2782,25 +2843,14 @@ function hoursRankingData(){
     label='Entire Historical Record';
   }
   var periodPatrols=(startISO&&endISO)?D.patrols.filter(function(p){return p.date>=startISO&&p.date<=endISO;}):D.patrols.slice();
-  // "Current" periods (mode=current, or a custom range extending through today) never show archived personnel.
-  var isCurrentPeriod=mode==='current'||(mode==='custom'&&endISO>=todayISO);
-  var archivedList=D.archived||[];
-  var pool;
-  if(mode==='all'||!isCurrentPeriod){
-    // Historical/all-time view: archived personnel included only if they were
-    // actually active (had a logged patrol) within the selected period.
-    pool=D.troops.concat(archivedList.filter(function(t){
-      return periodPatrols.some(function(p){return (p.troops||[]).indexOf(t.id)>=0;});
-    }));
-  } else {
-    pool=D.troops.slice();
-  }
+  // Only currently deployed (active, non-archived) troops are shown in this ranking.
+  var pool=D.troops.slice();
   var rows=pool.map(function(t){
     var tp=periodPatrols.filter(function(p){return (p.troops||[]).indexOf(t.id)>=0;});
     var hrs=tp.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0);
     var cnt=tp.length;
     var lastP=cnt?tp.slice().sort(function(a,b){return b.date.localeCompare(a.date);})[0].date:null;
-    return {t:t,hrs:hrs,cnt:cnt,avg:cnt>0?hrs/cnt:0,lastP:lastP,archived:archivedList.indexOf(t)>=0};
+    return {t:t,hrs:hrs,cnt:cnt,avg:cnt>0?hrs/cnt:0,lastP:lastP};
   });
   rows.sort(function(a,b){
     if(a.hrs!==b.hrs) return a.hrs-b.hrs;
@@ -2819,31 +2869,34 @@ function renderHoursRanking(){
   if(!data){ container.innerHTML='<div class="alert al-info">Select both a From and To date for the custom range.</div>'; if(lbl) lbl.textContent=''; return; }
   if(lbl) lbl.textContent=data.label+' — '+data.rows.length+' troop'+(data.rows.length!==1?'s':'');
   if(data.rows.length===0){ container.innerHTML='<div class="empty">No troop records for this period.</div>'; return; }
-  var lastIdx=data.rows.length-1;
+  var n=data.rows.length;
+  var tertile=Math.max(1,Math.ceil(n/3));
   container.innerHTML=data.rows.map(function(r,i){
     var t=r.t;
-    var accent=i===0?'b-red':i===lastIdx?'b-green':'b-gray';
-    var edgeBadge=i===0?'<span class="badge b-red" style="font-size:9px;">LOWEST</span>':(i===lastIdx&&lastIdx>0?'<span class="badge b-green" style="font-size:9px;">HIGHEST</span>':'');
-    return '<div class="troop-row" data-accent="'+accent+'">'+
-      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;gap:8px;">'+
-      '<div style="cursor:pointer;min-width:0;" onclick="showProfile(\''+t.id+'\')">'+
-      '<div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">#'+(i+1)+'</div>'+
+    // Red/yellow/green flag by relative position: bottom third needs attention (red),
+    // middle third caution (yellow), top third healthy (green).
+    var flag=i<tertile?'b-red':(i<n-tertile?'b-orange':'b-green');
+    var flagLbl=i<tertile?'LOW':(i<n-tertile?'MID':'HIGH');
+    return '<div class="hr-row" data-accent="'+flag+'">'+
+      '<div class="hr-rank-badge '+flag+'">#'+(i+1)+'</div>'+
+      '<div style="min-width:0;flex:1;cursor:pointer;" onclick="showProfile(\''+t.id+'\')">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">'+
       '<div style="font-size:14.5px;"><strong>'+(t.rank||'').toUpperCase()+' '+(t.name||'').toUpperCase()+'</strong></div>'+
-      '<div style="font-size:11.5px;color:var(--text-muted);">'+(t.sn?('SN '+t.sn+' · '):'')+(t.unit||'')+(r.archived?' · <span style="color:var(--orange);">ARCHIVED</span>':'')+'</div></div>'+
-      '<div style="flex-shrink:0;">'+edgeBadge+'</div></div>'+
+      '<span class="badge '+flag+'" style="font-size:9px;">'+flagLbl+'</span></div>'+
+      '<div style="font-size:11.5px;color:var(--text-muted);margin-bottom:5px;">'+(t.sn?('SN '+t.sn+' · '):'')+(t.unit||'')+'</div>'+
       '<div class="pc-chiprow">'+
       '<span class="pc-chip">⏱ <strong>'+r.hrs.toFixed(1)+'h</strong></span>'+
       '<span class="pc-chip">📋 <strong>'+r.cnt+'</strong> ptl</span>'+
       '<span class="pc-chip">📊 avg <strong>'+(r.cnt>0?r.avg.toFixed(1)+'h':'—')+'</strong></span>'+
       '<span class="pc-chip">🕒 '+(r.lastP?fmtDateLong(r.lastP):'Never')+'</span>'+
-      '</div></div>';
+      '</div></div></div>';
   }).join('');
 }
 function printHoursRanking(){
   var data=hoursRankingData();
   if(!data){ alert('Select both a From and To date for the custom range first.'); return; }
   var s=D.settings;
-  var rows=data.rows.map(function(r,i){var t=r.t;return '<tr><td>'+(i+1)+'</td><td>'+(t.sn||'')+'</td><td>'+(t.rank||'').toUpperCase()+' '+(t.name||'').toUpperCase()+(r.archived?' (Archived)':'')+'</td><td>'+r.hrs.toFixed(1)+'</td><td>'+r.cnt+'</td><td>'+(r.cnt>0?r.avg.toFixed(1):'—')+'</td><td>'+(r.lastP?fmtDateLong(r.lastP):'Never')+'</td></tr>';}).join('');
+  var rows=data.rows.map(function(r,i){var t=r.t;return '<tr><td>'+(i+1)+'</td><td>'+(t.sn||'')+'</td><td>'+(t.rank||'').toUpperCase()+' '+(t.name||'').toUpperCase()+'</td><td>'+r.hrs.toFixed(1)+'</td><td>'+r.cnt+'</td><td>'+(r.cnt>0?r.avg.toFixed(1):'—')+'</td><td>'+(r.lastP?fmtDateLong(r.lastP):'Never')+'</td></tr>';}).join('');
   var win=window.open('','_blank','width=1000,height=700');
   win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Patrol Hours Ranking</title><style>body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:13px;}.hdr{text-align:center;border-bottom:2px solid #2d5a3d;padding-bottom:12px;margin-bottom:20px;}.hdr h2{margin:0 0 4px;font-size:18px;color:#1a3a2a;}.hdr p{margin:2px 0;font-size:11px;color:#555;}table{width:100%;border-collapse:collapse;font-size:12px;}th{background:#2d5a3d;color:#fff;font-family:\'Courier New\',monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:7px 8px;text-align:left;}td{padding:6px 8px;border-bottom:1px solid #e0e8e0;}tr:nth-child(even) td{background:#f8f8f8;}tr{page-break-inside:avoid;}.footer{margin-top:16px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}@media print{@page{margin:1.5cm;size:A4;}button{display:none!important;}thead{display:table-header-group;}}</style></head><body><div class="hdr"><div style="font-size:10px;color:#999;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">'+(s.classification||'')+(s.classification?' — ':'')+(s.pob||'POB Mobaye')+'</div><h2>PATROL HOURS RANKING</h2><p>'+data.label+'</p><p>Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p></div><table><thead><tr><th>#</th><th>SN</th><th>Name</th><th>Hours</th><th>Patrols</th><th>Avg/Patrol</th><th>Last Patrol</th></tr></thead><tbody>'+rows+'</tbody></table><div class="footer">'+(s.pob||'POB Mobaye')+' Patrol Tracker · Patrol Hours Ranking · '+nowStr()+'</div><div style="margin-top:16px;text-align:center;"><button onclick="window.print()" style="padding:10px 24px;background:#2d5a3d;color:#fff;border:none;border-radius:4px;font-size:13px;cursor:pointer;font-weight:700;">🖨 Print</button></div></body></html>');
   win.document.close(); win.focus();
@@ -3095,11 +3148,11 @@ function renderHandover(){
     '</div>'+
     '<div style="font-size:12px;color:var(--text-muted);">Sectors: <strong style="color:var(--text);">'+(sectors.join(', ')||'None')+'</strong></div></div>'+
     '</div>'+
-    '<div class="lh-block"><div class="lh-title">Troop Performance</div>'+
-    '<div class="lh-person-grid">'+sortTroops(D.troops).map(function(t){var c30=recentPats.filter(function(p){return (p.troops||[]).indexOf(t.id)>=0;}).length;var h30=recentPats.filter(function(p){return (p.troops||[]).indexOf(t.id)>=0;}).reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0);var lp=lastPatrol(t.id),ds=daysSince(lp);return '<div class="lh-person-card lh-perf-card" data-accent="'+statusAccentCls(t.status||'available')+'" onclick="showProfile(\''+t.id+'\')">'+
-      '<div class="lh-perf-num">'+c30+'<span class="lh-perf-unit">ptl</span></div>'+
+    '<div class="lh-block"><div class="lh-title">Troop Performance (Total Since Deployment)</div>'+
+    '<div class="lh-person-grid">'+sortTroops(D.troops).map(function(t){var cAll=patrolCount(t.id);var hAll=patrolHours(t.id);var lp=lastPatrol(t.id);return '<div class="lh-person-card lh-perf-card" data-accent="'+statusAccentCls(t.status||'available')+'" onclick="showProfile(\''+t.id+'\')">'+
+      '<div class="lh-perf-num">'+cAll+'<span class="lh-perf-unit">ptl</span></div>'+
       '<div style="min-width:0;flex:1;"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:4px;flex-wrap:wrap;">'+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong> '+statusBadge(t.status||'available')+'</div>'+
-      '<div class="pc-chiprow" style="margin-top:5px;"><span class="pc-chip">⏱ <strong>'+h30.toFixed(1)+'h</strong></span><span class="pc-chip">🕒 '+(lp?fmtDateLong(lp):'Never')+'</span></div></div></div>';}).join('')+'</div></div>'+
+      '<div class="pc-chiprow" style="margin-top:5px;"><span class="pc-chip">⏱ <strong>'+hAll.toFixed(1)+'h</strong></span><span class="pc-chip">🕒 '+(lp?fmtDateLong(lp):'Never')+'</span></div></div></div>';}).join('')+'</div></div>'+
     '<div class="lh-block"><div class="lh-title">Inactive Troops (Action Required)</div>'+
     (function(){var inn=sortTroops(D.troops.filter(function(t){return isAvailable(t)&&daysSince(lastPatrol(t.id))>7;}));if(inn.length===0) return '<div style="color:var(--text-muted);font-size:13px;">All available troops patrolled within 7 days.</div>';return '<div class="lh-person-grid">'+inn.map(function(t){var ds=daysSince(lastPatrol(t.id));return '<div class="lh-person-card" data-accent="'+(ds>14?'b-red':'b-orange')+'"><strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong><div style="font-size:12.5px;color:'+(ds>14?'var(--red-light)':'var(--orange)')+';margin-top:3px;font-weight:600;">'+(ds===9999?'Never patrolled':ds+' days inactive')+'</div></div>';}).join('')+'</div>';})()+
     '</div>'+
@@ -3117,10 +3170,10 @@ function printHandover(){
   var sectors=Object.keys(smap).sort(function(a,b){return smap[b]-smap[a];});
   var unavailable=sortTroops(D.troops.filter(function(t){return !isAvailable(t);}));
   var perfRows=sortTroops(D.troops).map(function(t){
-    var c30=recentPats.filter(function(p){return (p.troops||[]).indexOf(t.id)>=0;}).length;
-    var h30=recentPats.filter(function(p){return (p.troops||[]).indexOf(t.id)>=0;}).reduce(function(sum,p){return sum+(parseFloat(p.duration)||0);},0);
-    var lp=lastPatrol(t.id),ds=daysSince(lp);
-    return '<tr><td>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</td><td style="text-align:center;">'+c30+'</td><td style="text-align:center;">'+h30.toFixed(1)+'</td><td style="text-align:center;">'+(lp?fmtDateLong(lp):'Never')+'</td></tr>';
+    var cAll=patrolCount(t.id);
+    var hAll=patrolHours(t.id);
+    var lp=lastPatrol(t.id);
+    return '<tr><td>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</td><td style="text-align:center;">'+cAll+'</td><td style="text-align:center;">'+hAll.toFixed(1)+'</td><td style="text-align:center;">'+(lp?fmtDateLong(lp):'Never')+'</td></tr>';
   }).join('');
   var inactive=sortTroops(D.troops.filter(function(t){return isAvailable(t)&&daysSince(lastPatrol(t.id))>7;}));
   var handoverNotes=(document.querySelector('#handover-content textarea')?document.querySelector('#handover-content textarea').value.trim():'');
@@ -3164,9 +3217,9 @@ function printHandover(){
     '<div class="info-box"><div class="info-num">'+sectors.length+'</div><div class="info-lbl">Sectors</div></div>'+
     '</div>'+
     '<div style="font-size:12px;color:#555;margin-bottom:6px;">Sectors: <strong>'+(sectors.join(', ')||'None')+'</strong></div>'+
-    '<div class="sub-hdr">Troop Performance</div>'+
+    '<div class="sub-hdr">Troop Performance (Total Since Deployment)</div>'+
     '<table><colgroup><col style="width:40%"><col style="width:20%"><col style="width:20%"><col style="width:20%"></colgroup>'+
-    '<thead><tr><th>Name &amp; Rank</th><th>30d Patrols</th><th>30d Hours</th><th>Last Patrol</th></tr></thead><tbody>'+perfRows+'</tbody></table>'+
+    '<thead><tr><th>Name &amp; Rank</th><th>Total Patrols</th><th>Total Hours</th><th>Last Patrol</th></tr></thead><tbody>'+perfRows+'</tbody></table>'+
     '<div class="sub-hdr">Inactive Troops (Action Required)</div>'+
     (inactive.length===0?'<div style="color:#888;font-size:12px;">All available troops patrolled within 7 days.</div>':'<div style="font-size:12px;">'+inactive.map(function(t){var ds=daysSince(lastPatrol(t.id));return t.rank.toUpperCase()+' '+t.name.toUpperCase()+' ('+(ds===9999?'Never patrolled':ds+'d inactive')+')';}).join(', ')+'</div>')+
     (handoverNotes?'<div class="sub-hdr">Commander\'s Handover Notes</div><div class="remarks-box">'+handoverNotes+'</div>':'')+
@@ -3193,7 +3246,7 @@ function renderSysInfo(){ var sz=JSON.stringify(D).length; document.getElementBy
 var pendingDel=null;
 function confirmDel(type,id){ requirePin(function(){ pendingDel={type:type,id:id}; document.getElementById('del-modal').classList.add('open'); document.getElementById('del-confirm').onclick=function(){ if(pendingDel.type==='patrol'){var p=D.patrols.find(function(x){return x.id===pendingDel.id;});if(p) audit('Patrol deleted: '+(p.ptlId||p.id));D.patrols=D.patrols.filter(function(p){return p.id!==pendingDel.id;});remoteDeletePatrol(pendingDel.id);}else{var t=D.troops.find(function(x){return x.id===pendingDel.id;});if(t) audit('Troop deleted: '+upLabel(t.rank,t.name));D.troops=D.troops.filter(function(t){return t.id!==pendingDel.id;});D.patrols.forEach(function(p){p.troops=(p.troops||[]).filter(function(id){return id!==pendingDel.id;});});remoteDeleteTroop(pendingDel.id);} saveData(); closeModal('del-modal'); pendingDel=null; var active=document.querySelector('.section.active'); if(active){var aid=active.id;if(aid==='dashboard') renderDash();if(aid==='patrol-log') renderTable();if(aid==='troops') renderRoster();if(aid==='report') genReport();if(aid==='inactive') renderInactive(0);} }; }); }
 
-['del-modal','troops-modal','profile-modal'].forEach(function(id){ document.getElementById(id).addEventListener('click',function(e){if(e.target===this)closeModal(id);}); });
+['del-modal','troops-modal','profile-modal','dash-detail-modal'].forEach(function(id){ document.getElementById(id).addEventListener('click',function(e){if(e.target===this)closeModal(id);}); });
 document.getElementById('edit-confirm-modal').addEventListener('click',function(e){if(e.target===this)closeConfirmEdit();});
 document.getElementById('pin-modal').addEventListener('click',function(e){if(e.target===this)closePinModal();});
 document.getElementById('pin-setup-modal').addEventListener('click',function(e){if(e.target===this)closePinSetupModal();});
