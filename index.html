@@ -295,8 +295,8 @@ body.light-mode{background:
   .stat-label{font-size:12px;margin-top:5px;}
   .stat{padding:18px 12px;border-radius:12px;}
 
-  /* ── Dashboard 2-col layout ── */
-  .dash-row2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px;align-items:start;}
+  /* Dashboard 2-col layout removed — Monthly Overview is now full-width
+     since the Deployment Fairness card was removed */
 
   /* ── Cards ── */
   .card{border-radius:12px;padding:22px;margin-bottom:18px;}
@@ -340,7 +340,7 @@ body.light-mode{background:
 
 /* ── Desktop: recent-list looks like a clean data table ── */
 @media (min-width:900px){
-  .recent-item{padding:12px 4px;font-size:15px;gap:14px;}
+  .recent-item{padding:8px 4px;font-size:14px;gap:14px;}
   .recent-list{border:1px solid var(--border);border-radius:10px;overflow:hidden;padding:0 12px;}
   .recent-item:last-child{border-bottom:none;}
 
@@ -357,7 +357,6 @@ body.light-mode{background:
   .troop-card{margin-bottom:0;}
 
   /* Fairness rows: bigger and more readable */
-  #fairness-view .fairness-bar{height:10px;}
 }
 @media (min-width:900px) and (hover:hover){
   .card:hover{box-shadow:var(--card-bevel),var(--shadow-lg);border-color:var(--tan-dark);transform:translateY(-2px);}
@@ -397,7 +396,7 @@ body.light-mode .sidebar-item.active{background:#f5e8cc;color:var(--tan);}
 /* ── TAG PILL (e.g. Top Sector callout) ── */
 .tag-pill{margin-top:10px;padding:9px 12px;background:rgba(230,179,74,0.08);border:1px solid rgba(230,179,74,0.25);
   border-radius:8px;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:8px;}
-.tag-pill span{color:var(--text-muted);}
+.tag-pill span{color:var(--text);}
 .tag-pill strong{color:var(--tan);}
 
 /* ── STAT GRID ── */
@@ -444,6 +443,7 @@ select option{background:var(--surface2);color:var(--text);}
 .btn-ghost:active{border-color:var(--tan);color:var(--text);}
 .btn-sm{padding:8px 13px;font-size:13.5px;min-height:36px;}
 .btn-full{width:100%;}
+.btn-print{font-size:12.5px!important;padding:8px 14px!important;min-height:36px!important;font-weight:700;}
 
 /* ── BADGES ── */
 .badge{display:inline-block;padding:3px 10px;border-radius:6px;font-size:12.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;font-family:var(--font-mono);box-shadow:0 1px 2px rgba(0,0,0,0.15);}
@@ -504,7 +504,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 
 /* ── RECENT LIST ── */
 .recent-list{list-style:none;}
-.recent-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(100,130,100,0.2);gap:8px;}
+.recent-item{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid rgba(100,130,100,0.2);gap:8px;}
 .recent-item:last-child{border-bottom:none;}
 
 /* ── PATROL CARDS (replaces table on mobile) ── */
@@ -644,6 +644,18 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
   max-height:200px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,0.4);}
 .suggest-item{padding:12px;cursor:pointer;font-size:17px;border-bottom:1px solid rgba(61,90,61,0.3);}
 .suggest-item:active{background:var(--surface2);color:var(--tan);}
+
+/* ── MINI SUGGEST (small, simple field autosuggest — replaces the native
+     browser <datalist> popup, which was oversized and disruptive) ── */
+.mini-suggest{display:none;position:absolute;top:100%;left:0;right:0;margin-top:3px;
+  background:var(--surface2);border:1px solid var(--border);border-radius:8px;
+  max-height:150px;overflow-y:auto;z-index:40;box-shadow:0 3px 10px rgba(0,0,0,0.3);}
+.mini-suggest.open{display:block;}
+.mini-suggest-item{padding:8px 12px;font-size:13.5px;color:var(--text);cursor:pointer;
+  border-bottom:1px solid rgba(255,255,255,0.06);}
+.mini-suggest-item:last-child{border-bottom:none;}
+.mini-suggest-item:active{background:var(--surface);color:var(--tan);}
+@media (min-width:900px) and (hover:hover){.mini-suggest-item:hover{background:var(--surface);color:var(--tan);}}
 
 /* ── COUNT PILL ── */
 .count-pill{background:linear-gradient(155deg,var(--tan),var(--tan-dark));color:#1a1206;padding:3px 10px;border-radius:10px;
@@ -909,30 +921,13 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     <div id="dash-participation"></div>
   </div>
 
-  <!-- 2-col on desktop: left=Monthly Overview, right=Fairness -->
-  <div class="dash-row2">
-    <!-- LEFT column -->
-    <div>
-      <!-- Monthly Stats -->
-      <div class="card" style="margin-bottom:0;">
-        <div class="card-title">
-          📅 Monthly Overview
-          <span style="font-size:11px;color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0;" id="month-year-lbl"></span>
-        </div>
-        <div id="monthly-stats"></div>
-      </div>
+  <!-- Monthly Stats -->
+  <div class="card">
+    <div class="card-title">
+      📅 Monthly Overview
+      <span style="font-size:11px;color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0;" id="month-year-lbl"></span>
     </div>
-    <!-- RIGHT column -->
-    <div>
-      <!-- Deployment Fairness -->
-      <div class="card" style="margin-bottom:0;height:100%;box-sizing:border-box;">
-        <div class="card-title">
-          ⚖ Deployment Fairness
-          <span style="font-size:11px;color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0;">This Month</span>
-        </div>
-        <div id="fairness-view"></div>
-      </div>
-    </div>
+    <div id="monthly-stats"></div>
   </div>
 
   <!-- Recent Patrols — full width -->
@@ -942,10 +937,6 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
       <button class="btn btn-ghost btn-sm" onclick="showTab('patrol-log')">View All →</button>
     </div>
     <ul class="recent-list" id="recent-list"></ul>
-    <div id="recent-extra-wrap" style="display:none;">
-      <ul class="recent-list" id="recent-extra" style="display:none;"></ul>
-      <button class="btn btn-ghost btn-sm" id="recent-toggle-btn" onclick="toggleRecentExtra()" style="width:100%;margin-top:6px;">▼ Show More</button>
-    </div>
   </div>
 
   <!-- Credit — Dashboard bottom (do not remove; footer credit) -->
@@ -1048,7 +1039,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
   <div class="card">
     <div class="card-title">
       <span>Patrols <span id="patrol-count-lbl" style="color:var(--text-muted);font-size:10px;font-weight:400;"></span></span>
-      <button class="btn btn-ghost btn-sm" onclick="printPatrolSummary()" style="font-size:9px;padding:3px 8px;min-height:28px;">🖨 Print</button>
+      <button class="btn btn-info btn-sm btn-print" onclick="printPatrolSummary()">🖨 Print</button>
     </div>
     <!-- Filters -->
     <div class="toolbar-box">
@@ -1093,7 +1084,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
       <span>Roster (<span id="troop-count">0</span>)</span>
       <div style="display:flex;gap:6px;">
         <button class="btn btn-primary btn-sm" onclick="openTroopForm()">+ Add Troop</button>
-        <button class="btn btn-ghost btn-sm" onclick="showTab('archived-troops')" style="font-size:11px;">📁 Archived (<span id="arch-count-btn">0</span>) →</button>
+        <button class="btn btn-warning btn-sm" onclick="showTab('archived-troops')" style="font-size:11px;">📁 Archived (<span id="arch-count-btn">0</span>) →</button>
       </div>
     </div>
     <div id="roster"></div>
@@ -1101,11 +1092,6 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 </div>
 
 <!-- Lightweight client-side auto-suggestion sources — populated from existing roster data -->
-<datalist id="dl-names"></datalist>
-<datalist id="dl-units"></datalist>
-<datalist id="dl-sns"></datalist>
-<datalist id="dl-weapons"></datalist>
-<datalist id="dl-phones"></datalist>
 
 <!-- ===== ARCHIVED TROOPS ===== -->
 <div id="archived-troops" class="section">
@@ -1123,7 +1109,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
   <div class="card">
     <div class="card-title">
       <span>Inactive Monitoring</span>
-      <button class="btn btn-ghost btn-sm" onclick="printInactive()" style="font-size:9px;padding:3px 8px;min-height:28px;">🖨</button>
+      <button class="btn btn-info btn-sm btn-print" onclick="printInactive()">🖨 Print</button>
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
       <button class="btn btn-ghost btn-sm" onclick="setInactiveFilter(3,this)">3d</button>
@@ -1150,7 +1136,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
   <div class="card">
     <div class="card-title">
       <span>Patrol Participation Status</span>
-      <button class="btn btn-ghost btn-sm" onclick="printParticipation()" style="font-size:9px;padding:3px 8px;min-height:28px;">🖨</button>
+      <button class="btn btn-info btn-sm btn-print" onclick="printParticipation()">🖨 Print</button>
     </div>
     <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;">Each troop's share of total unit patrol hours, measured only from their own deployment date to today — so troops deployed at different times are compared fairly.</div>
     <div id="participation-list"></div>
@@ -1163,8 +1149,8 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     <div class="card-title">
       <span>Patrol Report</span>
       <div style="display:flex;gap:5px;flex-wrap:wrap;">
-        <button class="btn btn-ghost btn-sm" onclick="exportCSV()" style="font-size:9px;padding:3px 7px;min-height:28px;">CSV</button>
-        <button class="btn btn-ghost btn-sm" onclick="printReport()" style="font-size:9px;padding:3px 7px;min-height:28px;">PDF</button>
+        <button class="btn btn-ghost btn-sm btn-print" onclick="exportCSV()">📄 CSV</button>
+        <button class="btn btn-info btn-sm btn-print" onclick="printReport()">🖨 PDF</button>
       </div>
     </div>
     <div class="toolbar-box">
@@ -1211,7 +1197,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
   <div class="card">
     <div class="card-title">
       <span>Command Handover</span>
-      <button class="btn btn-ghost btn-sm" onclick="printHandover()" style="font-size:9px;padding:3px 8px;min-height:28px;">🖨</button>
+      <button class="btn btn-info btn-sm btn-print" onclick="printHandover()">🖨 Print</button>
     </div>
     <div id="handover-content"></div>
   </div>
@@ -1342,7 +1328,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     <div class="card-title" id="t-form-title" style="border-bottom:none;margin-bottom:10px;">Add Troop</div>
     <div id="t-alert"></div>
     <input type="hidden" id="t-edit-id">
-    <div class="fg"><label class="field-label">Full Name</label><input type="text" id="t-name" placeholder="Surname, Firstname" list="dl-names" autocomplete="off"></div>
+    <div class="fg" style="position:relative;"><label class="field-label">Full Name</label><input type="text" id="t-name" placeholder="Surname, Firstname" autocomplete="off" oninput="fieldSuggest('t-name','names',this.value)" onfocus="fieldSuggest('t-name','names',this.value)"><div class="mini-suggest" id="sg-t-name"></div></div>
     <div class="fg">
       <label class="field-label">Deployment Date <span style="color:var(--red-light);">*</span></label>
       <div style="position:relative;">
@@ -1354,10 +1340,10 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     </div>
     <div class="fr">
       <div class="fg"><label class="field-label">Rank</label><select id="t-rank"></select></div>
-      <div class="fg"><label class="field-label">Unit / Section</label><input type="text" id="t-unit" placeholder="e.g. Alpha" list="dl-units" autocomplete="off"></div>
+      <div class="fg" style="position:relative;"><label class="field-label">Unit / Section</label><input type="text" id="t-unit" placeholder="e.g. Alpha" autocomplete="off" oninput="fieldSuggest('t-unit','units',this.value)" onfocus="fieldSuggest('t-unit','units',this.value)"><div class="mini-suggest" id="sg-t-unit"></div></div>
     </div>
     <div class="fr">
-      <div class="fg"><label class="field-label">Service Number</label><input type="text" id="t-sn" placeholder="e.g. SN-0042" list="dl-sns" autocomplete="off"></div>
+      <div class="fg" style="position:relative;"><label class="field-label">Service Number</label><input type="text" id="t-sn" placeholder="e.g. SN-0042" autocomplete="off" oninput="fieldSuggest('t-sn','sns',this.value)" onfocus="fieldSuggest('t-sn','sns',this.value)"><div class="mini-suggest" id="sg-t-sn"></div></div>
       <div class="fg"><label class="field-label">Status</label>
         <select id="t-status">
           <option value="available">Available</option>
@@ -1381,11 +1367,11 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
           <option value="O-">O-</option>
         </select>
       </div>
-      <div class="fg"><label class="field-label">🔫 Weapon Number</label><input type="text" id="t-weapon" placeholder="e.g. W-2291" list="dl-weapons" autocomplete="off"></div>
+      <div class="fg" style="position:relative;"><label class="field-label">🔫 Weapon Number</label><input type="text" id="t-weapon" placeholder="e.g. W-2291" autocomplete="off" oninput="fieldSuggest('t-weapon','weapons',this.value)" onfocus="fieldSuggest('t-weapon','weapons',this.value)"><div class="mini-suggest" id="sg-t-weapon"></div></div>
     </div>
     <div class="fr">
-      <div class="fg"><label class="field-label">📞 Local No.</label><input type="tel" id="t-phone-local" placeholder="e.g. 981-234-5678" list="dl-phones" autocomplete="off"></div>
-      <div class="fg"><label class="field-label">💬 WhatsApp No.</label><input type="tel" id="t-phone-wa" placeholder="e.g. +977-981-234-5678" list="dl-phones" autocomplete="off"></div>
+      <div class="fg" style="position:relative;"><label class="field-label">📞 Local No.</label><input type="tel" id="t-phone-local" placeholder="e.g. 981-234-5678" autocomplete="off" oninput="fieldSuggest('t-phone-local','phones',this.value)" onfocus="fieldSuggest('t-phone-local','phones',this.value)"><div class="mini-suggest" id="sg-t-phone-local"></div></div>
+      <div class="fg" style="position:relative;"><label class="field-label">💬 WhatsApp No.</label><input type="tel" id="t-phone-wa" placeholder="e.g. +977-981-234-5678" autocomplete="off" oninput="fieldSuggest('t-phone-wa','phones',this.value)" onfocus="fieldSuggest('t-phone-wa','phones',this.value)"><div class="mini-suggest" id="sg-t-phone-wa"></div></div>
     </div>
     <div class="fg"><label class="field-label">Notes / Skills / Restrictions</label><textarea id="t-notes" rows="2" placeholder="e.g. Medic trained, No night ops..."></textarea></div>
     <div class="modal-actions" style="justify-content:stretch;">
@@ -1818,17 +1804,39 @@ function nowStr(){ var n=new Date(); return String(n.getDate()).padStart(2,'0')+
 function todayDMY(){ var n=new Date(); return String(n.getDate()).padStart(2,'0')+'/'+String(n.getMonth()+1).padStart(2,'0')+'/'+n.getFullYear(); }
 // Lightweight, instant auto-suggestions built from the roster already loaded
 // in memory — no network round-trip needed since the full troop list is
-// already local. Populates <datalist> options that the form inputs reference.
+// already local. Feeds a small custom-styled dropdown (see fieldSuggest)
+// instead of the native browser <datalist> UI, which rendered as a large,
+// unstyleable system popup.
+var _autoSuggestData={names:[],units:[],sns:[],weapons:[],phones:[]};
 function populateAutoSuggestLists(){
   var all=(D.troops||[]).concat(D.archived||[]);
   function uniq(arr){ var seen={},out=[]; arr.forEach(function(v){ v=(v||'').trim(); if(v&&!seen[v]){seen[v]=1;out.push(v);} }); return out; }
-  function fillList(elId,values){ var el=document.getElementById(elId); if(!el) return; el.innerHTML=values.map(function(v){return '<option value="'+v.replace(/"/g,'&quot;')+'">';}).join(''); }
-  fillList('dl-names',uniq(all.map(function(t){return t.name;})));
-  fillList('dl-units',uniq(all.map(function(t){return t.unit;})));
-  fillList('dl-sns',uniq(all.map(function(t){return t.sn;})));
-  fillList('dl-weapons',uniq(all.map(function(t){return t.weaponNumber;})));
-  fillList('dl-phones',uniq(all.reduce(function(a,t){return a.concat([t.phoneLocal,t.phoneWa]);},[])));
+  _autoSuggestData.names=uniq(all.map(function(t){return t.name;}));
+  _autoSuggestData.units=uniq(all.map(function(t){return t.unit;}));
+  _autoSuggestData.sns=uniq(all.map(function(t){return t.sn;}));
+  _autoSuggestData.weapons=uniq(all.map(function(t){return t.weaponNumber;}));
+  _autoSuggestData.phones=uniq(all.reduce(function(a,t){return a.concat([t.phoneLocal,t.phoneWa]);},[]));
 }
+// Small, simple, app-styled suggestion dropdown — shows at most 5 close matches.
+function fieldSuggest(inputId,key,val){
+  var box=document.getElementById('sg-'+inputId); if(!box) return;
+  document.querySelectorAll('.mini-suggest.open').forEach(function(b){ if(b!==box) b.classList.remove('open'); });
+  val=(val||'').trim();
+  if(!val){ box.classList.remove('open'); return; }
+  var q=val.toLowerCase();
+  var matches=(_autoSuggestData[key]||[]).filter(function(v){ return v.toLowerCase().indexOf(q)>=0 && v.toLowerCase()!==q; }).slice(0,5);
+  if(matches.length===0){ box.classList.remove('open'); return; }
+  box.innerHTML=matches.map(function(v){ return '<div class="mini-suggest-item" onmousedown="event.preventDefault();pickSuggest(\''+inputId+'\',\''+v.replace(/'/g,"\\'").replace(/"/g,'&quot;')+'\')">'+v+'</div>'; }).join('');
+  box.classList.add('open');
+}
+function pickSuggest(inputId,val){
+  var inp=document.getElementById(inputId); if(inp){ inp.value=val; }
+  var box=document.getElementById('sg-'+inputId); if(box) box.classList.remove('open');
+}
+document.addEventListener('click',function(e){
+  if(e.target.closest('.mini-suggest')||e.target.closest('input')) return;
+  document.querySelectorAll('.mini-suggest.open').forEach(function(b){ b.classList.remove('open'); });
+});
 function dmyFromISO(iso){ if(!iso) return ''; var p=iso.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
 // Effective deployment date per the participation rules: the troop's own
 // recorded deployment date, or — if never recorded — the earliest patrol
@@ -1911,17 +1919,17 @@ function computeMostActive(patrols){
 }
 function mostActiveBlockHTML(patrols,historyMode){
   var res=computeMostActive(patrols);
-  var histBtn=historyMode?'':'<button class="btn btn-ghost btn-sm" onclick="showTab(\'history\')" style="font-size:9px;padding:2px 7px;min-height:22px;line-height:1;">📜 History</button>';
+  var histBtn=historyMode?'':'<button class="btn btn-info btn-sm btn-print" onclick="showTab(\'history\')">📜 History</button>';
   if(!res.winner){
     if(historyMode) return '<div style="color:var(--text-muted);font-size:12px;">No data</div>';
-    return '<div style="margin-top:12px;padding:10px;background:rgba(230,179,74,0.08);border:1px solid rgba(230,179,74,0.2);border-radius:8px;font-size:13px;display:flex;justify-content:space-between;align-items:center;">'+
-      '<span style="color:var(--text-muted);">⭐ Most Active: <span style="opacity:0.6;">No data yet</span></span>'+histBtn+'</div>';
+    return '<div style="margin-top:12px;padding:10px;background:rgba(230,179,74,0.08);border:1px solid rgba(230,179,74,0.2);border-radius:8px;font-size:13px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">'+
+      '<span style="color:var(--text);">⭐ Most Active: <span style="opacity:0.7;">No data yet</span></span>'+histBtn+'</div>';
   }
   var w=res.winner;
   var topMargin=historyMode?'0':'12px';
   var html='<div style="margin-top:'+topMargin+';padding:10px;background:rgba(230,179,74,0.08);border:1px solid rgba(230,179,74,0.2);border-radius:8px;font-size:13px;">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">'+
-    '<span style="color:var(--text-muted);">⭐ Most Active: <strong style="color:var(--tan);text-transform:uppercase;letter-spacing:0.3px;">'+upLabel(w.person.rank,w.person.name)+'</strong></span>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">'+
+    '<span style="color:var(--text);">⭐ Most Active: <strong style="color:var(--tan);text-transform:uppercase;letter-spacing:0.3px;">'+upLabel(w.person.rank,w.person.name)+'</strong></span>'+
     histBtn+
     '</div>'+
     '<div style="color:var(--text-muted);margin-top:2px;"> '+w.hours.toFixed(1)+'h | '+w.count+' patrols</div></div>';
@@ -2379,52 +2387,22 @@ function renderDash(){
         '<div class="pp-pct '+r.flag+'" style="font-size:16px;">'+r.pct.toFixed(1)+'%</div></div>';}).join('')+'</div>':'');
   }
 
-  // ── DEPLOYMENT FAIRNESS ─────────────────────────────────────────────
-  var moTotalPatrols=Math.max(1,moPats.length);
-  var sorted=sortTroops(D.troops);
-  var top10=sorted.slice(0,5),rest=sorted.slice(5);
-  function fairnessRow(t){
-    var c=monthlyPatrolCount(t.id);var pct=Math.round(c/moTotalPatrols*100);
-    var color=pct>70?'var(--green-light)':pct>30?'var(--orange)':'var(--red-light)';
-    return '<div style="margin-bottom:10px;cursor:pointer;" onclick="showProfile(\''+t.id+'\')">'+
-      '<div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:4px;">'+
-      '<span style="color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:75%;"><strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong></span>'+
-      '<span style="color:var(--tan);font-family:\'Courier New\',monospace;font-weight:700;">'+c+'</span></div>'+
-      '<div class="fairness-bar"><div class="fairness-fill" style="width:'+pct+'%;background:'+color+';"></div></div></div>';
-  }
-  var fairHTML=top10.map(fairnessRow).join('');
-  if(rest.length>0) fairHTML+='<div id="fairness-extra" style="display:none;">'+rest.map(fairnessRow).join('')+'</div>'+
-    '<button class="btn btn-ghost btn-sm" id="fairness-toggle-btn" onclick="toggleFairnessExtra()" style="width:100%;margin-top:6px;">▼ Show '+rest.length+' More</button>';
-  document.getElementById('fairness-view').innerHTML=fairHTML||'<div class="empty">No troop data.</div>';
-
   // ── RECENT PATROLS ──────────────────────────────────────────────────
-  var recentAll=D.patrols.slice().sort(function(a,b){return b.date.localeCompare(a.date);}).slice(0,8);
-  var recent=recentAll.slice(0,5),recentRest=recentAll.slice(5);
+  // (Deployment Fairness card removed per prior request — Monthly Overview
+  // now uses the reclaimed space as a full-width card above.)
+  var recentAll=D.patrols.slice().sort(function(a,b){return b.date.localeCompare(a.date);}).slice(0,5);
   function recentRow(p){
     return '<li class="recent-item">'+
       '<div style="min-width:0;flex:1;">'+
-      '<div style="font-weight:700;color:var(--text);font-size:15px;">'+(p.ptlId||'')+
+      '<div style="font-weight:700;color:var(--text);font-size:14px;">'+(p.ptlId||'')+
       ' <button class="count-pill" onclick="showTroopsModal(\''+p.id+'\')">'+(p.troops||[]).length+' trp</button></div>'+
-      '<div style="font-size:13px;color:var(--text-muted);margin-top:2px;">'+fmtDateLong(p.date)+(p.area?' · <strong style="color:var(--text);">'+p.area+'</strong>':'')+(p.duration?' · '+p.duration+'h':'')+'</div>'+
-      (p.remarks?'<div style="font-size:12px;color:var(--text-muted);margin-top:1px;font-style:italic;">'+p.remarks+'</div>':'')+
+      '<div style="font-size:12px;color:var(--text-muted);margin-top:1px;">'+fmtDateLong(p.date)+(p.area?' · <strong style="color:var(--text);">'+p.area+'</strong>':'')+(p.duration?' · '+p.duration+'h':'')+'</div>'+
       '</div>'+
       '<span class="'+typeBadge(p.type)+'" style="flex-shrink:0;">'+p.type+'</span></li>';
   }
-  var recentHTML=recentAll.length===0?'<li class="empty">No patrols logged yet.</li>':recent.map(recentRow).join('');
+  var recentHTML=recentAll.length===0?'<li class="empty">No patrols logged yet.</li>':recentAll.map(recentRow).join('');
   document.getElementById('recent-list').innerHTML=recentHTML;
-  var recentExtraWrap=document.getElementById('recent-extra-wrap');
-  if(recentExtraWrap){
-    if(recentRest.length>0){
-      recentExtraWrap.style.display='';
-      document.getElementById('recent-extra').innerHTML=recentRest.map(recentRow).join('');
-      document.getElementById('recent-extra').style.display='none';
-      document.getElementById('recent-toggle-btn').textContent='▼ Show '+recentRest.length+' More';
-    } else {
-      recentExtraWrap.style.display='none';
-    }
-  }
 }
-function toggleRecentExtra(){ var extra=document.getElementById('recent-extra'); var btn=document.getElementById('recent-toggle-btn'); if(!extra||!btn) return; if(extra.style.display==='none'){extra.style.display='block';btn.textContent='▲ Show Less';}else{extra.style.display='none';btn.textContent='▼ Show More';} }
 // Shows a quick detail modal for a clicked dashboard stat/tile, so the person
 // doesn't have to navigate away just to see what's behind a number.
 function dashDetailRow(main,sub){ return '<div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:14px;"><strong>'+main+'</strong><div style="font-size:12px;color:var(--text-muted);margin-top:2px;">'+sub+'</div></div>'; }
@@ -2454,7 +2432,6 @@ function showDashDetail(kind){
   document.getElementById('dash-detail-modal').classList.add('open');
 }
 
-function toggleFairnessExtra(){ var extra=document.getElementById('fairness-extra'); var btn=document.getElementById('fairness-toggle-btn'); if(!extra||!btn) return; if(extra.style.display==='none'){extra.style.display='block';btn.textContent='▲ Show Less';}else{extra.style.display='none';btn.textContent='▼ Show More';} }
 
 // =====================================================================
 // LOG PATROL
@@ -2869,12 +2846,12 @@ function viewFullRecord(){
   var rowsHtml='';
   if(tp.length===0){ rowsHtml='<tr><td colspan="6" style="text-align:center;color:#888;padding:20px;">No patrol records.</td></tr>'; }
   else { monthKeys.forEach(function(mk){var mo=byMonth[mk];var moDate=new Date(mk+'-01T12:00:00');var moLabel=moDate.toLocaleString('default',{month:'long',year:'numeric'});var moH=mo.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0); rowsHtml+='<tr style="background:#e8f0e8;"><td colspan="6" style="font-family:\'Courier New\',monospace;font-size:11px;font-weight:700;color:#2d5a3d;letter-spacing:1px;text-transform:uppercase;padding:7px 10px;">'+moLabel+' · '+mo.length+' patrols · '+moH.toFixed(1)+'h</td></tr>'; mo.forEach(function(p){ rowsHtml+='<tr><td style="font-family:\'Courier New\',monospace;font-size:11px;color:#2d5a3d;white-space:nowrap;">'+(p.ptlId||'—')+'</td><td style="font-size:11px;white-space:nowrap;">'+fmtDate(p.date)+'</td><td><span style="display:inline-block;padding:2px 7px;border-radius:2px;font-size:10px;font-weight:700;background:#eef4ee;border:1px solid #9aaa9a;color:#333;">'+p.type+'</span></td><td style="font-size:12px;color:#555;">'+(p.area||'—')+'</td><td style="font-family:\'Courier New\',monospace;font-size:11px;">'+(p.duration?p.duration+'h':'—')+'</td><td style="font-size:11px;color:#777;">'+(p.remarks||'—')+'</td></tr>'; }); }); }
-  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Full Record — '+upLabel(t.rank,t.name)+'</title><style>body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:14px;}.hdr{text-align:center;border-bottom:2px solid #2d5a3d;padding-bottom:14px;margin-bottom:20px;}.hdr h2{margin:0 0 4px;font-size:20px;color:#1a3a2a;}.hdr p{margin:2px 0;font-size:11px;color:#555;}.info-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;}.info-box{background:#f5f5f5;border:1px solid #ccc;border-radius:4px;padding:10px;text-align:center;}.info-num{font-size:22px;font-weight:700;color:#2d5a3d;font-family:\'Courier New\',monospace;}.info-lbl{font-size:10px;color:#666;letter-spacing:1px;text-transform:uppercase;margin-top:3px;}.sub-hdr{font-family:\'Courier New\',monospace;font-size:10px;color:#2d5a3d;letter-spacing:2px;text-transform:uppercase;margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid #ccc;}table{width:100%;border-collapse:collapse;font-size:13px;}th{background:#2d5a3d;color:#fff;font-family:\'Courier New\',monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:8px 10px;text-align:left;}td{padding:7px 10px;border-bottom:1px solid #e0e8e0;}tr:hover td{background:#f8fff8;}.footer{margin-top:20px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}@media print{@page{margin:1cm;}.no-print{display:none!important;}}</style></head><body>'+
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Full Record — '+upLabel(t.rank,t.name)+'</title><style>body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:14px;}.hdr{text-align:center;border-bottom:2px solid #2d5a3d;padding-bottom:14px;margin-bottom:20px;}.hdr h2{margin:0 0 4px;font-size:20px;color:#1a3a2a;}.hdr p{margin:2px 0;font-size:11px;color:#555;}.info-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;}.info-box{background:#f5f5f5;border:1px solid #ccc;border-radius:4px;padding:10px;text-align:center;}.info-num{font-size:22px;font-weight:700;color:#2d5a3d;font-family:\'Courier New\',monospace;}.info-lbl{font-size:10px;color:#666;letter-spacing:1px;text-transform:uppercase;margin-top:3px;}.sub-hdr{font-family:\'Courier New\',monospace;font-size:10px;color:#2d5a3d;letter-spacing:2px;text-transform:uppercase;margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid #ccc;}table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;}th{background:#2d5a3d;color:#fff;font-family:\'Courier New\',monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:8px 10px;text-align:left;}td{padding:7px 10px;border-bottom:1px solid #e0e8e0;word-wrap:break-word;vertical-align:top;}tr:hover td{background:#f8fff8;}.footer{margin-top:20px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}@media print{@page{margin:1cm;}.no-print{display:none!important;}}</style></head><body>'+
   '<div class="hdr"><div style="font-size:10px;color:#999;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;">'+(s.classification||'')+(s.classification?' — ':'')+''+(s.pob||'POB Mobaye')+'</div><h2>COMPLETE SERVICE RECORD</h2><p style="font-size:14px;font-weight:700;color:#1a3a2a;">'+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>'+(t.sn?' · SN: '+t.sn:'')+'</p><p>Unit: '+(t.unit||'—')+'</p><p>Period: <strong>'+(earliest?fmtDateLong(earliest):'N/A')+' — '+fmtDateLong(todayStr)+'</strong></p><p style="color:#888;">Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p></div>'+
   '<div class="info-grid"><div class="info-box"><div class="info-num">'+tp.length+'</div><div class="info-lbl">Total Patrols</div></div><div class="info-box"><div class="info-num">'+totalH.toFixed(1)+'</div><div class="info-lbl">Total Hours</div></div><div class="info-box"><div class="info-num">'+sectors.length+'</div><div class="info-lbl">Sectors</div></div><div class="info-box"><div class="info-num">'+monthKeys.length+'</div><div class="info-lbl">Active Months</div></div></div>'+
   (sectors.length>0?'<div class="sub-hdr">Sectors Covered</div><p style="font-size:13px;color:#444;margin-bottom:14px;">'+sectors.join(', ')+'</p>':'')+
   (Object.keys(types).length>0?'<div class="sub-hdr">Patrol Types</div><p style="font-size:13px;color:#444;margin-bottom:14px;">'+Object.entries(types).sort(function(a,b){return b[1]-a[1];}).map(function(kv){return kv[0]+': <strong>'+kv[1]+'</strong>';}).join(' · ')+'</p>':'')+
-  '<div class="sub-hdr">Full Patrol History ('+tp.length+')</div><table><thead><tr><th>Patrol ID</th><th>Date</th><th>Type</th><th>Sector</th><th>Duration</th><th>Remarks</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'+
+  '<div class="sub-hdr">Full Patrol History ('+tp.length+')</div><table><colgroup><col style="width:13%"><col style="width:12%"><col style="width:14%"><col style="width:19%"><col style="width:11%"><col style="width:31%"></colgroup><thead><tr><th>Patrol ID</th><th>Date</th><th>Type</th><th>Sector</th><th>Duration</th><th>Remarks</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'+
   '<div class="footer">'+(s.pob||'POB Mobaye')+' · '+upLabel(t.rank,t.name)+' · Record as of '+fmtDateLong(todayStr)+'</div>'+
   '<div class="no-print" style="margin-top:20px;text-align:center;"><button onclick="window.print()" style="padding:10px 24px;background:#2d5a3d;color:#fff;border:none;border-radius:4px;font-size:13px;cursor:pointer;font-weight:700;">🖨 Print / Save as PDF</button></div>'+
   '</body></html>'); win.document.close(); win.focus();
@@ -3103,7 +3080,7 @@ function printReport(){
     '</div>'+
     (cmdR?'<div class="remarks-box"><div style="font-size:9px;color:#8a6d1f;font-family:\'Courier New\',monospace;letter-spacing:1px;margin-bottom:3px;">COMMANDER\'S REMARKS</div>'+cmdR+'</div>':'')+
     '<div class="sub-hdr">Patrol Detail</div>'+
-    (patrolRows?'<table><colgroup><col style="width:11%"><col style="width:10%"><col style="width:11%"><col style="width:15%"><col style="width:16%"><col style="width:8%"><col style="width:29%"></colgroup>'+
+    (patrolRows?'<table><colgroup><col style="width:12%"><col style="width:11%"><col style="width:12%"><col style="width:17%"><col style="width:18%"><col style="width:9%"><col style="width:21%"></colgroup>'+
     '<thead><tr><th>Ptl ID</th><th>Date</th><th>Type</th><th>Sector</th><th>Commander</th><th>Hrs</th><th>Remarks / Route</th></tr></thead><tbody>'+patrolRows+'</tbody></table>':'<div style="color:#888;font-size:12px;">No patrols in this period.</div>')+
     '<div class="sub-hdr">Troop Participation</div>'+
     '<table><colgroup><col style="width:38%"><col style="width:20%"><col style="width:14%"><col style="width:14%"><col style="width:14%"></colgroup>'+
@@ -3186,7 +3163,7 @@ function printPatrolSummary(){
     '<div class="info-box"><div class="info-num" style="font-size:14px;">'+dateRange+'</div><div class="info-lbl">Range</div></div>'+
     '</div>'+
     '<div class="sub-hdr">Patrol Detail</div>'+
-    '<table><colgroup><col style="width:10%"><col style="width:9%"><col style="width:9%"><col style="width:12%"><col style="width:13%"><col style="width:7%"><col style="width:8%"><col style="width:32%"></colgroup>'+
+    '<table><colgroup><col style="width:11%"><col style="width:10%"><col style="width:10%"><col style="width:14%"><col style="width:16%"><col style="width:8%"><col style="width:9%"><col style="width:22%"></colgroup>'+
     '<thead><tr><th>Ptl ID</th><th>Date</th><th>Type</th><th>Sector</th><th>Commander</th><th>Hrs</th><th>Trp #</th><th>Remarks / Route</th></tr></thead>'+
     '<tbody>'+rowsHtml+'</tbody></table>'+
     '<div class="footer">'+(s.pob||'POB Mobaye')+' Patrol Tracker · Patrol Log Summary · '+nowStr()+'</div>'+
