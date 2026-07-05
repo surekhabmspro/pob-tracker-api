@@ -1522,8 +1522,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     <div class="modal-title" id="profile-title">Troop Profile</div>
     <div id="profile-body"></div>
     <div class="modal-actions">
-      <button class="btn btn-ghost btn-sm" onclick="viewFullRecord()">📄 Full Record</button>
-      <button class="btn btn-ghost btn-sm" onclick="printProfile()">Print</button>
+      <button class="btn btn-ghost btn-sm" onclick="viewFullRecord()">📄 Full Record (Print/PDF)</button>
       <button class="btn btn-ghost" onclick="closeModal('profile-modal')">Close</button>
     </div>
   </div>
@@ -2754,9 +2753,6 @@ function showProfile(id, fromArch){
   document.getElementById('profile-body').innerHTML=html;
   document.getElementById('profile-modal').classList.add('open');
 }
-
-function printProfile(){ var title=document.getElementById('profile-title').textContent; var body=document.getElementById('profile-body').innerHTML; var s=D.settings; var win=window.open('','_blank','width=900,height=700'); win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+title+'</title><style>body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:14px;}.print-hdr{text-align:center;border-bottom:2px solid #333;padding-bottom:12px;margin-bottom:20px;}.print-hdr h2{margin:0 0 4px;font-size:18px;}.section-hdr{font-family:\'Courier New\',monospace;font-size:10px;color:#2d5a3d;letter-spacing:2px;text-transform:uppercase;margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid #ccc;}.stat{background:#f5f5f5;border:1px solid #ccc;border-radius:4px;padding:8px;text-align:center;}.stat-num{font-size:20px;font-weight:700;color:#2d5a3d;font-family:\'Courier New\',monospace;}.stat-label{font-size:9px;color:#666;letter-spacing:1px;text-transform:uppercase;margin-top:2px;}.badge{display:inline-block;padding:2px 6px;border-radius:2px;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;font-family:\'Courier New\',monospace;background:#eee;border:1px solid #999;color:#333;}.notes-field{background:#f9f9f9;border:1px solid #ddd;border-radius:3px;padding:8px 10px;font-size:12px;color:#555;margin-top:6px;font-style:italic;}a,button{display:none!important;}@media print{body{padding:10px;}@page{margin:1cm;}}</style></head><body>'+
-  '<div class="print-hdr"><div style="font-size:10px;color:#999;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">'+(s.classification||'')+(s.classification?' — ':'')+''+(s.pob||'POB Mobaye')+'</div><h2>'+title+'</h2><p style="font-size:11px;color:#555;">Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p></div>'+body+'</body></html>'); win.document.close(); win.focus(); }
 
 function viewFullRecord(){
   var id=document.getElementById('profile-modal').dataset.troopId;
