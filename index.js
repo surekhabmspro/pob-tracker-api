@@ -11,8 +11,21 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
+// ── SELF-MIGRATION: ensure newer troop columns exist ────────────────────
+// Runs once on boot. Safe to run every deploy — IF NOT EXISTS makes it a no-op
+// once the columns are already there.
+async function migrateSchema() {
+  try {
+    await pool.query('ALTER TABLE troops ADD COLUMN IF NOT EXISTS blood_group TEXT');
+    await pool.query('ALTER TABLE troops ADD COLUMN IF NOT EXISTS deployment_date DATE');
+    console.log('Schema check OK: blood_group, deployment_date present on troops table.');
+  } catch (e) {
+    console.error('Schema migration failed:', e.message);
+  }
+}
+
 // ── VERSION (bump this string on every backend deploy) ─────────────────
-const API_VERSION = '2026.07.03.1';
+const API_VERSION = '2026.07.05.1';
 app.get('/version', (_, res) => res.json({ version: API_VERSION }));
 
 // ── HEALTH ────────────────────────────────────────────────────────────
@@ -41,13 +54,13 @@ app.get('/archived', async (req, res) => {
 // ── UPSERT TROOP ──────────────────────────────────────────────────────
 app.post('/troops', async (req, res) => {
   try {
-    const { id, name, rank, unit, sn, status, notes, phoneLocal, phoneWa } = req.body;
+    const { id, name, rank, unit, sn, status, notes, phoneLocal, phoneWa, bloodGroup, deploymentDate } = req.body;
     await pool.query(
-      `INSERT INTO troops (id, name, rank, unit, sn, status, notes, phone_local, phone_wa)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      `INSERT INTO troops (id, name, rank, unit, sn, status, notes, phone_local, phone_wa, blood_group, deployment_date)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        ON CONFLICT (id) DO UPDATE
-         SET name=$2, rank=$3, unit=$4, sn=$5, status=$6, notes=$7, phone_local=$8, phone_wa=$9`,
-      [id, name, rank || '', unit || '', sn || '', status || 'available', notes || '', phoneLocal || '', phoneWa || '']
+         SET name=$2, rank=$3, unit=$4, sn=$5, status=$6, notes=$7, phone_local=$8, phone_wa=$9, blood_group=$10, deployment_date=$11`,
+      [id, name, rank || '', unit || '', sn || '', status || 'available', notes || '', phoneLocal || '', phoneWa || '', bloodGroup || null, deploymentDate || null]
     );
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -151,6 +164,8 @@ app.post('/config', async (req, res) => {
 
 // ── START ─────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`POB Tracker API running on port ${PORT}`);
+migrateSchema().finally(() => {
+  app.listen(PORT, () => {
+    console.log(`POB Tracker API running on port ${PORT}`);
+  });
 });

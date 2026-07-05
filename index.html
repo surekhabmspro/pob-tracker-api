@@ -1591,7 +1591,7 @@ function apiFetch(path, opts) {
     .then(function(r){ return r.json(); });
 }
 function dbToTroop(r) {
-  return {id:r.id,name:r.name,rank:r.rank,unit:r.unit,sn:r.sn||'',status:r.status||'available',notes:r.notes||'',phoneLocal:r.phone_local||'',phoneWa:r.phone_wa||''};
+  return {id:r.id,name:r.name,rank:r.rank,unit:r.unit,sn:r.sn||'',status:r.status||'available',notes:r.notes||'',phoneLocal:r.phone_local||'',phoneWa:r.phone_wa||'',bloodGroup:r.blood_group||'',deploymentDate:r.deployment_date?String(r.deployment_date).slice(0,10):''};
 }
 function dbToPatrol(r) {
   return {id:r.id,ptlId:r.ptl_id,date:(r.date||'').slice(0,10),type:r.type,
