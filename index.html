@@ -395,6 +395,7 @@ body.light-mode{background:
   .btn-primary:hover,.btn-danger:hover,.btn-warning:hover,.btn-info:hover{filter:brightness(1.08);transform:translateY(-1px);box-shadow:0 6px 16px rgba(0,0,0,0.3);}
   .btn-ghost:hover{border-color:var(--tan-dark);color:var(--tan);transform:translateY(-1px);}
   .stat.clickable:hover{transform:translateY(-2px);box-shadow:var(--card-bevel),var(--shadow-md);border-color:var(--tan-dark);}
+  .pp-summary-chip.clickable:hover{transform:translateY(-2px);box-shadow:var(--card-bevel),var(--shadow-md);}
   .patrol-card,.troop-card,.inactive-card,.troop-row,.lh-block{transition:transform 0.15s,box-shadow 0.15s,border-color 0.15s;}
   .patrol-card:hover,.troop-card:hover,.inactive-card:hover,.troop-row:hover{transform:translateY(-2px);box-shadow:var(--card-bevel),var(--shadow-md);border-color:var(--tan-dark);}
   .lh-block:hover{box-shadow:var(--card-bevel),var(--shadow-md);border-color:var(--tan-dark);}
@@ -658,6 +659,8 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 /* Dashboard participation summary chips */
 .pp-summary-grid{display:flex;gap:8px;flex-wrap:wrap;}
 .pp-summary-chip{flex:1;min-width:80px;text-align:center;padding:10px 8px;border-radius:10px;font-size:13.5px;font-weight:600;border:var(--card-border);box-shadow:var(--card-bevel),var(--shadow-sm);}
+.pp-summary-chip.clickable{cursor:pointer;transition:transform 0.15s,box-shadow 0.15s,border-color 0.15s;}
+.pp-summary-chip.clickable:active{transform:scale(0.96);}
 .pp-summary-chip.b-green{background:linear-gradient(155deg,rgba(52,211,153,0.14),var(--surface2));color:var(--green-light);}
 .pp-summary-chip.b-orange{background:linear-gradient(155deg,rgba(240,160,75,0.14),var(--surface2));color:var(--orange);}
 .pp-summary-chip.b-red{background:linear-gradient(155deg,rgba(242,73,90,0.14),var(--surface2));color:var(--red-light);}
@@ -2477,9 +2480,9 @@ function renderDash(){
     var worst=pd.rows.slice(0,3);
     document.getElementById('dash-participation').innerHTML=
       '<div class="pp-summary-grid">'+
-      '<div class="pp-summary-chip b-green">🟢 <strong>'+gC+'</strong></div>'+
-      '<div class="pp-summary-chip b-orange">🟡 <strong>'+yC+'</strong></div>'+
-      '<div class="pp-summary-chip b-red">🔴 <strong>'+rC+'</strong></div>'+
+      '<div class="pp-summary-chip b-green clickable" onclick="showDashDetail(\'pp-green\')">🟢 <strong>'+gC+'</strong></div>'+
+      '<div class="pp-summary-chip b-orange clickable" onclick="showDashDetail(\'pp-yellow\')">🟡 <strong>'+yC+'</strong></div>'+
+      '<div class="pp-summary-chip b-red clickable" onclick="showDashDetail(\'pp-red\')">🔴 <strong>'+rC+'</strong></div>'+
       '</div>'+
       (worst.length?'<div style="margin-top:10px;">'+worst.map(function(r){return '<div class="pp-row" data-accent="'+r.flag+'" onclick="showProfile(\''+r.t.id+'\')">'+
         '<div class="pp-flag-dot '+r.flag+'"></div>'+
@@ -2510,6 +2513,13 @@ function showDashDetail(kind){
     var list=sortTroops(D.troops.filter(function(t){return ids.has(t.id);}));
     title='Troops Deployed This Month ('+list.length+')';
     body=list.length?list.map(function(t){var cnt=moPats.filter(function(p){return (p.troops||[]).indexOf(t.id)>=0;}).length;return dashDetailRow(t.rank.toUpperCase()+' '+t.name.toUpperCase(),(t.unit||'')+' · '+cnt+' patrol'+(cnt!==1?'s':'')+' this month');}).join(''):'';
+  } else if(kind==='pp-green'||kind==='pp-yellow'||kind==='pp-red'){
+    var flagMap={'pp-green':'b-green','pp-yellow':'b-orange','pp-red':'b-red'};
+    var labelMap={'pp-green':'🟢 Green — Satisfactory','pp-yellow':'🟡 Yellow — Below Expected','pp-red':'🔴 Red — Low Participation'};
+    var pd2=participationData();
+    var rows=pd2.rows.filter(function(r){return r.flag===flagMap[kind];});
+    title=labelMap[kind]+' ('+rows.length+')';
+    body=rows.length?rows.map(function(r){return dashDetailRow(r.t.rank.toUpperCase()+' '+r.t.name.toUpperCase(),(r.t.unit||'')+' · '+r.pct.toFixed(1)+'% of unit patrol hours');}).join(''):'';
   }
   document.getElementById('dash-detail-title').textContent=title;
   document.getElementById('dash-detail-body').innerHTML=body||'<div class="empty">Nothing to show.</div>';
