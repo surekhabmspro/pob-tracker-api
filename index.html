@@ -2236,6 +2236,28 @@ document.addEventListener('visibilitychange',function(){
     }
   }
 });
+// ── PIN LOCKOUT ──────────────────────────────────────────────────────
+// Without this, someone holding the phone could just keep guessing a
+// 4-digit PIN (only 10,000 combinations) with no penalty. After 5 wrong
+// tries in a row, entry is blocked for 60 seconds. Stored in localStorage
+// (not a JS variable) so simply reloading the page can't reset the count.
+var PIN_MAX_ATTEMPTS=5;
+var PIN_LOCKOUT_MS=60000;
+function getPinLockState(){
+  try{ return JSON.parse(localStorage.getItem('pinLockState')||'{"fails":0,"lockUntil":0}'); }catch(e){ return {fails:0,lockUntil:0}; }
+}
+function setPinLockState(s){ try{ localStorage.setItem('pinLockState',JSON.stringify(s)); }catch(e){} }
+function showPinLockMessage(lockUntil){
+  var secs=Math.max(0,Math.ceil((lockUntil-Date.now())/1000));
+  var errEl=document.getElementById('pin-error'), inpEl=document.getElementById('pin-input');
+  if(!errEl||!inpEl) return;
+  errEl.textContent='Too many wrong attempts. Try again in '+secs+'s.';
+  inpEl.disabled=true;
+  setTimeout(function(){
+    if(Date.now()>=lockUntil){ inpEl.disabled=false; errEl.textContent=''; inpEl.focus(); }
+    else if(document.getElementById('pin-modal').classList.contains('open')){ showPinLockMessage(lockUntil); }
+  },1000);
+}
 function requirePin(onSuccess,onCancel){
   if(!hasPinSet()){ onSuccess(); return; }
   if(_pinUnlockedThisSession){ onSuccess(); return; }
@@ -2243,22 +2265,36 @@ function requirePin(onSuccess,onCancel){
   _pinCancelCallback=onCancel||null;
   document.getElementById('pin-input').value='';
   document.getElementById('pin-error').textContent='';
+  document.getElementById('pin-input').disabled=false;
   document.getElementById('pin-modal').classList.add('open');
-  setTimeout(function(){document.getElementById('pin-input').focus();},150);
+  var lock=getPinLockState();
+  if(lock.lockUntil && Date.now()<lock.lockUntil){ showPinLockMessage(lock.lockUntil); }
+  else { setTimeout(function(){document.getElementById('pin-input').focus();},150); }
 }
 function closePinModal(){ document.getElementById('pin-modal').classList.remove('open'); if(_pinCancelCallback) _pinCancelCallback(); _pinSuccessCallback=null; _pinCancelCallback=null; }
 function submitPin(){
+  var lock=getPinLockState();
+  if(lock.lockUntil && Date.now()<lock.lockUntil){ showPinLockMessage(lock.lockUntil); return; }
   var val=document.getElementById('pin-input').value.trim();
   if(val.length!==4){ document.getElementById('pin-error').textContent='Enter a 4-digit PIN.'; return; }
   if(simpleHash(val)===D.security.pinHash){
+    setPinLockState({fails:0,lockUntil:0});
     _pinUnlockedThisSession=true;
     document.getElementById('pin-modal').classList.remove('open');
     var cb=_pinSuccessCallback; _pinSuccessCallback=null; _pinCancelCallback=null;
     if(cb) cb();
   } else {
-    document.getElementById('pin-error').textContent='Incorrect PIN. Try again.';
-    document.getElementById('pin-input').value='';
-    document.getElementById('pin-input').focus();
+    lock.fails=(lock.fails||0)+1;
+    if(lock.fails>=PIN_MAX_ATTEMPTS){
+      lock.lockUntil=Date.now()+PIN_LOCKOUT_MS; lock.fails=0;
+      setPinLockState(lock);
+      showPinLockMessage(lock.lockUntil);
+    } else {
+      setPinLockState(lock);
+      document.getElementById('pin-error').textContent='Incorrect PIN. Try again. ('+(PIN_MAX_ATTEMPTS-lock.fails)+' attempts left)';
+      document.getElementById('pin-input').value='';
+      document.getElementById('pin-input').focus();
+    }
   }
 }
 

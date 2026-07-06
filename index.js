@@ -1,9 +1,11 @@
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
+const crypto = require('crypto');
 
 const app = express();
 app.set('trust proxy', true);
+app.disable('x-powered-by'); // don't advertise "this server runs Express" to scanners
 
 // ── CORS: only allow requests from the app's own front-end ────────────
 // Locks out random websites/scripts running in a browser from calling
@@ -11,7 +13,7 @@ app.set('trust proxy', true);
 // gate below is still the main protection.
 const ALLOWED_ORIGIN = 'https://surekhabmspro.github.io';
 app.use(cors({ origin: ALLOWED_ORIGIN }));
-app.use(express.json());
+app.use(express.json({ limit: '200kb' })); // caps request size against oversized-payload abuse
 
 // ── BASIC RATE LIMITING ─────────────────────────────────────────────────
 // Blunts brute-force / scraping attempts against this API. No extra
@@ -78,9 +80,19 @@ if (!API_KEY) {
   console.error('FATAL: API_KEY environment variable is not set. Refusing to start unprotected.');
   process.exit(1);
 }
+// Timing-safe comparison: a plain !== check leaks tiny timing differences
+// that could theoretically help an attacker guess the key character by
+// character. This compares in constant time instead.
+function safeCompare(a, b) {
+  const bufA = Buffer.from(String(a));
+  const bufB = Buffer.from(String(b));
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
 function requireApiKey(req, res, next) {
-  const key = req.header('x-api-key');
-  if (key !== API_KEY) {
+  const key = req.header('x-api-key') || '';
+  if (!safeCompare(key, API_KEY)) {
+    console.warn('Rejected request with invalid API key from IP:', req.ip);
     return res.status(401).json({ error: 'Unauthorized' });
   }
   next();
