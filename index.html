@@ -1640,6 +1640,15 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 // DATA & CONSTANTS
 // =====================================================================
 var API_URL = 'https://pob-tracker-api.onrender.com';
+// Shared secret that must match the API_KEY environment variable set on the
+// Render backend. This blocks casual/automated discovery of the API (search
+// crawlers, random scans of *.onrender.com, a leaked link) — anyone without
+// this key gets a 401 instead of your data. It is NOT a substitute for
+// keeping this app file itself private: since this is a static front-end,
+// anyone who has this file can read this value out of it. Treat it as a
+// lock on the door, not a guarantee against someone who already has a key
+// to the house — see the security notes shared alongside this update.
+var API_KEY = 'qxHA4lMhdNK_7CfGcWJxekFKK5jJzSQggFDGBpKqtXY';
 var APP_VERSION = '2026.07.03.1';
 var SK = 'pob_v4';
 var DEFAULT_RANKS = ['POB Commander','Major','Captain','WO1','WO2','CSM','Sergeant','Corporal','Lance Corporal','Private','NCE'];
@@ -1694,7 +1703,9 @@ function flushOutbox(){
 
 // ── API helpers ────────────────────────────────────────────────────────
 function apiFetch(path, opts) {
-  return fetch(API_URL + path, Object.assign({headers:{'Content-Type':'application/json'}}, opts||{}))
+  opts = opts || {};
+  var headers = Object.assign({'Content-Type':'application/json','x-api-key':API_KEY}, opts.headers||{});
+  return fetch(API_URL + path, Object.assign({}, opts, {headers:headers}))
     .then(function(r){ return r.json(); });
 }
 function dbToTroop(r) {
