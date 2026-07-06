@@ -2204,6 +2204,13 @@ function saveSettings(){ D.settings.pob=document.getElementById('cfg-pob').value
 // =====================================================================
 // Simple non-cryptographic hash — sufficient to avoid storing PIN as plaintext
 // for this offline-first tool; not intended as high-security encryption.
+// Escapes free-text (Notes, Remarks) before it's inserted into the page, so
+// that pasted text like <script> or an onerror= attribute is displayed as
+// harmless plain text instead of being able to run as code in the browser.
+function escHtml(str){
+  if(str==null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
 function simpleHash(str){ var h=0; for(var i=0;i<str.length;i++){ h=((h<<5)-h)+str.charCodeAt(i); h|=0; } return 'h'+Math.abs(h).toString(36); }
 function hasPinSet(){ return !!(D.security&&D.security.pinHash); }
 var _pinSuccessCallback=null;
@@ -2714,7 +2721,7 @@ function renderTable(){
   container.innerHTML=rows.map(function(p){
     var detailLines=[];
     if(p.commander&&troopById(p.commander)) detailLines.push('<span class="pc-cdr">⭐ Cdr: '+upLabel(troopById(p.commander).rank,troopById(p.commander).name)+'</span>');
-    if(p.remarks) detailLines.push('<span class="pc-remarks">'+p.remarks+'</span>');
+    if(p.remarks) detailLines.push('<span class="pc-remarks">'+escHtml(p.remarks)+'</span>');
     if(p.route) detailLines.push('<span>📍 '+p.route+'</span>');
     return '<div class="patrol-card" data-accent="'+typeAccentCls(p.type)+'">'+
       '<div class="patrol-card-header">'+
@@ -2850,7 +2857,7 @@ function renderRoster(){
       (t.phoneLocal?'<span class="pc-chip">📞 <a href="tel:'+t.phoneLocal.replace(/\s+/g,'')+'" style="color:var(--tan);text-decoration:none;font-weight:700;">'+t.phoneLocal+'</a></span>':'')+
       (t.phoneWa?'<span class="pc-chip">💬 <a href="https://wa.me/'+t.phoneWa.replace(/[^0-9]/g,'')+'" target="_blank" style="color:var(--tan);text-decoration:none;font-weight:700;">'+t.phoneWa+'</a></span>':'')+
       '</div>'+
-      (t.notes?'<div class="notes-field">'+t.notes+'</div>':'')+
+      (t.notes?'<div class="notes-field">'+escHtml(t.notes)+'</div>':'')+
       '<div class="troop-card-btns">'+
       '<button class="rb-btn rb-info" onclick="showProfile(\''+t.id+'\')">Profile</button>'+
       '<button class="rb-btn rb-primary" onclick="confirmEditTroop(\''+t.id+'\')">Edit</button>'+
@@ -2908,7 +2915,7 @@ function showProfile(id, fromArch){
     '<div><div class="pf-label">📞 LOCAL NO.</div><div class="pf-value">'+(t.phoneLocal?'<a href="tel:'+t.phoneLocal.replace(/\s+/g,'')+'" style="color:var(--tan);text-decoration:none;">'+t.phoneLocal+'</a>':'—')+'</div></div>'+
     '<div><div class="pf-label">💬 WHATSAPP NO.</div><div class="pf-value">'+(t.phoneWa?'<a href="https://wa.me/'+t.phoneWa.replace(/[^0-9]/g,'')+'" target="_blank" style="color:var(--tan);text-decoration:none;">'+t.phoneWa+'</a>':'—')+'</div></div>'+
     '</div>'+
-    (t.notes?'<div class="notes-field">'+t.notes+'</div>':'')+
+    (t.notes?'<div class="notes-field">'+escHtml(t.notes)+'</div>':'')+
     '</div>'+
     '<div class="section-hdr">Statistics</div>'+
     '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;">'+
@@ -2935,7 +2942,7 @@ function showProfile(id, fromArch){
           '<span class="ph-date">'+fmtDate(p.date)+'</span> '+
           '<span class="'+typeBadge(p.type)+'" style="font-size:9px;">'+p.type+'</span>'+
           (p.area?'<div class="ph-area">'+p.area+'</div>':'')+
-          (p.remarks?'<div class="ph-remarks">'+p.remarks+'</div>':'')+
+          (p.remarks?'<div class="ph-remarks">'+escHtml(p.remarks)+'</div>':'')+
           '</div>'+
           '<span class="ph-dur">'+(p.duration?p.duration+'h':'—')+'</span>'+
           '</div></div>';
@@ -2992,7 +2999,7 @@ function viewFullRecord(){
   var win=window.open('','_blank','width=960,height=750');
   var rowsHtml='';
   if(tp.length===0){ rowsHtml='<tr><td colspan="6" style="text-align:center;color:#888;padding:20px;">No patrol records.</td></tr>'; }
-  else { monthKeys.forEach(function(mk){var mo=byMonth[mk];var moDate=new Date(mk+'-01T12:00:00');var moLabel=moDate.toLocaleString('default',{month:'long',year:'numeric'});var moH=mo.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0); rowsHtml+='<tr style="background:#e8f0e8;"><td colspan="6" style="font-family:\'Courier New\',monospace;font-size:11px;font-weight:700;color:#2d5a3d;letter-spacing:1px;text-transform:uppercase;padding:7px 10px;">'+moLabel+' · '+mo.length+' patrols · '+moH.toFixed(1)+'h</td></tr>'; mo.forEach(function(p){ rowsHtml+='<tr><td style="font-family:\'Courier New\',monospace;font-size:11px;color:#2d5a3d;white-space:nowrap;">'+(p.ptlId||'—')+'</td><td style="font-size:11px;white-space:nowrap;">'+fmtDate(p.date)+'</td><td><span style="display:inline-block;padding:2px 7px;border-radius:2px;font-size:10px;font-weight:700;background:#eef4ee;border:1px solid #9aaa9a;color:#333;">'+p.type+'</span></td><td style="font-size:12px;color:#555;">'+(p.area||'—')+'</td><td style="font-family:\'Courier New\',monospace;font-size:11px;">'+(p.duration?p.duration+'h':'—')+'</td><td style="font-size:11px;color:#777;">'+(p.remarks||'—')+'</td></tr>'; }); }); }
+  else { monthKeys.forEach(function(mk){var mo=byMonth[mk];var moDate=new Date(mk+'-01T12:00:00');var moLabel=moDate.toLocaleString('default',{month:'long',year:'numeric'});var moH=mo.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0); rowsHtml+='<tr style="background:#e8f0e8;"><td colspan="6" style="font-family:\'Courier New\',monospace;font-size:11px;font-weight:700;color:#2d5a3d;letter-spacing:1px;text-transform:uppercase;padding:7px 10px;">'+moLabel+' · '+mo.length+' patrols · '+moH.toFixed(1)+'h</td></tr>'; mo.forEach(function(p){ rowsHtml+='<tr><td style="font-family:\'Courier New\',monospace;font-size:11px;color:#2d5a3d;white-space:nowrap;">'+(p.ptlId||'—')+'</td><td style="font-size:11px;white-space:nowrap;">'+fmtDate(p.date)+'</td><td><span style="display:inline-block;padding:2px 7px;border-radius:2px;font-size:10px;font-weight:700;background:#eef4ee;border:1px solid #9aaa9a;color:#333;">'+p.type+'</span></td><td style="font-size:12px;color:#555;">'+(p.area||'—')+'</td><td style="font-family:\'Courier New\',monospace;font-size:11px;">'+(p.duration?p.duration+'h':'—')+'</td><td style="font-size:11px;color:#777;">'+escHtml(p.remarks||'—')+'</td></tr>'; }); }); }
   win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Full Record — '+upLabel(t.rank,t.name)+'</title><style>body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:14px;}.hdr{text-align:center;border-bottom:2px solid #2d5a3d;padding-bottom:14px;margin-bottom:20px;}.hdr h2{margin:0 0 4px;font-size:20px;color:#1a3a2a;}.hdr p{margin:2px 0;font-size:11px;color:#555;}.info-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;}.info-box{background:#f5f5f5;border:1px solid #ccc;border-radius:4px;padding:10px;text-align:center;}.info-num{font-size:22px;font-weight:700;color:#2d5a3d;font-family:\'Courier New\',monospace;}.info-lbl{font-size:10px;color:#666;letter-spacing:1px;text-transform:uppercase;margin-top:3px;}.sub-hdr{font-family:\'Courier New\',monospace;font-size:10px;color:#2d5a3d;letter-spacing:2px;text-transform:uppercase;margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid #ccc;}table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;}th{background:#2d5a3d;color:#fff;font-family:\'Courier New\',monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:8px 10px;text-align:left;}td{padding:7px 10px;border-bottom:1px solid #e0e8e0;word-wrap:break-word;vertical-align:top;}tr:hover td{background:#f8fff8;}.footer{margin-top:20px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}@media print{@page{margin:1cm;}.no-print{display:none!important;}}</style></head><body>'+
   '<div class="hdr"><div style="font-size:10px;color:#999;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;">'+(s.classification||'')+(s.classification?' — ':'')+''+(s.pob||'POB Mobaye')+'</div><h2>COMPLETE SERVICE RECORD</h2><p style="font-size:14px;font-weight:700;color:#1a3a2a;">'+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>'+(t.sn?' · SN: '+t.sn:'')+'</p><p>Unit: '+(t.unit||'—')+'</p><p>Period: <strong>'+(earliest?fmtDateLong(earliest):'N/A')+' — '+fmtDateLong(todayStr)+'</strong></p><p style="color:#888;">Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p></div>'+
   '<div class="info-grid"><div class="info-box"><div class="info-num">'+tp.length+'</div><div class="info-lbl">Total Patrols</div></div><div class="info-box"><div class="info-num">'+totalH.toFixed(1)+'</div><div class="info-lbl">Total Hours</div></div><div class="info-box"><div class="info-num">'+sectors.length+'</div><div class="info-lbl">Sectors</div></div><div class="info-box"><div class="info-num">'+monthKeys.length+'</div><div class="info-lbl">Active Months</div></div></div>'+
@@ -3180,7 +3187,7 @@ function printReport(){
 
   var patrolRows=patrols.slice().sort(function(a,b){return a.date.localeCompare(b.date);}).map(function(p){
     var cdr=p.commander&&troopById(p.commander)?upLabel(troopById(p.commander).rank,troopById(p.commander).name):'—';
-    return '<tr><td><strong>'+(p.ptlId||'—')+'</strong></td><td>'+fmtDate(p.date)+'</td><td>'+p.type+'</td><td>'+(p.area||'—')+'</td><td style="font-size:10.5px;">'+cdr+'</td><td style="text-align:center;">'+(p.duration?p.duration+'h':'—')+'</td><td style="font-size:10.5px;font-style:italic;">'+(p.remarks||p.route||'—')+'</td></tr>';
+    return '<tr><td><strong>'+(p.ptlId||'—')+'</strong></td><td>'+fmtDate(p.date)+'</td><td>'+p.type+'</td><td>'+(p.area||'—')+'</td><td style="font-size:10.5px;">'+cdr+'</td><td style="text-align:center;">'+(p.duration?p.duration+'h':'—')+'</td><td style="font-size:10.5px;font-style:italic;">'+escHtml(p.remarks||p.route||'—')+'</td></tr>';
   }).join('');
 
   var allT=sortTroops(D.troops);
@@ -3273,7 +3280,7 @@ function printPatrolSummary(){
       '<td style="font-size:11px;">'+cdr+'</td>'+
       '<td style="text-align:center;">'+(p.duration?p.duration+'h':'—')+'</td>'+
       '<td style="text-align:center;">'+(p.troops||[]).length+'</td>'+
-      '<td style="font-size:11px;font-style:italic;">'+(p.remarks||p.route||'—')+'</td>'+
+      '<td style="font-size:11px;font-style:italic;">'+escHtml(p.remarks||p.route||'—')+'</td>'+
       '</tr>';
   }).join('');
 

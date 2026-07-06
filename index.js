@@ -44,6 +44,19 @@ setInterval(() => {
 }, RATE_LIMIT_WINDOW_MS).unref();
 app.use(rateLimiter);
 
+// ── SECURITY HEADERS ─────────────────────────────────────────────────
+// Standard hardening headers, set by hand so no extra package (like
+// "helmet") needs to be installed. These tell browsers: don't guess file
+// types, don't let this API be framed by another site, and don't leak
+// this URL as a referrer to other sites.
+app.use(function(req, res, next) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  next();
+});
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
@@ -106,7 +119,7 @@ app.get('/troops', async (req, res) => {
       'SELECT * FROM troops WHERE archived = FALSE ORDER BY name'
     );
     res.json(rows);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
 });
 
 // ── TROOPS (archived) ─────────────────────────────────────────────────
@@ -116,7 +129,7 @@ app.get('/archived', async (req, res) => {
       'SELECT * FROM troops WHERE archived = TRUE ORDER BY name'
     );
     res.json(rows);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
 });
 
 // ── UPSERT TROOP ──────────────────────────────────────────────────────
@@ -131,7 +144,7 @@ app.post('/troops', async (req, res) => {
       [id, name, rank || '', unit || '', sn || '', status || 'available', notes || '', phoneLocal || '', phoneWa || '', bloodGroup || null, deploymentDate || null, weaponNumber || null]
     );
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
 });
 
 // ── DELETE TROOP ──────────────────────────────────────────────────────
@@ -139,7 +152,7 @@ app.delete('/troops/:id', async (req, res) => {
   try {
     await pool.query('DELETE FROM troops WHERE id = $1', [req.params.id]);
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
 });
 
 // ── ARCHIVE / UNARCHIVE TROOP ─────────────────────────────────────────
@@ -150,7 +163,7 @@ app.patch('/troops/:id/archive', async (req, res) => {
       [req.body.archived, req.params.id]
     );
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
 });
 
 // ── PATROLS ───────────────────────────────────────────────────────────
@@ -160,7 +173,7 @@ app.get('/patrols', async (req, res) => {
       'SELECT * FROM patrols ORDER BY date DESC'
     );
     res.json(rows);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
 });
 
 // ── UPSERT PATROL ─────────────────────────────────────────────────────
@@ -177,7 +190,7 @@ app.post('/patrols', async (req, res) => {
        parseFloat(duration) || null, route || '', remarks || '', commander || null, (commander_auto === null || commander_auto === undefined) ? null : !!commander_auto]
     );
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
 });
 
 // ── DELETE PATROL ─────────────────────────────────────────────────────
@@ -185,7 +198,7 @@ app.delete('/patrols/:id', async (req, res) => {
   try {
     await pool.query('DELETE FROM patrols WHERE id = $1', [req.params.id]);
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
 });
 
 // ── AUDIT LOG ─────────────────────────────────────────────────────────
@@ -195,7 +208,7 @@ app.get('/audit', async (req, res) => {
       'SELECT * FROM audit_log ORDER BY ts DESC LIMIT 500'
     );
     res.json(rows);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
 });
 
 app.post('/audit', async (req, res) => {
@@ -205,7 +218,7 @@ app.post('/audit', async (req, res) => {
       [req.body.ts || new Date().toISOString(), req.body.msg]
     );
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
 });
 
 // ── APP CONFIG (settings, patrol types, sectors, routes, ranks) ───────
@@ -215,7 +228,7 @@ app.get('/config', async (req, res) => {
     const config = {};
     rows.forEach(r => { config[r.key] = r.value; });
     res.json(config);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
 });
 
 app.post('/config', async (req, res) => {
@@ -227,7 +240,7 @@ app.post('/config', async (req, res) => {
       [key, JSON.stringify(value)]
     );
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
 });
 
 // ── START ─────────────────────────────────────────────────────────────
