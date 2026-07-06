@@ -1648,7 +1648,7 @@ var API_URL = 'https://pob-tracker-api.onrender.com';
 // anyone who has this file can read this value out of it. Treat it as a
 // lock on the door, not a guarantee against someone who already has a key
 // to the house — see the security notes shared alongside this update.
-var API_KEY = 'qxHA4lMhdNK_7CfGcWJxekFKK5jJzSQggFDGBpKqtXY';
+var API_KEY = 'ClCsXG9eY87D-PgpBJ7pxBMmHZpcRNAM0bnWBevOC1U';
 var APP_VERSION = '2026.07.03.1';
 var SK = 'pob_v4';
 var DEFAULT_RANKS = ['POB Commander','Major','Captain','WO1','WO2','CSM','Sergeant','Corporal','Lance Corporal','Private','NCE'];
@@ -2087,6 +2087,13 @@ function toggleTheme(){ darkMode=!darkMode; document.body.classList.toggle('ligh
 // =====================================================================
 var _moreMenuTabs=['inactive','hours-ranking','report','settings'];
 function showTab(id){
+  // PIN gate: Dashboard stays open to everyone. Every other section
+  // requires the PIN once per session — after that, _pinUnlockedThisSession
+  // (set inside submitPin) means no further prompts until locked again.
+  if(id!=='dashboard' && hasPinSet() && !_pinUnlockedThisSession){
+    requirePin(function(){ _showTabInner(id); }, function(){});
+    return;
+  }
   _showTabInner(id);
 }
 function _showTabInner(id){
@@ -2201,6 +2208,25 @@ var _pinSuccessCallback=null;
 var _pinCancelCallback=null;
 
 var _pinUnlockedThisSession=false;
+// ── AUTO RE-LOCK ─────────────────────────────────────────────────────
+// If the phone is put down / app backgrounded for a while, the session
+// unlock is cleared and the view snaps back to Dashboard. This stops
+// someone picking up an unlocked, unattended phone from browsing every
+// section without ever seeing the PIN prompt again. Editing/deleting a
+// record mid-session is unaffected — this only re-arms the PIN gate.
+var _hiddenAt=null;
+var AUTO_LOCK_AFTER_MS=60000; // re-lock if away for 1+ minute
+document.addEventListener('visibilitychange',function(){
+  if(document.hidden){ _hiddenAt=Date.now(); }
+  else if(_hiddenAt!==null){
+    var awayMs=Date.now()-_hiddenAt; _hiddenAt=null;
+    if(hasPinSet() && awayMs>AUTO_LOCK_AFTER_MS){
+      _pinUnlockedThisSession=false;
+      var active=document.querySelector('.section.active');
+      if(active && active.id!=='dashboard'){ showTab('dashboard'); }
+    }
+  }
+});
 function requirePin(onSuccess,onCancel){
   if(!hasPinSet()){ onSuccess(); return; }
   if(_pinUnlockedThisSession){ onSuccess(); return; }
@@ -2267,7 +2293,7 @@ function renderPinStatus(){
   var rmBtn=document.getElementById('pin-remove-btn');
   if(!txt) return;
   if(hasPinSet()){
-    txt.textContent='PIN protection is ON — required for Log Patrol access, and to edit, archive, or delete records.';
+    txt.textContent='PIN protection is ON — required to open any section except Dashboard, and to edit, archive, or delete records. Re-locks automatically if the app is left idle.';
     txt.style.color='#5ee8b8';
     setBtn.textContent='Change PIN';
     rmBtn.style.display='';
