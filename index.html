@@ -1999,17 +1999,18 @@ function mostActiveBlockHTML(patrols,historyMode){
   var histBtn=historyMode?'':'<button class="btn btn-info btn-sm btn-print" onclick="showTab(\'history\')">📜 History</button>';
   if(!res.winner){
     if(historyMode) return '<div style="color:var(--text-muted);font-size:12px;">No data</div>';
-    return '<div style="margin-top:12px;padding:10px;background:rgba(230,179,74,0.08);border:1px solid rgba(230,179,74,0.2);border-radius:8px;font-size:13px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">'+
-      '<span style="color:var(--text);">⭐ Most Active: <span style="opacity:0.7;">No data yet</span></span>'+histBtn+'</div>';
+    return '<div style="margin-top:12px;padding:10px;background:rgba(230,179,74,0.08);border:1px solid rgba(230,179,74,0.2);border-radius:8px;font-size:13px;">'+
+      '<div style="color:var(--text);">⭐ Most Active: <span style="opacity:0.7;">No data yet</span></div>'+
+      (histBtn?'<div style="display:flex;justify-content:flex-end;margin-top:4px;">'+histBtn+'</div>':'')+'</div>';
   }
   var w=res.winner;
   var topMargin=historyMode?'0':'12px';
   var html='<div style="margin-top:'+topMargin+';padding:10px;background:rgba(230,179,74,0.08);border:1px solid rgba(230,179,74,0.2);border-radius:8px;font-size:13px;">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">'+
-    '<span style="color:var(--tan);font-weight:700;">⭐ Most Active: <strong style="color:#1a1206;background:var(--tan);padding:1px 7px;border-radius:5px;text-transform:uppercase;letter-spacing:0.3px;">'+upLabel(w.person.rank,w.person.name)+'</strong></span>'+
+    '<div style="color:var(--tan);font-weight:700;">⭐ Most Active: <strong style="color:#1a1206;background:var(--tan);padding:1px 7px;border-radius:5px;text-transform:uppercase;letter-spacing:0.3px;">'+upLabel(w.person.rank,w.person.name)+'</strong></div>'+
+    '<div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px;">'+
+    '<div style="color:var(--text-muted);flex:1;min-width:0;">'+w.hours.toFixed(1)+'h | '+w.count+' patrols</div>'+
     histBtn+
-    '</div>'+
-    '<div style="color:var(--text-muted);margin-top:2px;"> '+w.hours.toFixed(1)+'h | '+w.count+' patrols</div></div>';
+    '</div></div>';
   if(res.officerRecord){
     var o=res.officerRecord;
     html+='<div style="margin-top:8px;padding:10px;background:rgba(120,150,220,0.08);border:1px solid rgba(120,150,220,0.2);border-radius:8px;font-size:13px;">'+
