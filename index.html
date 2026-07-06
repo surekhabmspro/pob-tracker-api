@@ -582,6 +582,8 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 .patrol-card-actions{display:flex;gap:6px;align-items:center;flex-shrink:0;}
 /* Icon chips for sector/duration/troop-count meta row — replaces run-on inline text */
 .pc-chiprow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:2px;}
+.pc-chiprow-oneline{display:flex;flex-wrap:nowrap;gap:5px;align-items:center;margin-top:2px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:1px;}
+.pc-chiprow-oneline .pc-chip{flex-shrink:0;font-size:11.5px;padding:3px 6px;}
 .pc-chip{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;color:var(--text-muted);
   background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 8px;
   font-family:'Courier New',monospace;white-space:nowrap;}
@@ -2837,16 +2839,22 @@ function renderRoster(){
       statusBadge(t.status||'available')+
       (isAvailable(t)&&ds>7?'<span class="inactive-badge">'+(ds===9999?'N/A':ds+'d')+'</span>':'')+
       '</div></div>'+
-      '<div class="pc-chiprow" style="margin-bottom:6px;">'+
+      '<div class="pc-chiprow" style="margin-bottom:4px;">'+
       '<span class="pc-chip">📋 <strong>'+c+'</strong></span>'+
       '<span class="pc-chip">⏱ <strong>'+patrolHours(t.id).toFixed(1)+'h</strong></span>'+
       '<span class="pc-chip">📅 <strong>'+mo+'</strong> this mo.</span>'+
       '<span class="pc-chip">🕒 '+(lp?fmtDateLong(lp):'Never')+'</span>'+
       '</div>'+
+      '<div class="pc-chiprow-oneline" style="margin-bottom:6px;">'+
+      '<span class="pc-chip">🩸 <strong style="color:var(--red-light);">'+(t.bloodGroup||'N/A')+'</strong></span>'+
+      (t.phoneLocal?'<span class="pc-chip">📞 <a href="tel:'+t.phoneLocal.replace(/\s+/g,'')+'" style="color:var(--tan);text-decoration:none;font-weight:700;">'+t.phoneLocal+'</a></span>':'')+
+      (t.phoneWa?'<span class="pc-chip">💬 <a href="https://wa.me/'+t.phoneWa.replace(/[^0-9]/g,'')+'" target="_blank" style="color:var(--tan);text-decoration:none;font-weight:700;">'+t.phoneWa+'</a></span>':'')+
+      '</div>'+
       (t.notes?'<div class="notes-field">'+t.notes+'</div>':'')+
       '<div class="troop-card-btns">'+
       '<button class="rb-btn rb-info" onclick="showProfile(\''+t.id+'\')">Profile</button>'+
       '<button class="rb-btn rb-primary" onclick="confirmEditTroop(\''+t.id+'\')">Edit</button>'+
+      '<button class="rb-btn rb-danger-soft" onclick="showCompatibleDonors(\''+t.id+'\')" title="Compatible Blood Donors">🩸 Donors</button>'+
       '<button class="rb-btn rb-warning" onclick="archiveTroop(\''+t.id+'\')">Archive</button>'+
       '<button class="del-btn" onclick="confirmDel(\'troop\',\''+t.id+'\')">×</button>'+
       '</div></div>';
@@ -2939,8 +2947,8 @@ function showProfile(id, fromArch){
 // Compatible Blood Donors: uses the blood group of whichever troop's profile
 // is currently open, and lists other currently-deployed troops sharing that
 // exact blood group — for fast emergency donor identification.
-function showCompatibleDonors(){
-  var id=document.getElementById('profile-modal').dataset.troopId;
+function showCompatibleDonors(id){
+  if(!id) id=document.getElementById('profile-modal').dataset.troopId;
   var t=D.troops.find(function(x){return x.id===id;})||D.archived.find(function(x){return x.id===id;});
   if(!t) return;
   document.getElementById('donors-title').textContent='Compatible Donors — '+(t.bloodGroup||'Unknown')+' ('+t.rank.toUpperCase()+' '+t.name.toUpperCase()+')';
