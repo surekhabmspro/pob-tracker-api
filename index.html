@@ -385,8 +385,11 @@ body.light-mode{background:
   .rep-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
   .rep-grid .troop-row{margin-bottom:0;}
 
-  /* Settings cards + Backup modal cards: 2-col grid */
-  .settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;}
+  /* Settings cards + Backup modal cards: masonry-style 2-col layout so
+     cards of different heights pack tightly with no leftover gaps
+     (a strict row-based grid would leave empty space under shorter cards) */
+  .settings-grid{display:block;column-count:2;column-gap:16px;}
+  .settings-grid .card{display:inline-block;width:100%;margin:0 0 16px;break-inside:avoid;-webkit-column-break-inside:avoid;}
 
   /* Fairness rows: bigger and more readable */
 }
@@ -411,8 +414,10 @@ body.light-mode .sidebar-item.active{background:#f5e8cc;color:var(--tan);}
 
 /* ── CARDS ── */
 .card{background:linear-gradient(180deg,var(--surface) 0%,var(--surface2) 130%);border:var(--card-border);border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:var(--card-bevel),var(--shadow-md);max-width:100%;overflow:hidden;transition:box-shadow 0.25s var(--ease),transform 0.25s var(--ease),border-color 0.25s;}
-.settings-grid{display:flex;flex-direction:column;gap:14px;}
-.settings-grid .card{margin-bottom:0;}
+@media (max-width:899px){
+  .settings-grid{display:flex;flex-direction:column;gap:14px;}
+  .settings-grid .card{margin-bottom:0;}
+}
 .card-title{font-size:12.5px;font-weight:700;color:var(--tan);letter-spacing:2px;text-transform:uppercase;
   margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);
   font-family:var(--font-mono);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;}
@@ -488,6 +493,7 @@ select option{background:var(--surface2);color:var(--text);}
 .btn-danger{background:linear-gradient(155deg,var(--red-light),var(--red));color:#ffffff;box-shadow:0 3px 10px rgba(168,40,40,0.35),inset 0 1px 0 rgba(255,255,255,0.15);}
 .btn-warning{background:linear-gradient(155deg,var(--orange),#b8681f);color:#ffffff;box-shadow:0 3px 10px rgba(240,160,75,0.35),inset 0 1px 0 rgba(255,255,255,0.15);}
 .btn-info{background:linear-gradient(155deg,var(--blue),#3a5fc0);color:#ffffff;box-shadow:0 3px 10px rgba(91,141,239,0.35),inset 0 1px 0 rgba(255,255,255,0.15);}
+.btn-success{background:linear-gradient(155deg,var(--green-mid),#0a6b48);color:#ffffff;box-shadow:0 3px 10px rgba(15,157,110,0.35),inset 0 1px 0 rgba(255,255,255,0.15);}
 .btn-ghost{background:var(--surface2);border:1.5px solid var(--border);color:var(--text);}
 .btn-ghost:active{border-color:var(--tan);color:var(--text);}
 .btn-sm{padding:8px 13px;font-size:13.5px;min-height:36px;}
@@ -1177,8 +1183,8 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     <div class="card-title">System</div>
     <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">Protected by your Security PIN, if one is set.</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      <button class="btn btn-ghost" onclick="openAuditModal()">📝 View Audit Log</button>
-      <button class="btn btn-ghost" onclick="openBackupModal()">💾 Backup &amp; Restore</button>
+      <button class="btn btn-info" onclick="openAuditModal()">📝 View Audit Log</button>
+      <button class="btn btn-success" onclick="openBackupModal()">💾 Backup &amp; Restore</button>
     </div>
   </div>
   <div class="card">
