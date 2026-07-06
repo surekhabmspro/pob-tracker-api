@@ -3,8 +3,46 @@ const { Pool } = require('pg');
 const cors = require('cors');
 
 const app = express();
-app.use(cors());
+app.set('trust proxy', true);
+
+// ── CORS: only allow requests from the app's own front-end ────────────
+// Locks out random websites/scripts running in a browser from calling
+// this API. This is one extra layer, not the only one — the API key
+// gate below is still the main protection.
+const ALLOWED_ORIGIN = 'https://surekhabmspro.github.io';
+app.use(cors({ origin: ALLOWED_ORIGIN }));
 app.use(express.json());
+
+// ── BASIC RATE LIMITING ─────────────────────────────────────────────────
+// Blunts brute-force / scraping attempts against this API. No extra
+// package needed — just an in-memory counter per IP address that resets
+// every minute. Not as strong as a dedicated service, but a real
+// deterrent for an app this size, and completely free.
+const RATE_LIMIT_MAX = 120;         // max requests allowed per IP per window
+const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute window
+const _rateHits = new Map();
+function rateLimiter(req, res, next) {
+  const ip = req.ip || 'unknown';
+  const now = Date.now();
+  const entry = _rateHits.get(ip);
+  if (!entry || now - entry.start > RATE_LIMIT_WINDOW_MS) {
+    _rateHits.set(ip, { start: now, count: 1 });
+    return next();
+  }
+  entry.count++;
+  if (entry.count > RATE_LIMIT_MAX) {
+    return res.status(429).json({ error: 'Too many requests, slow down.' });
+  }
+  next();
+}
+// Clears old entries periodically so this stays small in memory.
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of _rateHits) {
+    if (now - entry.start > RATE_LIMIT_WINDOW_MS) _rateHits.delete(ip);
+  }
+}, RATE_LIMIT_WINDOW_MS).unref();
+app.use(rateLimiter);
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
