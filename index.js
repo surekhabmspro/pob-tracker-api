@@ -11,6 +11,30 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
+// ── API KEY GATE ─────────────────────────────────────────────────────
+// Every data route below requires a matching x-api-key header. Without
+// this, anyone who discovers this URL (search-engine crawlers, random
+// scans of *.onrender.com, a leaked link) could read or edit every troop,
+// patrol, and the PIN hash with a single request — the app's PIN only
+// protected the front-end UI, not this API.
+//
+// Set the API_KEY environment variable in the Render dashboard (Settings
+// → Environment) to a long random value. If it's not set, the server
+// refuses to start, so a misconfigured deploy fails loudly instead of
+// silently running unprotected.
+const API_KEY = process.env.API_KEY;
+if (!API_KEY) {
+  console.error('FATAL: API_KEY environment variable is not set. Refusing to start unprotected.');
+  process.exit(1);
+}
+function requireApiKey(req, res, next) {
+  const key = req.header('x-api-key');
+  if (key !== API_KEY) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  next();
+}
+
 // ── SELF-MIGRATION: ensure newer troop columns exist ────────────────────
 // Runs once on boot. Safe to run every deploy — IF NOT EXISTS makes it a no-op
 // once the columns are already there.
@@ -26,11 +50,16 @@ async function migrateSchema() {
 }
 
 // ── VERSION (bump this string on every backend deploy) ─────────────────
+// Left open — reveals nothing about your data.
 const API_VERSION = '2026.07.05.1';
 app.get('/version', (_, res) => res.json({ version: API_VERSION }));
 
 // ── HEALTH ────────────────────────────────────────────────────────────
+// Left open — just a heartbeat, reveals nothing about your data.
 app.get('/health', (_, res) => res.json({ status: 'ok', time: new Date() }));
+
+// Everything below this line handles real data and requires the API key.
+app.use(requireApiKey);
 
 // ── TROOPS (active) ───────────────────────────────────────────────────
 app.get('/troops', async (req, res) => {
