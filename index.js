@@ -12,8 +12,20 @@ app.disable('x-powered-by'); // don't advertise "this server runs Express" to sc
 // this API. This is one extra layer, not the only one — the API key
 // gate below is still the main protection.
 const ALLOWED_ORIGIN = 'https://surekhabmspro.github.io';
-app.use(cors({ origin: ALLOWED_ORIGIN }));
+app.use(cors({
+  origin: ALLOWED_ORIGIN,
+  methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'x-api-key']
+}));
 app.use(express.json({ limit: '200kb' })); // caps request size against oversized-payload abuse
+
+// ── REQUEST LOG ───────────────────────────────────────────────────────
+// A simple visible trail in Render's Logs tab of who hit what and when —
+// useful if you ever need to check whether something unusual happened.
+app.use((req, res, next) => {
+  console.log(new Date().toISOString(), req.method, req.path, 'from', req.ip);
+  next();
+});
 
 // ── BASIC RATE LIMITING ─────────────────────────────────────────────────
 // Blunts brute-force / scraping attempts against this API. No extra
@@ -98,6 +110,20 @@ function requireApiKey(req, res, next) {
   next();
 }
 
+// ── INPUT VALIDATION ──────────────────────────────────────────────────
+// Even with a valid key, this stops obviously malformed or oversized
+// data from being written — caps free-text field lengths and makes sure
+// an "id" is actually a real, short string before it ever reaches the
+// database.
+function clip(v, max) {
+  if (v === null || v === undefined) return '';
+  const s = String(v);
+  return s.length > max ? s.slice(0, max) : s;
+}
+function isValidId(v) {
+  return typeof v === 'string' && v.trim().length > 0 && v.length <= 100;
+}
+
 // ── SELF-MIGRATION: ensure newer troop columns exist ────────────────────
 // Runs once on boot. Safe to run every deploy — IF NOT EXISTS makes it a no-op
 // once the columns are already there.
@@ -148,12 +174,15 @@ app.get('/archived', async (req, res) => {
 app.post('/troops', async (req, res) => {
   try {
     const { id, name, rank, unit, sn, status, notes, phoneLocal, phoneWa, bloodGroup, deploymentDate, weaponNumber } = req.body;
+    if (!isValidId(id)) return res.status(400).json({ error: 'Invalid troop id.' });
     await pool.query(
       `INSERT INTO troops (id, name, rank, unit, sn, status, notes, phone_local, phone_wa, blood_group, deployment_date, weapon_number)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        ON CONFLICT (id) DO UPDATE
          SET name=$2, rank=$3, unit=$4, sn=$5, status=$6, notes=$7, phone_local=$8, phone_wa=$9, blood_group=$10, deployment_date=$11, weapon_number=$12`,
-      [id, name, rank || '', unit || '', sn || '', status || 'available', notes || '', phoneLocal || '', phoneWa || '', bloodGroup || null, deploymentDate || null, weaponNumber || null]
+      [id, clip(name,200), clip(rank||'',100), clip(unit||'',100), clip(sn||'',50), clip(status||'available',30),
+       clip(notes||'',5000), clip(phoneLocal||'',30), clip(phoneWa||'',30), bloodGroup?clip(bloodGroup,10):null,
+       deploymentDate || null, weaponNumber?clip(weaponNumber,100):null]
     );
     res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
@@ -192,14 +221,16 @@ app.get('/patrols', async (req, res) => {
 app.post('/patrols', async (req, res) => {
   try {
     const { id, ptl_id, date, type, troops, area, duration, route, remarks, commander, commander_auto } = req.body;
+    if (!isValidId(id)) return res.status(400).json({ error: 'Invalid patrol id.' });
+    if (!Array.isArray(troops)) return res.status(400).json({ error: 'Invalid troops list.' });
     await pool.query(
       `INSERT INTO patrols (id, ptl_id, date, type, troops, area, duration, route, remarks, commander, commander_auto)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        ON CONFLICT (id) DO UPDATE
          SET ptl_id=$2, date=$3, type=$4, troops=$5, area=$6,
              duration=$7, route=$8, remarks=$9, commander=$10, commander_auto=$11`,
-      [id, ptl_id || '', date, type || '', troops || [], area || '',
-       parseFloat(duration) || null, route || '', remarks || '', commander || null, (commander_auto === null || commander_auto === undefined) ? null : !!commander_auto]
+      [id, clip(ptl_id||'',50), date, clip(type||'',50), troops || [], clip(area||'',200),
+       parseFloat(duration) || null, clip(route||'',500), clip(remarks||'',5000), commander || null, (commander_auto === null || commander_auto === undefined) ? null : !!commander_auto]
     );
     res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
@@ -254,6 +285,11 @@ app.post('/config', async (req, res) => {
     res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
 });
+
+// ── CATCH-ALL ─────────────────────────────────────────────────────────
+// Any URL that isn't one of the routes above gets a plain, uninformative
+// 404 — doesn't hint at what routes do or don't exist.
+app.use((req, res) => { res.status(404).json({ error: 'Not found' }); });
 
 // ── START ─────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
