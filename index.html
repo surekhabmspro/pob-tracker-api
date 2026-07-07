@@ -963,6 +963,8 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 <div id="dashboard" class="section active">
   <div id="dash-alerts"></div>
 
+  <button class="btn btn-primary btn-full" style="margin-bottom:14px;font-size:14.5px;" onclick="openSuggestTeamModal()">🎯 Suggest Patrol Team</button>
+
   <!-- Stats Bar — 4 cols mobile, 4-5 cols desktop via CSS -->
   <div class="stat-grid" id="dash-stats"></div>
 
@@ -1231,6 +1233,26 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     <div id="pin-settings-alert" style="margin-top:8px;"></div>
   </div>
   <div class="card">
+    <div class="card-title">Patrol Participation Target</div>
+    <p style="color:var(--text-muted);font-size:13px;margin-bottom:10px;">One shared target % applied to every troop marked <strong>Role = Administration</strong>. Mark someone as Administration in Add/Edit Troop — this percentage applies to them automatically.</p>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <input type="number" id="cfg-admin-pct" min="0" max="100" style="max-width:90px;">
+      <span style="font-size:13px;color:var(--text-muted);">%</span>
+      <button class="btn btn-ghost btn-sm" onclick="saveAdminTargetPct()">Save</button>
+    </div>
+    <div id="admin-pct-alert" style="margin-top:8px;"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Renumber Patrol Numbers</div>
+    <p style="color:var(--text-muted);font-size:13px;margin-bottom:10px;">One-time fix so patrol numbers follow patrol <strong>date</strong> order instead of the order they were typed in. Same-date patrols are ordered using their current number, descending. This changes every patrol's number — export a backup first.</p>
+    <div class="fr">
+      <div class="fg"><label class="field-label">Starting Number</label><input type="number" id="renum-start" min="1" placeholder="e.g. 302"></div>
+      <div class="fg"><label class="field-label">Year Label</label><input type="number" id="renum-year" placeholder="e.g. 2026"></div>
+    </div>
+    <button class="btn btn-warning btn-full" onclick="renumberPatrols()">Renumber All Patrols Now</button>
+    <div id="renum-alert" style="margin-top:8px;"></div>
+  </div>
+  <div class="card">
     <div class="card-title">Patrol Types</div>
     <div style="display:flex;gap:8px;margin-bottom:8px;">
       <input type="text" id="new-type" placeholder="Add patrol type..." style="flex:1;">
@@ -1332,6 +1354,46 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
   </div>
 </div>
 
+<!-- Suggest Patrol Team — builds a fair, role-aware team suggestion, then
+     hands the chosen troop IDs to the normal Log Patrol flow for review. -->
+<div class="modal-ov" id="suggest-team-modal">
+  <div class="modal" style="max-width:640px;">
+    <div class="card-title" style="border-bottom:none;margin-bottom:10px;">
+      <span>🎯 Suggest Patrol Team</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeSuggestTeamModal()">Close</button>
+    </div>
+    <div id="stm-config">
+      <div class="fg" style="display:flex;align-items:center;gap:8px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:400;white-space:nowrap;"><input type="checkbox" id="stm-officer-need" style="width:auto;" checked onchange="stmToggleOfficer()"> Include Officer</label>
+      </div>
+      <div class="fg" id="stm-officer-wrap"><label class="field-label">Officer (few available — pick manually if needed)</label><select id="stm-officer-pick"></select></div>
+      <div class="fr">
+        <div class="fg"><label class="field-label">JCOs Needed</label>
+          <select id="stm-jco-count"><option value="0">0</option><option value="1" selected>1</option><option value="2">2</option></select>
+        </div>
+        <div class="fg"><label class="field-label">Others (general troops)</label><input type="number" id="stm-others" min="0" value="4"></div>
+      </div>
+      <div class="fg"><label style="display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:400;"><input type="checkbox" id="stm-mechanic-need" style="width:auto;"> Needs Vehicle Mechanic</label></div>
+      <div class="fg"><label class="field-label">Vehicles for this Patrol</label>
+        <div class="fr" style="gap:8px;">
+          <div class="fg"><label class="field-label" style="font-size:10.5px;">🛡 APC</label><input type="number" id="stm-apc" min="0" value="0"></div>
+          <div class="fg"><label class="field-label" style="font-size:10.5px;">🚛 Heavy</label><input type="number" id="stm-heavy" min="0" value="0"></div>
+          <div class="fg"><label class="field-label" style="font-size:10.5px;">🚙 Light</label><input type="number" id="stm-light" min="0" value="1"></div>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-full" onclick="generateSuggestion()">Generate Suggestion</button>
+    </div>
+    <div id="stm-results" style="display:none;">
+      <div id="stm-warnings"></div>
+      <div id="stm-slots"></div>
+      <div style="display:flex;gap:8px;margin-top:14px;">
+        <button class="btn btn-ghost" onclick="backToStmConfig()">← Adjust</button>
+        <button class="btn btn-primary btn-full" onclick="useSuggestedTeam()">Use This Team →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Log Patrol — modal (embedded the same way Add Troop is embedded in Troops:
      a button at the top of Patrol Log opens this, instead of a dedicated tab) -->
 <div class="modal-ov" id="log-patrol-modal">
@@ -1421,7 +1483,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
       <div style="font-size:11.5px;color:var(--text-muted);margin-top:4px;">Used to calculate this troop's patrol participation fairly against their own time in service.</div>
     </div>
     <div class="fr">
-      <div class="fg"><label class="field-label">Rank</label><select id="t-rank"></select></div>
+      <div class="fg"><label class="field-label">Rank</label><select id="t-rank" onchange="if(!document.getElementById('t-category').value||document.getElementById('t-category').dataset.auto==='1'){document.getElementById('t-category').value=guessCategory(this.value);document.getElementById('t-category').dataset.auto='1';}"></select></div>
       <div class="fg" style="position:relative;"><label class="field-label">Unit / Section</label><input type="text" id="t-unit" placeholder="e.g. Alpha" autocomplete="off" oninput="fieldSuggest('t-unit','units',this.value)" onfocus="fieldSuggest('t-unit','units',this.value)"><div class="mini-suggest" id="sg-t-unit"></div></div>
     </div>
     <div class="fr">
@@ -1454,6 +1516,47 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     <div class="fr">
       <div class="fg" style="position:relative;"><label class="field-label">📞 Local No.</label><input type="tel" id="t-phone-local" placeholder="e.g. 981-234-5678" autocomplete="off" oninput="fieldSuggest('t-phone-local','phones',this.value)" onfocus="fieldSuggest('t-phone-local','phones',this.value)"><div class="mini-suggest" id="sg-t-phone-local"></div></div>
       <div class="fg" style="position:relative;"><label class="field-label">💬 WhatsApp No.</label><input type="tel" id="t-phone-wa" placeholder="e.g. +977-981-234-5678" autocomplete="off" oninput="fieldSuggest('t-phone-wa','phones',this.value)" onfocus="fieldSuggest('t-phone-wa','phones',this.value)"><div class="mini-suggest" id="sg-t-phone-wa"></div></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="field-label">Gender</label>
+        <select id="t-gender">
+          <option value="">Not recorded</option>
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
+        </select>
+      </div>
+      <div class="fg"><label class="field-label">Category</label>
+        <select id="t-category" onchange="this.dataset.auto='0';">
+          <option value="">Not set</option>
+          <option value="Officer">Officer</option>
+          <option value="JCO">JCO</option>
+          <option value="Other Rank">Other Rank</option>
+        </select>
+      </div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="field-label">Role</label>
+        <select id="t-trade" onchange="toggleDriverQuals();">
+          <option value="General">General</option>
+          <option value="Medical">Medical</option>
+          <option value="Signal">Signal</option>
+          <option value="Driver">Driver</option>
+          <option value="Mechanic">Vehicle Mechanic</option>
+          <option value="Administration">Administration</option>
+        </select>
+      </div>
+      <div class="fg" id="t-driver-quals-wrap" style="display:none;">
+        <label class="field-label">🚚 Qualified For</label>
+        <div style="display:flex;gap:10px;align-items:center;padding-top:6px;font-size:13px;">
+          <label style="display:flex;align-items:center;gap:4px;font-weight:400;"><input type="checkbox" id="t-qual-apc" style="width:auto;"> APC</label>
+          <label style="display:flex;align-items:center;gap:4px;font-weight:400;"><input type="checkbox" id="t-qual-heavy" style="width:auto;"> Heavy</label>
+          <label style="display:flex;align-items:center;gap:4px;font-weight:400;"><input type="checkbox" id="t-qual-light" style="width:auto;"> Light</label>
+        </div>
+      </div>
+    </div>
+    <div class="fg" style="display:flex;flex-direction:column;gap:8px;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;"><input type="checkbox" id="t-never-suggest" style="width:auto;"> Never suggest for patrol (e.g. Medical Officer / Doctor)</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;"><input type="checkbox" id="t-restricted-range" style="width:auto;"> Restricted range — not suitable for distant patrols (e.g. Armoury Keeper, Storeman)</label>
     </div>
     <div class="fg"><label class="field-label">Notes / Skills / Restrictions</label><textarea id="t-notes" rows="2" placeholder="e.g. Medic trained, No night ops..."></textarea></div>
     <div class="modal-actions" style="justify-content:stretch;">
@@ -1711,7 +1814,7 @@ function apiFetch(path, opts) {
     .then(function(r){ return r.json(); });
 }
 function dbToTroop(r) {
-  return {id:r.id,name:r.name,rank:r.rank,unit:r.unit,sn:r.sn||'',status:r.status||'available',notes:r.notes||'',phoneLocal:r.phone_local||'',phoneWa:r.phone_wa||'',bloodGroup:r.blood_group||'',deploymentDate:r.deployment_date?String(r.deployment_date).slice(0,10):'',weaponNumber:r.weapon_number||''};
+  return {id:r.id,name:r.name,rank:r.rank,unit:r.unit,sn:r.sn||'',status:r.status||'available',notes:r.notes||'',phoneLocal:r.phone_local||'',phoneWa:r.phone_wa||'',bloodGroup:r.blood_group||'',deploymentDate:r.deployment_date?String(r.deployment_date).slice(0,10):'',weaponNumber:r.weapon_number||'',gender:r.gender||'',category:r.category||'',trade:r.trade||'',driverQuals:r.driver_quals||'',targetPct:(r.target_pct!=null?r.target_pct:100),neverSuggest:!!r.never_suggest,restrictedRange:!!r.restricted_range};
 }
 function dbToPatrol(r) {
   return {id:r.id,ptlId:r.ptl_id,date:(r.date||'').slice(0,10),type:r.type,
@@ -1885,7 +1988,204 @@ function remoteSaveConfig(){
 // HELPERS
 // =====================================================================
 function uid(p){ return p+Date.now()+Math.random().toString(36).slice(2,5); }
+// ── SUGGEST PATROL TEAM ──────────────────────────────────────────────
+// Builds a fair, role-aware patrol suggestion, then hands the chosen
+// troop IDs straight to the normal Log Patrol screen for review — nothing
+// is saved directly from here.
+var _stmSlots=[];
+function stmOverdueScore(t){
+  var ds=daysSince(lastPatrol(t.id));
+  var scale=(t.targetPct!=null?t.targetPct:100)/100;
+  return ds*scale; // lower target = "uses up" overdue budget slower
+}
+function stmEligibleBase(){
+  return D.troops.filter(function(t){ return isAvailable(t) && !t.neverSuggest; });
+}
+function stmRank(pool){
+  return pool.slice().sort(function(a,b){ return stmOverdueScore(b)-stmOverdueScore(a); }).map(function(t){ return t.id; });
+}
+function openSuggestTeamModal(){
+  var base=stmEligibleBase();
+  var officers=stmRank(base.filter(function(t){ return t.category==='Officer'; }));
+  var sel=document.getElementById('stm-officer-pick');
+  sel.innerHTML='<option value="">-- Most overdue (auto) --</option>'+officers.map(function(id){ var t=troopById(id); return '<option value="'+id+'">'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</option>'; }).join('');
+  document.getElementById('stm-officer-need').checked=true;
+  stmToggleOfficer();
+  document.getElementById('stm-config').style.display='';
+  document.getElementById('stm-results').style.display='none';
+  document.getElementById('suggest-team-modal').classList.add('open');
+}
+function closeSuggestTeamModal(){ document.getElementById('suggest-team-modal').classList.remove('open'); }
+function stmToggleOfficer(){
+  document.getElementById('stm-officer-wrap').style.display=document.getElementById('stm-officer-need').checked?'':'none';
+}
+function backToStmConfig(){ document.getElementById('stm-config').style.display=''; document.getElementById('stm-results').style.display='none'; }
+
+function generateSuggestion(){
+  var base=stmEligibleBase();
+  var officerNeeded=document.getElementById('stm-officer-need').checked;
+  var officerPicked=document.getElementById('stm-officer-pick').value;
+  var jcoCount=parseInt(document.getElementById('stm-jco-count').value)||0;
+  var othersCount=Math.max(0,parseInt(document.getElementById('stm-others').value)||0);
+  var mechanicNeeded=document.getElementById('stm-mechanic-need').checked;
+  var apcCount=Math.max(0,parseInt(document.getElementById('stm-apc').value)||0);
+  var heavyCount=Math.max(0,parseInt(document.getElementById('stm-heavy').value)||0);
+  var lightCount=Math.max(0,parseInt(document.getElementById('stm-light').value)||0);
+
+  var used={};
+  var slots=[];
+  var warnings=[];
+
+  function take(pool,role,forceId){
+    var candidates=pool.filter(function(id){ return !used[id]; });
+    var chosen=forceId&&!used[forceId]?forceId:(candidates[0]||null);
+    if(chosen) used[chosen]=true;
+    slots.push({role:role,chosenId:chosen,pool:pool,poolPos:pool.indexOf(chosen)});
+    return chosen;
+  }
+
+  // Compulsory core
+  if(officerNeeded){
+    var officerPool=stmRank(base.filter(function(t){return t.category==='Officer';}));
+    var chosen=take(officerPool,'Officer',officerPicked||null);
+    if(!chosen) warnings.push('No available Officer found.');
+  }
+  var jcoPool=stmRank(base.filter(function(t){return t.category==='JCO';}));
+  for(var i=0;i<jcoCount;i++){
+    var c=take(jcoPool,'JCO');
+    if(!c) warnings.push('No available JCO found for slot '+(i+1)+'.');
+  }
+  var medicalPool=stmRank(base.filter(function(t){return t.trade==='Medical';}));
+  var cm=take(medicalPool,'Medical');
+  if(!cm) warnings.push('No available Medical troop found.');
+  var signalPool=stmRank(base.filter(function(t){return t.trade==='Signal';}));
+  var cs=take(signalPool,'Signal');
+  if(!cs) warnings.push('No available Signal troop found.');
+  if(mechanicNeeded){
+    var mechPool=stmRank(base.filter(function(t){return t.trade==='Mechanic';}));
+    var cme=take(mechPool,'Vehicle Mechanic');
+    if(!cme) warnings.push('No available Vehicle Mechanic found.');
+  }
+
+  // Drivers — APC hard-restricted; Heavy prefers Heavy/APC-qualified, falls
+  // back to any non-Light-only driver; Light accepts any driver.
+  var drivers=base.filter(function(t){return t.trade==='Driver';});
+  function hasQual(t,q){ return (t.driverQuals||'').split(',').indexOf(q)>=0; }
+  var apcDrivers=stmRank(drivers.filter(function(t){return hasQual(t,'APC');}));
+  var heavyPrimary=stmRank(drivers.filter(function(t){return hasQual(t,'Heavy');}));
+  var heavyFallback=stmRank(drivers.filter(function(t){return hasQual(t,'Heavy')||hasQual(t,'APC');}));
+  var lightAny=stmRank(drivers); // any driver — APC/Heavy quals cover Light too
+
+  for(var a=0;a<apcCount;a++){
+    var c=take(apcDrivers,'Driver (APC)');
+    if(!c) warnings.push('No APC-qualified driver available for APC seat '+(a+1)+'.');
+  }
+  for(var h=0;h<heavyCount;h++){
+    var poolNow=heavyPrimary.filter(function(id){return !used[id];}).length?heavyPrimary:heavyFallback;
+    var c=take(poolNow,'Driver (Heavy)');
+    if(!c) warnings.push('No Heavy-capable driver available for Heavy seat '+(h+1)+'.');
+  }
+  for(var l=0;l<lightCount;l++){
+    var c=take(lightAny,'Driver (Light)');
+    if(!c) warnings.push('No driver available for Light seat '+(l+1)+'.');
+  }
+
+  // Female inclusion: pair priority + guarantee for a female Officer/JCO
+  function isFemale(id){ var t=troopById(id); return t&&t.gender==='Female'; }
+  var femaleOfficerOrJco=slots.some(function(s){return (s.role==='Officer'||s.role==='JCO')&&s.chosenId&&isFemale(s.chosenId);});
+  var femaleAlreadyIn=slots.some(function(s){return s.chosenId&&isFemale(s.chosenId);});
+  var forcedFemaleNeeded=femaleOfficerOrJco&&!femaleAlreadyIn;
+
+  var generalRanked=stmRank(base);
+  var femalePool=generalRanked.filter(function(id){return !used[id]&&isFemale(id);});
+  var malePool=generalRanked.filter(function(id){return !used[id]&&!isFemale(id);});
+  var othersChosen=[];
+  var remaining=othersCount;
+  var femalesToTry=femalePool.length>=2?2:(femalePool.length===1?1:0);
+  var take2=Math.min(femalesToTry,remaining);
+  for(var f=0;f<take2;f++){ othersChosen.push(femalePool.shift()); remaining--; }
+  if(forcedFemaleNeeded && othersChosen.every(function(id){return !isFemale(id);}) && femalePool.length>0){
+    if(remaining<=0){ remaining++; othersCount++; } // guarantee overrides the count if needed
+    othersChosen.push(femalePool.shift()); remaining--;
+  }
+  var mergedRest=femalePool.concat(malePool).sort(function(x,y){return stmOverdueScore(troopById(y))-stmOverdueScore(troopById(x));});
+  while(remaining>0 && mergedRest.length>0){ othersChosen.push(mergedRest.shift()); remaining--; }
+  othersChosen.forEach(function(id){ used[id]=true; slots.push({role:'Other',chosenId:id,pool:generalRanked,poolPos:generalRanked.indexOf(id)}); });
+  if(othersChosen.length<othersCount) warnings.push('Only '+othersChosen.length+' of '+othersCount+' "Others" seats could be filled — not enough available troops left.');
+
+  _stmSlots=slots;
+  renderStmResults(warnings);
+}
+
+function renderStmResults(warnings){
+  document.getElementById('stm-config').style.display='none';
+  document.getElementById('stm-results').style.display='';
+  document.getElementById('stm-warnings').innerHTML=warnings.length?
+    '<div class="alert al-warn" style="margin-bottom:10px;">'+warnings.map(escHtml).join('<br>')+'</div>':'';
+  document.getElementById('stm-slots').innerHTML=_stmSlots.map(function(s,i){
+    var t=s.chosenId?troopById(s.chosenId):null;
+    var restrictedNote=(t&&t.restrictedRange)?' <span style="color:var(--tan);font-size:10.5px;">⚠ Restricted range</span>':'';
+    return '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">'+
+      '<div style="width:110px;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;flex-shrink:0;">'+s.role+'</div>'+
+      '<div style="flex:1;min-width:0;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+
+      (t?('<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>'+restrictedNote):'<span style="color:var(--red-light);">— none available —</span>')+
+      '</div>'+
+      '<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:5px 9px;white-space:nowrap;" onclick="replaceStmSlot('+i+')">🔁 Replace</button>'+
+      '</div>';
+  }).join('');
+}
+function replaceStmSlot(i){
+  var slot=_stmSlots[i];
+  var usedElsewhere={};
+  _stmSlots.forEach(function(s,idx){ if(idx!==i&&s.chosenId) usedElsewhere[s.chosenId]=true; });
+  var pos=slot.poolPos;
+  for(var j=pos+1;j<slot.pool.length;j++){
+    if(!usedElsewhere[slot.pool[j]]){ slot.chosenId=slot.pool[j]; slot.poolPos=j; renderStmResults([]); return; }
+  }
+  showAlert('stm-warnings','No more alternatives available for this slot.','warn');
+}
+function useSuggestedTeam(){
+  var ids=_stmSlots.map(function(s){return s.chosenId;}).filter(Boolean);
+  selectedTroops=ids.slice();
+  selectedCommander=null;
+  closeSuggestTeamModal();
+  editingPatrolId=null;
+  document.getElementById('log-patrol-modal-title').textContent='Log New Patrol';
+  document.getElementById('p-submit-btn').textContent='⚡ Log Patrol';
+  document.getElementById('p-cancel-edit-btn').style.display='none';
+  renderSelected(); updatePtlPreview();
+  document.getElementById('log-patrol-modal').classList.add('open');
+}
 function nextPtlId(){ var yr=new Date().getFullYear(),n=String(D.counter).padStart(3,'0'); D.counter++; return 'PTL-'+yr+'-'+n; }
+// ── RENUMBER PATROL NUMBERS ──────────────────────────────────────────
+// One-time fix: patrol numbers were originally assigned in entry order,
+// not patrol date order, since this system was set up after many patrols
+// already existed on paper. This re-sorts every patrol by its actual date
+// (oldest first) and reassigns sequential numbers so they line up with
+// the calendar. For patrols sharing the same date — all from the old,
+// pre-system backlog — there's no recorded time of day to sort by, so the
+// existing patrol number is used as the next-best stand-in for order,
+// descending, per how those were originally logged.
+function renumberPatrols(){
+  var startNum=parseInt(document.getElementById('renum-start').value);
+  var year=parseInt(document.getElementById('renum-year').value)||new Date().getFullYear();
+  if(!Number.isFinite(startNum)||startNum<1){ showAlert('renum-alert','Enter a valid starting number.','danger'); return; }
+  if(!confirm('This will change the patrol number on ALL '+D.patrols.length+' patrols, starting at '+startNum+' for '+year+'. Make sure you have exported a backup first. Continue?')) return;
+  function existingSeq(p){ var m=/(\d+)$/.exec(p.ptlId||''); return m?parseInt(m[1]):0; }
+  var sorted=D.patrols.slice().sort(function(a,b){
+    if(a.date!==b.date) return a.date<b.date?-1:1;
+    return existingSeq(b)-existingSeq(a); // same date: descending by old number
+  });
+  sorted.forEach(function(p,i){
+    p.ptlId='PTL-'+year+'-'+String(startNum+i).padStart(3,'0');
+    remoteSavePatrol(p);
+  });
+  D.counter=startNum+sorted.length;
+  remoteSaveConfig();
+  saveData(); renderTable(); renderDash();
+  showAlert('renum-alert','Renumbered '+sorted.length+' patrols, starting at '+startNum+'.','success');
+  audit('Renumbered all patrols by date, starting at '+startNum+' ('+year+')');
+}
 function parseDate(s){ if(!s) return ''; s=s.trim(); if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; var p=s.split('/'); if(p.length===3&&p[2]&&p[2].length===4) return p[2]+'-'+p[1].padStart(2,'0')+'-'+p[0].padStart(2,'0'); return ''; }
 function fmtDate(d){ if(!d) return ''; try{ var dt=new Date(d+'T12:00:00'); return String(dt.getDate()).padStart(2,'0')+'/'+String(dt.getMonth()+1).padStart(2,'0')+'/'+dt.getFullYear(); } catch(e){ return d; } }
 function fmtDateLong(d){ if(!d) return ''; try{ var dt=new Date(d+'T12:00:00'); var mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return String(dt.getDate()).padStart(2,'0')+' '+mo[dt.getMonth()]+' '+dt.getFullYear(); } catch(e){ return d; } }
@@ -1967,6 +2267,16 @@ function compareSeniority(a,b){
 }
 function sortTroops(arr){ return arr.slice().sort(compareSeniority); }
 function daysSince(dateStr){ if(!dateStr) return 9999; return Math.floor((new Date()-new Date(dateStr+'T12:00:00'))/86400000); }
+// Troops with a lower Patrol Participation Target (mainly Administration
+// role) are naturally expected to patrol less. Flagging them "inactive"
+// on the same flat 7-day clock as a frontline troop is misleading, so the
+// allowed gap scales inversely with their target — a 25% target troop is
+// only flagged after ~4x as long (28 days), not 7.
+function inactiveThresholdDays(t){
+  var pct=(t&&t.targetPct!=null)?t.targetPct:100;
+  if(pct<=0) pct=1;
+  return Math.round(7*(100/pct));
+}
 function lastPatrol(tid){ var pts=D.patrols.filter(function(p){return (p.troops||[]).indexOf(tid)>=0;}); pts.sort(function(a,b){return b.date.localeCompare(a.date);}); return pts.length?pts[0].date:null; }
 function patrolCount(tid){ return D.patrols.filter(function(p){return (p.troops||[]).indexOf(tid)>=0;}).length; }
 function patrolHours(tid){ return D.patrols.filter(function(p){return (p.troops||[]).indexOf(tid)>=0;}).reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0); }
@@ -2177,7 +2487,7 @@ function showTabFromMore(id){ closeMoreMenu(); showTab(id); }
 // =====================================================================
 // SETTINGS
 // =====================================================================
-function renderSettings(){ var s=D.settings,c=D.config; document.getElementById('cfg-pob').value=s.pob||''; document.getElementById('cfg-mission').value=s.mission||''; document.getElementById('cfg-cmd').value=s.commander||''; document.getElementById('cfg-class').value=s.classification||''; document.getElementById('cfg-pp-green').value=(s.ppGreen!=null?s.ppGreen:''); document.getElementById('cfg-pp-yellow').value=(s.ppYellow!=null?s.ppYellow:''); renderTagList('type-tags',c.types,'types'); renderTagList('sector-tags',c.sectors,'sectors'); renderTagList('route-tags',c.routes,'routes'); renderRankTags(); renderPinStatus(); }
+function renderSettings(){ var s=D.settings,c=D.config; document.getElementById('cfg-pob').value=s.pob||''; document.getElementById('cfg-mission').value=s.mission||''; document.getElementById('cfg-cmd').value=s.commander||''; document.getElementById('cfg-class').value=s.classification||''; document.getElementById('cfg-pp-green').value=(s.ppGreen!=null?s.ppGreen:''); document.getElementById('cfg-pp-yellow').value=(s.ppYellow!=null?s.ppYellow:''); renderTagList('type-tags',c.types,'types'); renderTagList('sector-tags',c.sectors,'sectors'); renderTagList('route-tags',c.routes,'routes'); renderRankTags(); renderPinStatus(); renderPptList(); }
 function savePPThresholds(){
   var g=parseFloat(document.getElementById('cfg-pp-green').value);
   var y=parseFloat(document.getElementById('cfg-pp-yellow').value);
@@ -2192,6 +2502,28 @@ function savePPThresholds(){
 function renderTagList(elId,arr,key){ var el=document.getElementById(elId); if(!el) return; el.innerHTML=arr.map(function(item,i){ return '<div class="tag"><span>'+item+'</span><button class="tag-del" onclick="removeItem(\''+key+'\','+i+',\''+elId+'\')">×</button></div>'; }).join(''); }
 function removeItem(key,idx,elId){ D.config[key].splice(idx,1); renderTagList(elId,D.config[key],key); populateDropdowns(); remoteSaveConfig(); audit('Removed from '+key); }
 function addItem(key,inputId,tagElId){ var val=document.getElementById(inputId).value.trim(); if(!val) return; D.config[key].push(val); document.getElementById(inputId).value=''; renderTagList(tagElId,D.config[key],key); populateDropdowns(); remoteSaveConfig(); audit('Added to '+key+': '+val); }
+// ── PATROL PARTICIPATION TARGETS (Settings) ─────────────────────────────
+// The single place to mark which troops are mainly on admin/internal jobs,
+// by giving them a lower Target %. This is the only signal "Suggest Patrol
+// Team" uses — nothing here is auto-detected.
+// ── PATROL PARTICIPATION TARGET (Settings) ──────────────────────────────
+// One shared number applied to every troop marked Trade = Administration —
+// not a per-person list. This is the only signal "Suggest Patrol Team"
+// uses to tell them apart from everyone else.
+function renderPptList(){
+  var el=document.getElementById('cfg-admin-pct'); if(!el) return;
+  el.value=(D.settings.adminTargetPct!=null?D.settings.adminTargetPct:25);
+}
+function saveAdminTargetPct(){
+  var n=parseInt(document.getElementById('cfg-admin-pct').value);
+  if(!Number.isFinite(n)){ showAlert('admin-pct-alert','Please enter a valid percentage.','danger'); return; }
+  n=Math.max(0,Math.min(100,n));
+  D.settings.adminTargetPct=n;
+  remoteSaveConfig();
+  D.troops.filter(function(t){ return t.trade==='Administration'; }).forEach(function(t){ t.targetPct=n; remoteSaveTroop(t); });
+  showAlert('admin-pct-alert','Applied '+n+'% to all Administration-trade troops.','success');
+  audit('Administration patrol target set to '+n+'%');
+}
 function renderRankTags(){ document.getElementById('rank-tags').innerHTML=D.config.ranks.map(function(r,i){ return '<div class="tag"><button style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:0 3px;font-size:12px;" onclick="moveRank('+i+',-1)">↑</button><span>'+r+'</span><button style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:0 3px;font-size:12px;" onclick="moveRank('+i+',1)">↓</button><button class="tag-del" onclick="removeRank('+i+')" title="Remove rank">×</button></div>'; }).join(''); }
 function addRank(){ var val=document.getElementById('new-rank').value.trim(); if(!val) return; if(D.config.ranks.indexOf(val)>=0){showAlert('rank-alert','Rank already exists.','warn');return;} D.config.ranks.push(val); RANKS=D.config.ranks; document.getElementById('new-rank').value=''; remoteSaveConfig(); renderRankTags(); populateRankDropdowns(); audit('Added rank: '+val); }
 function removeRank(idx){ var val=D.config.ranks[idx]; if(D.config.ranks.length<=1){showAlert('rank-alert','Must keep at least one rank.','warn');return;} D.config.ranks.splice(idx,1); RANKS=D.config.ranks; remoteSaveConfig(); renderRankTags(); populateRankDropdowns(); audit('Removed rank: '+val); }
@@ -2511,7 +2843,7 @@ function renderDash(){
   var wkPats=D.patrols.filter(function(p){var pd=new Date(p.date+'T12:00:00');return pd>=mon&&pd<=sun;});
   var totalH=D.patrols.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0);
   var availTroops=D.troops.filter(isAvailable);
-  var inactive7=availTroops.filter(function(t){return daysSince(lastPatrol(t.id))>7;});
+  var inactive7=availTroops.filter(function(t){return daysSince(lastPatrol(t.id))>inactiveThresholdDays(t);});
   var mo=now.getMonth(),yr=now.getFullYear();
   var moPats=D.patrols.filter(function(p){var d=new Date(p.date+'T12:00:00');return d.getMonth()===mo&&d.getFullYear()===yr;});
   var moNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -2784,6 +3116,23 @@ function showTroopsModal(patrolId){ var p=D.patrols.find(function(x){return x.id
 // =====================================================================
 // TROOPS
 // =====================================================================
+function toggleDriverQuals(){
+  var wrap=document.getElementById('t-driver-quals-wrap');
+  wrap.style.display=(document.getElementById('t-trade').value==='Driver')?'block':'none';
+}
+// Trade is the only thing set in the form for admin-focused troops.
+// The actual Target % lives only in Settings → Patrol Participation
+// Targets, and is applied automatically the moment Trade is set to
+// Administration (see saveTroop below) — nothing to touch here.
+// Best-guess Category from a rank string — a starting point the user can
+// always override, since rank names are fully custom in this app.
+function guessCategory(rank){
+  var r=(rank||'').toLowerCase();
+  if(/major|captain|lieut|colonel|pob commander|general/.test(r)) return 'Officer';
+  if(/\bwo1\b|\bwo2\b|warrant officer/.test(r)) return 'JCO';
+  if(r) return 'Other Rank';
+  return '';
+}
 function saveTroop(){
   var name=document.getElementById('t-name').value.trim();
   var rank=document.getElementById('t-rank').value;
@@ -2797,23 +3146,49 @@ function saveTroop(){
   var phoneLocal=document.getElementById('t-phone-local').value.trim();
   var phoneWa=document.getElementById('t-phone-wa').value.trim();
   var notes=document.getElementById('t-notes').value.trim();
+  var gender=document.getElementById('t-gender').value;
+  var category=document.getElementById('t-category').value;
+  var trade=document.getElementById('t-trade').value;
+  var driverQualsArr=[];
+  if(trade==='Driver'){
+    if(document.getElementById('t-qual-apc').checked) driverQualsArr.push('APC');
+    if(document.getElementById('t-qual-heavy').checked) driverQualsArr.push('Heavy');
+    if(document.getElementById('t-qual-light').checked) driverQualsArr.push('Light');
+  }
+  var driverQuals=driverQualsArr.join(',');
+  var neverSuggest=document.getElementById('t-never-suggest').checked;
+  var restrictedRange=document.getElementById('t-restricted-range').checked;
   var editId=document.getElementById('t-edit-id').value;
   if(!name){showAlert('t-alert','Please enter a name.','danger');return;}
   if(!deploymentDate){showAlert('t-alert','Please enter a valid Deployment Date (DD/MM/YYYY).','danger');return;}
   if(editId){
     var t=D.troops.find(function(x){return x.id===editId;});
-    if(t){t.name=name;t.rank=rank;t.unit=unit;t.sn=sn;t.status=status;t.bloodGroup=bloodGroup;t.weaponNumber=weaponNumber;t.deploymentDate=deploymentDate;t.phoneLocal=phoneLocal;t.phoneWa=phoneWa;t.notes=notes;}
+    if(t){
+      var wasAdmin=(t.trade==='Administration');
+      t.name=name;t.rank=rank;t.unit=unit;t.sn=sn;t.status=status;t.bloodGroup=bloodGroup;t.weaponNumber=weaponNumber;t.deploymentDate=deploymentDate;t.phoneLocal=phoneLocal;t.phoneWa=phoneWa;t.notes=notes;t.gender=gender;t.category=category;t.trade=trade;t.driverQuals=driverQuals;t.neverSuggest=neverSuggest;t.restrictedRange=restrictedRange;
+      // Target % is otherwise only managed in Settings. It's only auto-adjusted
+      // here the moment Trade actually switches to/from Administration.
+      var nowAdmin=(trade==='Administration');
+      var adminPct=(D.settings.adminTargetPct!=null?D.settings.adminTargetPct:25);
+      if(nowAdmin && !wasAdmin) t.targetPct=adminPct;
+      else if(!nowAdmin && wasAdmin && t.targetPct===adminPct) t.targetPct=100;
+      if(t.targetPct==null) t.targetPct=100;
+    }
     remoteSaveTroop(t); renderRoster(); populateAutoSuggestLists();
     showAlert('t-alert',rank+' '+name+' updated!','success');
     audit('Troop updated: '+rank+' '+name); cancelEdit();
   } else {
     if(D.troops.find(function(t){return t.name.toLowerCase()===name.toLowerCase();})){showAlert('t-alert','Troop already exists.','danger');return;}
-    var newT={id:uid('t'),name:name,rank:rank,unit:unit,sn:sn,status:status,bloodGroup:bloodGroup,weaponNumber:weaponNumber,deploymentDate:deploymentDate,phoneLocal:phoneLocal,phoneWa:phoneWa,notes:notes};
+    var newT={id:uid('t'),name:name,rank:rank,unit:unit,sn:sn,status:status,bloodGroup:bloodGroup,weaponNumber:weaponNumber,deploymentDate:deploymentDate,phoneLocal:phoneLocal,phoneWa:phoneWa,notes:notes,gender:gender,category:category,trade:trade,driverQuals:driverQuals,neverSuggest:neverSuggest,restrictedRange:restrictedRange,targetPct:(trade==='Administration'?(D.settings.adminTargetPct!=null?D.settings.adminTargetPct:25):100)};
     D.troops.push(newT); remoteSaveTroop(newT); renderRoster(); populateAutoSuggestLists();
     showAlert('t-alert',rank+' '+name+' added!','success');
     audit('Troop added: '+rank+' '+name);
     ['t-name','t-unit','t-sn','t-weapon','t-phone-local','t-phone-wa','t-notes'].forEach(function(id){document.getElementById(id).value='';});
     document.getElementById('t-deploy-date').value=todayDMY();
+    document.getElementById('t-gender').value=''; document.getElementById('t-category').value=''; document.getElementById('t-category').dataset.auto='';
+    document.getElementById('t-trade').value='General'; toggleDriverQuals();
+    document.getElementById('t-qual-apc').checked=false; document.getElementById('t-qual-heavy').checked=false; document.getElementById('t-qual-light').checked=false;
+    document.getElementById('t-never-suggest').checked=false; document.getElementById('t-restricted-range').checked=false;
   }
 }
 // Opens the Add Troop modal fresh (roster now shows immediately on the page,
@@ -2826,8 +3201,24 @@ function openTroopForm(){
 var _pendingEditId=null;
 function confirmEditTroop(id){ requirePin(function(){ _pendingEditId=id; document.getElementById('edit-confirm-modal').classList.add('open'); document.getElementById('edit-confirm-btn').onclick=function(){closeConfirmEdit();editTroop(_pendingEditId);_pendingEditId=null;}; }); }
 function closeConfirmEdit(){ document.getElementById('edit-confirm-modal').classList.remove('open'); }
-function editTroop(id){ var t=D.troops.find(function(x){return x.id===id;}); if(!t) return; document.getElementById('t-name').value=t.name; document.getElementById('t-rank').value=t.rank; document.getElementById('t-unit').value=t.unit||''; document.getElementById('t-sn').value=t.sn||''; document.getElementById('t-status').value=t.status||'available'; document.getElementById('t-blood').value=t.bloodGroup||''; document.getElementById('t-weapon').value=t.weaponNumber||''; document.getElementById('t-deploy-date').value=t.deploymentDate?dmyFromISO(t.deploymentDate):(effectiveDeploymentDate(t)?dmyFromISO(effectiveDeploymentDate(t)):todayDMY()); document.getElementById('t-phone-local').value=t.phoneLocal||''; document.getElementById('t-phone-wa').value=t.phoneWa||''; document.getElementById('t-notes').value=t.notes||''; document.getElementById('t-edit-id').value=id; document.getElementById('t-form-title').textContent='Edit Troop'; document.getElementById('t-submit-btn').textContent='Save Changes'; document.getElementById('troop-form-modal').classList.add('open'); }
-function cancelEdit(){ document.getElementById('t-edit-id').value=''; ['t-name','t-unit','t-sn','t-weapon','t-phone-local','t-phone-wa','t-notes'].forEach(function(id){document.getElementById(id).value='';}); document.getElementById('t-status').value='available'; document.getElementById('t-blood').value=''; document.getElementById('t-deploy-date').value=todayDMY(); document.getElementById('t-form-title').textContent='Add Troop'; document.getElementById('t-submit-btn').textContent='Add Troop'; document.getElementById('t-alert').innerHTML=''; document.getElementById('troop-form-modal').classList.remove('open'); }
+function editTroop(id){ var t=D.troops.find(function(x){return x.id===id;}); if(!t) return; document.getElementById('t-name').value=t.name; document.getElementById('t-rank').value=t.rank; document.getElementById('t-unit').value=t.unit||''; document.getElementById('t-sn').value=t.sn||''; document.getElementById('t-status').value=t.status||'available'; document.getElementById('t-blood').value=t.bloodGroup||''; document.getElementById('t-weapon').value=t.weaponNumber||''; document.getElementById('t-deploy-date').value=t.deploymentDate?dmyFromISO(t.deploymentDate):(effectiveDeploymentDate(t)?dmyFromISO(effectiveDeploymentDate(t)):todayDMY()); document.getElementById('t-phone-local').value=t.phoneLocal||''; document.getElementById('t-phone-wa').value=t.phoneWa||''; document.getElementById('t-notes').value=t.notes||'';
+  document.getElementById('t-gender').value=t.gender||'';
+  document.getElementById('t-category').value=t.category||''; document.getElementById('t-category').dataset.auto='0';
+  document.getElementById('t-trade').value=t.trade||'General';
+  var quals=(t.driverQuals||'').split(',');
+  document.getElementById('t-qual-apc').checked=quals.indexOf('APC')>=0;
+  document.getElementById('t-qual-heavy').checked=quals.indexOf('Heavy')>=0;
+  document.getElementById('t-qual-light').checked=quals.indexOf('Light')>=0;
+  toggleDriverQuals();
+  document.getElementById('t-never-suggest').checked=!!t.neverSuggest;
+  document.getElementById('t-restricted-range').checked=!!t.restrictedRange;
+  document.getElementById('t-edit-id').value=id; document.getElementById('t-form-title').textContent='Edit Troop'; document.getElementById('t-submit-btn').textContent='Save Changes'; document.getElementById('troop-form-modal').classList.add('open'); }
+function cancelEdit(){ document.getElementById('t-edit-id').value=''; ['t-name','t-unit','t-sn','t-weapon','t-phone-local','t-phone-wa','t-notes'].forEach(function(id){document.getElementById(id).value='';}); document.getElementById('t-status').value='available'; document.getElementById('t-blood').value=''; document.getElementById('t-deploy-date').value=todayDMY();
+  document.getElementById('t-gender').value=''; document.getElementById('t-category').value=''; document.getElementById('t-category').dataset.auto='';
+  document.getElementById('t-trade').value='General'; toggleDriverQuals();
+  document.getElementById('t-qual-apc').checked=false; document.getElementById('t-qual-heavy').checked=false; document.getElementById('t-qual-light').checked=false;
+  document.getElementById('t-never-suggest').checked=false; document.getElementById('t-restricted-range').checked=false;
+  document.getElementById('t-form-title').textContent='Add Troop'; document.getElementById('t-submit-btn').textContent='Add Troop'; document.getElementById('t-alert').innerHTML=''; document.getElementById('troop-form-modal').classList.remove('open'); }
 function archiveTroop(id){
   var t=D.troops.find(function(x){return x.id===id;}); if(!t) return;
   document.activeElement&&document.activeElement.blur&&document.activeElement.blur();
@@ -2880,7 +3271,7 @@ function renderRoster(){
       '<div class="troop-card-sub">'+(t.unit||'')+(t.sn?' · '+t.sn:'')+'</div></div>'+
       '<div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">'+
       statusBadge(t.status||'available')+
-      (isAvailable(t)&&ds>7?'<span class="inactive-badge">'+(ds===9999?'N/A':ds+'d')+'</span>':'')+
+      (isAvailable(t)&&ds>inactiveThresholdDays(t)?'<span class="inactive-badge">'+(ds===9999?'N/A':ds+'d')+'</span>':'')+
       '</div></div>'+
       '<div class="pc-chiprow" style="margin-bottom:4px;">'+
       '<span class="pc-chip">📋 <strong>'+c+'</strong></span>'+
@@ -2944,10 +3335,10 @@ function showProfile(id, fromArch){
     '<div><div class="pf-label">RANK</div><div class="pf-value">'+t.rank+'</div></div>'+
     '<div><div class="pf-label">STATUS</div><div style="margin-top:2px;">'+statusBadge(t.status||'available')+'</div></div>'+
     '<div><div class="pf-label">UNIT</div><div class="pf-value">'+(t.unit||'—')+'</div></div>'+
-    '<div><div class="pf-label">SVC NO.</div><div class="pf-value">'+(t.sn||'—')+'</div></div>'+
-    '<div><div class="pf-label">🩸 BLOOD GROUP</div><div class="pf-value" style="'+(t.bloodGroup?'color:var(--red-light);':'')+'">'+(t.bloodGroup||'Not recorded')+'</div></div>'+
     '<div><div class="pf-label">DEPLOYMENT DATE</div><div class="pf-value">'+(t.deploymentDate?fmtDateLong(t.deploymentDate):'Not recorded')+'</div></div>'+
+    '<div><div class="pf-label">SVC NO.</div><div class="pf-value">'+(t.sn||'—')+'</div></div>'+
     '<div><div class="pf-label">🔫 WEAPON NO.</div><div class="pf-value">'+(t.weaponNumber||'Not recorded')+'</div></div>'+
+    '<div><div class="pf-label">🩸 BLOOD GROUP</div><div class="pf-value" style="'+(t.bloodGroup?'color:var(--red-light);':'')+'">'+(t.bloodGroup||'Not recorded')+'</div></div>'+
     '<div><div class="pf-label">📞 LOCAL NO.</div><div class="pf-value">'+(t.phoneLocal?'<a href="tel:'+t.phoneLocal.replace(/\s+/g,'')+'" style="color:var(--tan);text-decoration:none;">'+t.phoneLocal+'</a>':'—')+'</div></div>'+
     '<div><div class="pf-label">💬 WHATSAPP NO.</div><div class="pf-value">'+(t.phoneWa?'<a href="https://wa.me/'+t.phoneWa.replace(/[^0-9]/g,'')+'" target="_blank" style="color:var(--tan);text-decoration:none;">'+t.phoneWa+'</a>':'—')+'</div></div>'+
     '</div>'+
@@ -2958,8 +3349,8 @@ function showProfile(id, fromArch){
     '<div class="stat"><div class="stat-num">'+tp.length+'</div><div class="stat-label">Patrols</div></div>'+
     '<div class="stat"><div class="stat-num">'+totalH.toFixed(0)+'</div><div class="stat-label">Hours</div></div>'+
     '<div class="stat"><div class="stat-num">'+sectors.length+'</div><div class="stat-label">Sectors</div></div>'+
-    '<div class="stat" style="'+(ds>7?'border-color:var(--red-light);':'')+'">'+
-    '<div class="stat-num" style="'+(ds>7?'color:#ff6666;':'')+'">'+(ds===9999?'—':ds+'d')+'</div>'+
+    '<div class="stat" style="'+(ds>inactiveThresholdDays(t)?'border-color:var(--red-light);':'')+'">'+
+    '<div class="stat-num" style="'+(ds>inactiveThresholdDays(t)?'color:#ff6666;':'')+'">'+(ds===9999?'—':ds+'d')+'</div>'+
     '<div class="stat-label">Inactive</div></div></div>'+
     '<div class="section-hdr">This Month</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px;">'+
@@ -3069,7 +3460,8 @@ function renderInactive(days){
   var el=document.getElementById('inactive-list');
   if(list.length===0){el.innerHTML='<div class="empty" style="grid-column:1/-1;">No troops matching this filter.</div>';return;}
   el.innerHTML=list.map(function(x){var t=x.t,lp=x.lp,ds=x.ds,c=x.c,h=x.h;
-    var bc=ds>14?'b-red':ds>7?'b-orange':'b-green';
+    var thr=inactiveThresholdDays(t);
+    var bc=ds>thr*2?'b-red':ds>thr?'b-orange':'b-green';
     var daysLbl=ds===9999?'NEVER':ds+' DAYS';
     return '<div class="inactive-card" data-accent="'+bc+'" onclick="showProfile(\''+t.id+'\')">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'+
@@ -3106,7 +3498,11 @@ function participationData(){
     var troopHours=unitPats.filter(function(p){return (p.troops||[]).indexOf(t.id)>=0;})
       .reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0);
     var pct=unitHours>0?(troopHours/unitHours*100):0;
-    var flag=pct>=greenT?'b-green':(pct>=yellowT?'b-orange':'b-red');
+    // Scale the flagging thresholds by this troop's own target — a lower
+    // Target % (Administration role) means a lower share is expected and
+    // shouldn't be flagged the same as a frontline troop falling behind.
+    var scale=(t.targetPct!=null?t.targetPct:100)/100;
+    var flag=pct>=(greenT*scale)?'b-green':(pct>=(yellowT*scale)?'b-orange':'b-red');
     return {t:t,pct:pct,flag:flag,dep:dep};
   });
   // Explicitly group Red → Yellow → Green, ascending % within each group.
@@ -3426,7 +3822,7 @@ function printHandover(){
   var personnelRows=sortTroops(D.troops).map(function(t){
     return '<tr><td>'+(t.sn||'—')+'</td><td>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</td><td style="text-align:center;">'+(t.bloodGroup||'N/A')+'</td><td style="text-align:center;">'+(t.weaponNumber||'N/A')+'</td><td style="text-align:center;">'+(t.deploymentDate?fmtDateLong(t.deploymentDate):'N/A')+'</td></tr>';
   }).join('');
-  var inactive=sortTroops(D.troops.filter(function(t){return isAvailable(t)&&daysSince(lastPatrol(t.id))>7;}));
+  var inactive=sortTroops(D.troops.filter(function(t){return isAvailable(t)&&daysSince(lastPatrol(t.id))>inactiveThresholdDays(t);}));
   var handoverNotes=(document.querySelector('#handover-content textarea')?document.querySelector('#handover-content textarea').value.trim():'');
 
   var win=window.open('','_blank','width=980,height=760');

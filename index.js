@@ -73,8 +73,14 @@ app.use(function(req, res, next) {
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: { rejectUnauthorized: false },
+  max: 5,                       // cap simultaneous DB connections
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000
 });
+// If a query somehow hangs (bad data, huge query, etc.), cut it off after
+// 10 seconds instead of letting it tie up a connection forever.
+pool.on('connect', (client) => { client.query('SET statement_timeout = 10000'); });
 
 // ── API KEY GATE ─────────────────────────────────────────────────────
 // Every data route below requires a matching x-api-key header. Without
@@ -102,9 +108,24 @@ function safeCompare(a, b) {
   return crypto.timingSafeEqual(bufA, bufB);
 }
 function requireApiKey(req, res, next) {
+  const ip = req.ip || 'unknown';
+  const now = Date.now();
+  const blockEntry = _badKeyBlocks.get(ip);
+  if (blockEntry && now < blockEntry.until) {
+    return res.status(403).json({ error: 'Too many invalid attempts. Blocked temporarily.' });
+  }
   const key = req.header('x-api-key') || '';
   if (!safeCompare(key, API_KEY)) {
-    console.warn('Rejected request with invalid API key from IP:', req.ip);
+    console.warn('Rejected request with invalid API key from IP:', ip);
+    const rec = _badKeyFails.get(ip) || { count: 0, start: now };
+    if (now - rec.start > BAD_KEY_WINDOW_MS) { rec.count = 0; rec.start = now; }
+    rec.count++;
+    _badKeyFails.set(ip, rec);
+    if (rec.count >= BAD_KEY_MAX) {
+      _badKeyBlocks.set(ip, { until: now + BAD_KEY_BLOCK_MS });
+      _badKeyFails.delete(ip);
+      console.warn('IP temporarily blocked for repeated invalid API key attempts:', ip);
+    }
     return res.status(401).json({ error: 'Unauthorized' });
   }
   next();
@@ -124,6 +145,21 @@ function isValidId(v) {
   return typeof v === 'string' && v.trim().length > 0 && v.length <= 100;
 }
 
+// ── INVALID-KEY IP BLOCK ───────────────────────────────────────────────
+// Separate from the general rate limiter: specifically watches for an IP
+// repeatedly sending a wrong API key (a probing/brute-force pattern) and
+// blocks that IP outright for a while, on top of everything else.
+const BAD_KEY_MAX = 10;             // wrong-key attempts allowed
+const BAD_KEY_WINDOW_MS = 10 * 60 * 1000;  // ...within this window
+const BAD_KEY_BLOCK_MS = 15 * 60 * 1000;   // ...before a 15-minute block
+const _badKeyFails = new Map();
+const _badKeyBlocks = new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, rec] of _badKeyFails) { if (now - rec.start > BAD_KEY_WINDOW_MS) _badKeyFails.delete(ip); }
+  for (const [ip, rec] of _badKeyBlocks) { if (now > rec.until) _badKeyBlocks.delete(ip); }
+}, 60000).unref();
+
 // ── SELF-MIGRATION: ensure newer troop columns exist ────────────────────
 // Runs once on boot. Safe to run every deploy — IF NOT EXISTS makes it a no-op
 // once the columns are already there.
@@ -132,7 +168,14 @@ async function migrateSchema() {
     await pool.query('ALTER TABLE troops ADD COLUMN IF NOT EXISTS blood_group TEXT');
     await pool.query('ALTER TABLE troops ADD COLUMN IF NOT EXISTS deployment_date DATE');
     await pool.query('ALTER TABLE troops ADD COLUMN IF NOT EXISTS weapon_number TEXT');
-    console.log('Schema check OK: blood_group, deployment_date, weapon_number present on troops table.');
+    await pool.query('ALTER TABLE troops ADD COLUMN IF NOT EXISTS gender TEXT');
+    await pool.query('ALTER TABLE troops ADD COLUMN IF NOT EXISTS category TEXT');
+    await pool.query('ALTER TABLE troops ADD COLUMN IF NOT EXISTS trade TEXT');
+    await pool.query('ALTER TABLE troops ADD COLUMN IF NOT EXISTS driver_quals TEXT');
+    await pool.query('ALTER TABLE troops ADD COLUMN IF NOT EXISTS target_pct INTEGER DEFAULT 100');
+    await pool.query('ALTER TABLE troops ADD COLUMN IF NOT EXISTS never_suggest BOOLEAN DEFAULT FALSE');
+    await pool.query('ALTER TABLE troops ADD COLUMN IF NOT EXISTS restricted_range BOOLEAN DEFAULT FALSE');
+    console.log('Schema check OK: blood_group, deployment_date, weapon_number, gender, category, trade, driver_quals, target_pct, never_suggest, restricted_range present on troops table.');
   } catch (e) {
     console.error('Schema migration failed:', e.message);
   }
@@ -173,16 +216,20 @@ app.get('/archived', async (req, res) => {
 // ── UPSERT TROOP ──────────────────────────────────────────────────────
 app.post('/troops', async (req, res) => {
   try {
-    const { id, name, rank, unit, sn, status, notes, phoneLocal, phoneWa, bloodGroup, deploymentDate, weaponNumber } = req.body;
+    const { id, name, rank, unit, sn, status, notes, phoneLocal, phoneWa, bloodGroup, deploymentDate, weaponNumber, gender, category, trade, driverQuals, targetPct, neverSuggest, restrictedRange } = req.body;
     if (!isValidId(id)) return res.status(400).json({ error: 'Invalid troop id.' });
     await pool.query(
-      `INSERT INTO troops (id, name, rank, unit, sn, status, notes, phone_local, phone_wa, blood_group, deployment_date, weapon_number)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+      `INSERT INTO troops (id, name, rank, unit, sn, status, notes, phone_local, phone_wa, blood_group, deployment_date, weapon_number, gender, category, trade, driver_quals, target_pct, never_suggest, restricted_range)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
        ON CONFLICT (id) DO UPDATE
-         SET name=$2, rank=$3, unit=$4, sn=$5, status=$6, notes=$7, phone_local=$8, phone_wa=$9, blood_group=$10, deployment_date=$11, weapon_number=$12`,
+         SET name=$2, rank=$3, unit=$4, sn=$5, status=$6, notes=$7, phone_local=$8, phone_wa=$9, blood_group=$10, deployment_date=$11, weapon_number=$12,
+             gender=$13, category=$14, trade=$15, driver_quals=$16, target_pct=$17, never_suggest=$18, restricted_range=$19`,
       [id, clip(name,200), clip(rank||'',100), clip(unit||'',100), clip(sn||'',50), clip(status||'available',30),
        clip(notes||'',5000), clip(phoneLocal||'',30), clip(phoneWa||'',30), bloodGroup?clip(bloodGroup,10):null,
-       deploymentDate || null, weaponNumber?clip(weaponNumber,100):null]
+       deploymentDate || null, weaponNumber?clip(weaponNumber,100):null,
+       gender?clip(gender,10):null, category?clip(category,20):null, trade?clip(trade,20):null,
+       driverQuals?clip(driverQuals,50):null, (Number.isFinite(parseInt(targetPct))?Math.max(0,Math.min(100,parseInt(targetPct))):100),
+       !!neverSuggest, !!restrictedRange]
     );
     res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
@@ -222,7 +269,9 @@ app.post('/patrols', async (req, res) => {
   try {
     const { id, ptl_id, date, type, troops, area, duration, route, remarks, commander, commander_auto } = req.body;
     if (!isValidId(id)) return res.status(400).json({ error: 'Invalid patrol id.' });
-    if (!Array.isArray(troops)) return res.status(400).json({ error: 'Invalid troops list.' });
+    if (!Array.isArray(troops) || !troops.every(t => typeof t === 'string' && t.length <= 100)) {
+      return res.status(400).json({ error: 'Invalid troops list.' });
+    }
     await pool.query(
       `INSERT INTO patrols (id, ptl_id, date, type, troops, area, duration, route, remarks, commander, commander_auto)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
@@ -258,7 +307,7 @@ app.post('/audit', async (req, res) => {
   try {
     await pool.query(
       'INSERT INTO audit_log (ts, msg) VALUES ($1, $2)',
-      [req.body.ts || new Date().toISOString(), req.body.msg]
+      [req.body.ts || new Date().toISOString(), clip(req.body.msg || '', 500)]
     );
     res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
