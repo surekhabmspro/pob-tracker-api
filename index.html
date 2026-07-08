@@ -1374,8 +1374,12 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
       </div>
       <div class="fg" id="stm-officer-wrap"><label class="field-label">Officer (few available — pick manually if needed)</label><select id="stm-officer-pick"></select></div>
       <div class="fr">
-        <div class="fg"><label class="field-label">JCOs Needed</label><input type="number" id="stm-jco-count" min="0" value="1"></div>
+        <div class="fg"><label class="field-label">JCOs Needed (WO1/WO2)</label><input type="number" id="stm-jco-count" min="0" value="1"></div>
         <div class="fg"><label class="field-label">Others (general troops)</label><input type="number" id="stm-others" min="0" value="4"></div>
+      </div>
+      <div class="fr">
+        <div class="fg"><label class="field-label">Medical Needed</label><input type="number" id="stm-medical-count" min="0" value="1"></div>
+        <div class="fg"><label class="field-label">Signal Needed</label><input type="number" id="stm-signal-count" min="0" value="1"></div>
       </div>
       <div class="fg"><label class="cb-wrap" style="font-size:13.5px;"><input type="checkbox" id="stm-mechanic-need"><span class="cb-box"></span>Needs Vehicle Mechanic</label></div>
       <div class="fg"><label class="field-label">Vehicles for this Patrol</label>
@@ -2070,8 +2074,10 @@ function generateSuggestion(){
   var base=stmEligibleBase();
   var officerNeeded=document.getElementById('stm-officer-need').checked;
   var officerPicked=document.getElementById('stm-officer-pick').value;
-  var jcoCount=parseInt(document.getElementById('stm-jco-count').value)||0;
+  var jcoCount=Math.max(0,parseInt(document.getElementById('stm-jco-count').value)||0);
   var othersCount=Math.max(0,parseInt(document.getElementById('stm-others').value)||0);
+  var medicalCount=Math.max(0,parseInt(document.getElementById('stm-medical-count').value)||0);
+  var signalCount=Math.max(0,parseInt(document.getElementById('stm-signal-count').value)||0);
   var mechanicNeeded=document.getElementById('stm-mechanic-need').checked;
   var apcCount=Math.max(0,parseInt(document.getElementById('stm-apc').value)||0);
   var heavyCount=Math.max(0,parseInt(document.getElementById('stm-heavy').value)||0);
@@ -2080,6 +2086,7 @@ function generateSuggestion(){
   var used={};
   var slots=[];
   var warnings=[];
+  function isFemale(id){ var t=troopById(id); return t&&t.gender==='Female'; }
 
   function take(pool,role,forceId){
     var candidates=pool.filter(function(id){ return !used[id]; });
@@ -2089,23 +2096,43 @@ function generateSuggestion(){
     return chosen;
   }
 
-  // Compulsory core
+  // ── STAGE 1: Role/rank-required seats. ──────────────────────────────────
+  // Every pool below is ranked ONLY by rotation/overdue score (stmRank) —
+  // gender plays no part here. Rank/role always outranks gender, so a
+  // requirement of "1 JCO" fills exactly one JCO seat (male or female,
+  // whichever is most overdue) and never adds a second person just because
+  // of gender. Rotation is independent per category (JCO among JCOs,
+  // Medical among Medical, Signal among Signal, Driver among Drivers,
+  // Other Rank among Other Ranks).
+
+  // Officer
   if(officerNeeded){
     var officerPool=stmRank(base.filter(function(t){return t.category==='Officer';}));
     var chosen=take(officerPool,'Officer',officerPicked||null);
     if(!chosen) warnings.push('No available Officer found.');
   }
+
+  // JCO — category 'JCO' already means WO1/WO2 only (see classifyCategory).
   var jcoPool=stmRank(base.filter(function(t){return t.category==='JCO';}));
   for(var i=0;i<jcoCount;i++){
     var c=take(jcoPool,'JCO');
     if(!c) warnings.push('No available JCO found for slot '+(i+1)+'.');
   }
+
+  // Medical — fills exactly the entered requirement, no more.
   var medicalPool=stmRank(base.filter(function(t){return t.trade==='Medical';}));
-  var cm=take(medicalPool,'Medical');
-  if(!cm) warnings.push('No available Medical troop found.');
+  for(var m=0;m<medicalCount;m++){
+    var cm=take(medicalPool,'Medical');
+    if(!cm) warnings.push('No available Medical troop found for slot '+(m+1)+'.');
+  }
+
+  // Signal — fills exactly the entered requirement, no more.
   var signalPool=stmRank(base.filter(function(t){return t.trade==='Signal';}));
-  var cs=take(signalPool,'Signal');
-  if(!cs) warnings.push('No available Signal troop found.');
+  for(var s=0;s<signalCount;s++){
+    var cs=take(signalPool,'Signal');
+    if(!cs) warnings.push('No available Signal troop found for slot '+(s+1)+'.');
+  }
+
   if(mechanicNeeded){
     var mechPool=stmRank(base.filter(function(t){return t.trade==='Mechanic';}));
     var cme=take(mechPool,'Vehicle Mechanic');
@@ -2135,28 +2162,59 @@ function generateSuggestion(){
     if(!c) warnings.push('No driver available for Light seat '+(l+1)+'.');
   }
 
-  // Female inclusion: pair priority + guarantee for a female Officer/JCO
-  function isFemale(id){ var t=troopById(id); return t&&t.gender==='Female'; }
-  var femaleOfficerOrJco=slots.some(function(s){return (s.role==='Officer'||s.role==='JCO')&&s.chosenId&&isFemale(s.chosenId);});
-  var femaleAlreadyIn=slots.some(function(s){return s.chosenId&&isFemale(s.chosenId);});
-  var forcedFemaleNeeded=femaleOfficerOrJco&&!femaleAlreadyIn;
+  // ── STAGE 2: "Others" (general Other Rank) seats — rotation first, then
+  // gender balance applied only within this pool, never by inflating the
+  // requested headcount or by re-touching role seats already filled above. ──
+  var MAX_FEMALES_PER_PATROL=3; // per "normally limited to 2 or 3 maximum"
 
-  var generalRanked=stmRank(base);
-  var femalePool=generalRanked.filter(function(id){return !used[id]&&isFemale(id);});
-  var malePool=generalRanked.filter(function(id){return !used[id]&&!isFemale(id);});
+  var committedFemales=slots.filter(function(sl){return sl.chosenId&&isFemale(sl.chosenId);}).length;
+  var femaleOfficerOrJco=slots.some(function(sl){return (sl.role==='Officer'||sl.role==='JCO')&&sl.chosenId&&isFemale(sl.chosenId);});
+
+  var generalRanked=stmRank(base.filter(function(t){return !used[t.id];}));
+  var femalePool=generalRanked.filter(function(id){return isFemale(id);});
+  var malePool=generalRanked.filter(function(id){return !isFemale(id);});
+
   var othersChosen=[];
   var remaining=othersCount;
-  var femalesToTry=femalePool.length>=2?2:(femalePool.length===1?1:0);
-  var take2=Math.min(femalesToTry,remaining);
-  for(var f=0;f<take2;f++){ othersChosen.push(femalePool.shift()); remaining--; }
-  if(forcedFemaleNeeded && othersChosen.every(function(id){return !isFemale(id);}) && femalePool.length>0){
-    if(remaining<=0){ remaining++; othersCount++; } // guarantee overrides the count if needed
-    othersChosen.push(femalePool.shift()); remaining--;
+  var roomForFemales=Math.max(0,MAX_FEMALES_PER_PATROL-committedFemales);
+
+  // Aim for a balanced 2 (buddy-paired) additional females when the pool,
+  // remaining seats and per-patrol cap allow it — never a lone addition
+  // that would leave exactly one female in the whole patrol.
+  var femalesToAdd=0;
+  if(remaining>0 && femalePool.length>0 && roomForFemales>0){
+    var idealPair=Math.min(2,femalePool.length,remaining,roomForFemales);
+    if(committedFemales===0){
+      // No female yet anywhere in the patrol: only add females in a pair
+      // (2), or skip entirely if a pair can't be formed — never exactly 1.
+      femalesToAdd=(idealPair>=2)?2:0;
+    } else {
+      // A female is already present (e.g. a female JCO/Medical/Signal/
+      // Driver) — she is not "alone" once at least one more Other Rank
+      // (any gender) is present, so we don't need to force another
+      // female here; but we still allow rotation to add up to the cap.
+      femalesToAdd=Math.min(idealPair,roomForFemales);
+    }
   }
+  for(var f=0;f<femalesToAdd;f++){ othersChosen.push(femalePool.shift()); remaining--; }
+
+  // Fill the rest by pure rotation (overdue score), regardless of gender.
   var mergedRest=femalePool.concat(malePool).sort(function(x,y){return stmOverdueScore(troopById(y))-stmOverdueScore(troopById(x));});
   while(remaining>0 && mergedRest.length>0){ othersChosen.push(mergedRest.shift()); remaining--; }
-  othersChosen.forEach(function(id){ used[id]=true; slots.push({role:'Other',chosenId:id,pool:generalRanked,poolPos:generalRanked.indexOf(id)}); });
+
+  othersChosen.forEach(function(id){ used[id]=true; slots.push({role:'Other Rank',chosenId:id,pool:generalRanked,poolPos:generalRanked.indexOf(id)}); });
   if(othersChosen.length<othersCount) warnings.push('Only '+othersChosen.length+' of '+othersCount+' "Others" seats could be filled — not enough available troops left.');
+
+  // ── STAGE 3: Final safety checks (advisory only — never removes a
+  // role/rank-required selection to fix a gender-balance issue). ──────────
+  var totalFemales=slots.filter(function(sl){return sl.chosenId&&isFemale(sl.chosenId);}).length;
+  var totalOtherRanksIncludingRole=slots.filter(function(sl){return sl.chosenId&&(sl.role==='Other Rank'||sl.role==='JCO'||sl.role==='Medical'||sl.role==='Signal'||sl.role.indexOf('Driver')===0);}).length;
+  if(totalFemales===1){
+    warnings.push('Only one female is currently in this patrol — pairing was not possible with the available/eligible pool. Review before deploying, or add an "Other" seat and regenerate.');
+  }
+  if(femaleOfficerOrJco && totalOtherRanksIncludingRole===0){
+    warnings.push('A female Officer/JCO is selected but no Other Rank soldier accompanies her — increase "Others" (or another role count) so she is not on patrol without an escort.');
+  }
 
   _stmSlots=slots;
   renderStmResults(warnings);
