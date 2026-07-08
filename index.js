@@ -318,7 +318,13 @@ app.get('/config', async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT key, value FROM app_config');
     const config = {};
-    rows.forEach(r => { config[r.key] = r.value; });
+    rows.forEach(r => {
+      let v = r.value;
+      if (typeof v === 'string') {
+        try { v = JSON.parse(v); } catch (e) { /* leave as-is if it wasn't actually JSON */ }
+      }
+      config[r.key] = v;
+    });
     res.json(config);
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
 });

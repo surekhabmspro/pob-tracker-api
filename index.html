@@ -1364,16 +1364,14 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     </div>
     <div id="stm-config">
       <div class="fg" style="display:flex;align-items:center;gap:8px;">
-        <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:400;white-space:nowrap;"><input type="checkbox" id="stm-officer-need" style="width:auto;" checked onchange="stmToggleOfficer()"> Include Officer</label>
+        <label class="cb-wrap" style="font-size:13.5px;"><input type="checkbox" id="stm-officer-need" checked onchange="stmToggleOfficer()"><span class="cb-box"></span>Include Officer</label>
       </div>
       <div class="fg" id="stm-officer-wrap"><label class="field-label">Officer (few available — pick manually if needed)</label><select id="stm-officer-pick"></select></div>
       <div class="fr">
-        <div class="fg"><label class="field-label">JCOs Needed</label>
-          <select id="stm-jco-count"><option value="0">0</option><option value="1" selected>1</option><option value="2">2</option></select>
-        </div>
+        <div class="fg"><label class="field-label">JCOs Needed</label><input type="number" id="stm-jco-count" min="0" value="1"></div>
         <div class="fg"><label class="field-label">Others (general troops)</label><input type="number" id="stm-others" min="0" value="4"></div>
       </div>
-      <div class="fg"><label style="display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:400;"><input type="checkbox" id="stm-mechanic-need" style="width:auto;"> Needs Vehicle Mechanic</label></div>
+      <div class="fg"><label class="cb-wrap" style="font-size:13.5px;"><input type="checkbox" id="stm-mechanic-need"><span class="cb-box"></span>Needs Vehicle Mechanic</label></div>
       <div class="fg"><label class="field-label">Vehicles for this Patrol</label>
         <div class="fr" style="gap:8px;">
           <div class="fg"><label class="field-label" style="font-size:10.5px;">🛡 APC</label><input type="number" id="stm-apc" min="0" value="0"></div>
@@ -1543,20 +1541,21 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
           <option value="Driver">Driver</option>
           <option value="Mechanic">Vehicle Mechanic</option>
           <option value="Administration">Administration</option>
+          <option value="POB Commander">POB Commander</option>
         </select>
       </div>
       <div class="fg" id="t-driver-quals-wrap" style="display:none;">
         <label class="field-label">🚚 Qualified For</label>
         <div style="display:flex;gap:10px;align-items:center;padding-top:6px;font-size:13px;">
-          <label style="display:flex;align-items:center;gap:4px;font-weight:400;"><input type="checkbox" id="t-qual-apc" style="width:auto;"> APC</label>
-          <label style="display:flex;align-items:center;gap:4px;font-weight:400;"><input type="checkbox" id="t-qual-heavy" style="width:auto;"> Heavy</label>
-          <label style="display:flex;align-items:center;gap:4px;font-weight:400;"><input type="checkbox" id="t-qual-light" style="width:auto;"> Light</label>
+          <label class="cb-wrap"><input type="checkbox" id="t-qual-apc"><span class="cb-box"></span>APC</label>
+          <label class="cb-wrap"><input type="checkbox" id="t-qual-heavy"><span class="cb-box"></span>Heavy</label>
+          <label class="cb-wrap"><input type="checkbox" id="t-qual-light"><span class="cb-box"></span>Light</label>
         </div>
       </div>
     </div>
     <div class="fg" style="display:flex;flex-direction:column;gap:8px;">
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;"><input type="checkbox" id="t-never-suggest" style="width:auto;"> Never suggest for patrol (e.g. Medical Officer / Doctor)</label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;"><input type="checkbox" id="t-restricted-range" style="width:auto;"> Restricted range — not suitable for distant patrols (e.g. Armoury Keeper, Storeman)</label>
+      <label class="cb-wrap" style="font-size:13px;"><input type="checkbox" id="t-never-suggest"><span class="cb-box"></span>Never suggest for patrol (e.g. Medical Officer / Doctor)</label>
+      <label class="cb-wrap" style="font-size:13px;"><input type="checkbox" id="t-restricted-range"><span class="cb-box"></span>Restricted range — not suitable for distant patrols (e.g. Armoury Keeper, Storeman)</label>
     </div>
     <div class="fg"><label class="field-label">Notes / Skills / Restrictions</label><textarea id="t-notes" rows="2" placeholder="e.g. Medic trained, No night ops..."></textarea></div>
     <div class="modal-actions" style="justify-content:stretch;">
@@ -1801,17 +1800,40 @@ function flushOutbox(){
     var q2=loadOutbox(); q2.shift(); saveOutbox(q2);
     return flushOutbox();
   }).catch(function(e){
+    if(e && e.status>=400 && e.status<500){
+      // A genuine rejection (bad data, auth mismatch) — retrying the exact
+      // same payload forever would never succeed and would block every
+      // future sync. Drop just this one item and keep going.
+      console.error('Server rejected a queued change — dropping it so sync can continue:',op,e);
+      var q2=loadOutbox(); q2.shift(); saveOutbox(q2);
+      return flushOutbox();
+    }
     console.warn('Outbox flush paused (offline?)',e);
     return false;
   });
 }
 
 // ── API helpers ────────────────────────────────────────────────────────
+// CRITICAL FIX: the previous version resolved successfully for ANY response
+// that returned valid JSON — including 400/401/429/500 error bodies. That
+// meant a rejected save (bad data, rate limit, auth mismatch) looked
+// identical to a successful one on screen, while nothing was actually
+// written to the database. This version properly rejects on any non-2xx
+// status so the existing retry/offline-queue logic actually engages.
 function apiFetch(path, opts) {
   opts = opts || {};
   var headers = Object.assign({'Content-Type':'application/json','x-api-key':API_KEY}, opts.headers||{});
   return fetch(API_URL + path, Object.assign({}, opts, {headers:headers}))
-    .then(function(r){ return r.json(); });
+    .then(function(r){
+      return r.json().catch(function(){ return {}; }).then(function(data){
+        if(!r.ok){
+          var err=new Error((data&&data.error)||('Request failed with status '+r.status));
+          err.status=r.status; err.data=data;
+          throw err;
+        }
+        return data;
+      });
+    });
 }
 function dbToTroop(r) {
   return {id:r.id,name:r.name,rank:r.rank,unit:r.unit,sn:r.sn||'',status:r.status||'available',notes:r.notes||'',phoneLocal:r.phone_local||'',phoneWa:r.phone_wa||'',bloodGroup:r.blood_group||'',deploymentDate:r.deployment_date?String(r.deployment_date).slice(0,10):'',weaponNumber:r.weapon_number||'',gender:r.gender||'',category:r.category||'',trade:r.trade||'',driverQuals:r.driver_quals||'',targetPct:(r.target_pct!=null?r.target_pct:100),neverSuggest:!!r.never_suggest,restrictedRange:!!r.restricted_range};
@@ -2176,15 +2198,29 @@ function renumberPatrols(){
     if(a.date!==b.date) return a.date<b.date?-1:1;
     return existingSeq(b)-existingSeq(a); // same date: descending by old number
   });
-  sorted.forEach(function(p,i){
-    p.ptlId='PTL-'+year+'-'+String(startNum+i).padStart(3,'0');
-    remoteSavePatrol(p);
-  });
+  sorted.forEach(function(p,i){ p.ptlId='PTL-'+year+'-'+String(startNum+i).padStart(3,'0'); });
   D.counter=startNum+sorted.length;
-  remoteSaveConfig();
   saveData(); renderTable(); renderDash();
-  showAlert('renum-alert','Renumbered '+sorted.length+' patrols, starting at '+startNum+'.','success');
-  audit('Renumbered all patrols by date, starting at '+startNum+' ('+year+')');
+  showAlert('renum-alert','Renumbering '+sorted.length+' patrols… saving to server, please wait.','success');
+  // Saved a few at a time with a short pause between batches — firing 100+
+  // requests instantly can trip the server's rate limit and silently drop
+  // some of them. This keeps every single one reliable instead of fast.
+  var i=0, batchSize=15;
+  function nextBatch(){
+    var batch=sorted.slice(i,i+batchSize);
+    if(batch.length===0){
+      remoteSaveConfig();
+      showAlert('renum-alert','Renumbered all '+sorted.length+' patrols, starting at '+startNum+'.','success');
+      audit('Renumbered all patrols by date, starting at '+startNum+' ('+year+')');
+      return;
+    }
+    Promise.all(batch.map(function(p){ return remoteSavePatrol(p); })).then(function(){
+      i+=batchSize;
+      showAlert('renum-alert','Saved '+Math.min(i,sorted.length)+' of '+sorted.length+'…','success');
+      setTimeout(nextBatch,600);
+    });
+  }
+  nextBatch();
 }
 function parseDate(s){ if(!s) return ''; s=s.trim(); if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; var p=s.split('/'); if(p.length===3&&p[2]&&p[2].length===4) return p[2]+'-'+p[1].padStart(2,'0')+'-'+p[0].padStart(2,'0'); return ''; }
 function fmtDate(d){ if(!d) return ''; try{ var dt=new Date(d+'T12:00:00'); return String(dt.getDate()).padStart(2,'0')+'/'+String(dt.getMonth()+1).padStart(2,'0')+'/'+dt.getFullYear(); } catch(e){ return d; } }
@@ -2520,8 +2556,8 @@ function saveAdminTargetPct(){
   n=Math.max(0,Math.min(100,n));
   D.settings.adminTargetPct=n;
   remoteSaveConfig();
-  D.troops.filter(function(t){ return t.trade==='Administration'; }).forEach(function(t){ t.targetPct=n; remoteSaveTroop(t); });
-  showAlert('admin-pct-alert','Applied '+n+'% to all Administration-trade troops.','success');
+  D.troops.filter(function(t){ return t.trade==='Administration'||t.trade==='POB Commander'; }).forEach(function(t){ t.targetPct=n; remoteSaveTroop(t); });
+  showAlert('admin-pct-alert','Applied '+n+'% to all Administration and POB Commander troops.','success');
   audit('Administration patrol target set to '+n+'%');
 }
 function renderRankTags(){ document.getElementById('rank-tags').innerHTML=D.config.ranks.map(function(r,i){ return '<div class="tag"><button style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:0 3px;font-size:12px;" onclick="moveRank('+i+',-1)">↑</button><span>'+r+'</span><button style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:0 3px;font-size:12px;" onclick="moveRank('+i+',1)">↓</button><button class="tag-del" onclick="removeRank('+i+')" title="Remove rank">×</button></div>'; }).join(''); }
@@ -3164,11 +3200,11 @@ function saveTroop(){
   if(editId){
     var t=D.troops.find(function(x){return x.id===editId;});
     if(t){
-      var wasAdmin=(t.trade==='Administration');
+      var wasAdmin=(t.trade==='Administration'||t.trade==='POB Commander');
       t.name=name;t.rank=rank;t.unit=unit;t.sn=sn;t.status=status;t.bloodGroup=bloodGroup;t.weaponNumber=weaponNumber;t.deploymentDate=deploymentDate;t.phoneLocal=phoneLocal;t.phoneWa=phoneWa;t.notes=notes;t.gender=gender;t.category=category;t.trade=trade;t.driverQuals=driverQuals;t.neverSuggest=neverSuggest;t.restrictedRange=restrictedRange;
       // Target % is otherwise only managed in Settings. It's only auto-adjusted
-      // here the moment Trade actually switches to/from Administration.
-      var nowAdmin=(trade==='Administration');
+      // here the moment Trade actually switches to/from Administration or POB Commander.
+      var nowAdmin=(trade==='Administration'||trade==='POB Commander');
       var adminPct=(D.settings.adminTargetPct!=null?D.settings.adminTargetPct:25);
       if(nowAdmin && !wasAdmin) t.targetPct=adminPct;
       else if(!nowAdmin && wasAdmin && t.targetPct===adminPct) t.targetPct=100;
@@ -3179,7 +3215,7 @@ function saveTroop(){
     audit('Troop updated: '+rank+' '+name); cancelEdit();
   } else {
     if(D.troops.find(function(t){return t.name.toLowerCase()===name.toLowerCase();})){showAlert('t-alert','Troop already exists.','danger');return;}
-    var newT={id:uid('t'),name:name,rank:rank,unit:unit,sn:sn,status:status,bloodGroup:bloodGroup,weaponNumber:weaponNumber,deploymentDate:deploymentDate,phoneLocal:phoneLocal,phoneWa:phoneWa,notes:notes,gender:gender,category:category,trade:trade,driverQuals:driverQuals,neverSuggest:neverSuggest,restrictedRange:restrictedRange,targetPct:(trade==='Administration'?(D.settings.adminTargetPct!=null?D.settings.adminTargetPct:25):100)};
+    var newT={id:uid('t'),name:name,rank:rank,unit:unit,sn:sn,status:status,bloodGroup:bloodGroup,weaponNumber:weaponNumber,deploymentDate:deploymentDate,phoneLocal:phoneLocal,phoneWa:phoneWa,notes:notes,gender:gender,category:category,trade:trade,driverQuals:driverQuals,neverSuggest:neverSuggest,restrictedRange:restrictedRange,targetPct:((trade==='Administration'||trade==='POB Commander')?(D.settings.adminTargetPct!=null?D.settings.adminTargetPct:25):100)};
     D.troops.push(newT); remoteSaveTroop(newT); renderRoster(); populateAutoSuggestLists();
     showAlert('t-alert',rank+' '+name+' added!','success');
     audit('Troop added: '+rank+' '+name);
@@ -3268,7 +3304,7 @@ function renderRoster(){
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">'+
       '<div style="cursor:pointer;flex:1;min-width:0;" onclick="showProfile(\''+t.id+'\')">'+
       '<div class="troop-card-name">'+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong></div>'+
-      '<div class="troop-card-sub">'+(t.unit||'')+(t.sn?' · '+t.sn:'')+'</div></div>'+
+      '<div class="troop-card-sub">'+(t.unit||'')+(t.sn?' · SVC '+t.sn:'')+(t.weaponNumber?' · 🔫 '+t.weaponNumber:'')+'</div></div>'+
       '<div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">'+
       statusBadge(t.status||'available')+
       (isAvailable(t)&&ds>inactiveThresholdDays(t)?'<span class="inactive-badge">'+(ds===9999?'N/A':ds+'d')+'</span>':'')+
@@ -3278,6 +3314,7 @@ function renderRoster(){
       '<span class="pc-chip">⏱ <strong>'+patrolHours(t.id).toFixed(1)+'h</strong></span>'+
       '<span class="pc-chip">📅 <strong>'+mo+'</strong> this mo.</span>'+
       '<span class="pc-chip">🕒 '+(lp?fmtDateLong(lp):'Never')+'</span>'+
+      (t.trade?'<span class="pc-chip">🎖 <strong>'+t.trade.toUpperCase()+'</strong></span>':'')+
       '</div>'+
       '<div class="pc-chiprow-oneline" style="margin-bottom:6px;">'+
       '<span class="pc-chip">🩸 <strong style="color:var(--red-light);">'+(t.bloodGroup||'N/A')+'</strong></span>'+
@@ -3338,6 +3375,7 @@ function showProfile(id, fromArch){
     '<div><div class="pf-label">DEPLOYMENT DATE</div><div class="pf-value">'+(t.deploymentDate?fmtDateLong(t.deploymentDate):'Not recorded')+'</div></div>'+
     '<div><div class="pf-label">SVC NO.</div><div class="pf-value">'+(t.sn||'—')+'</div></div>'+
     '<div><div class="pf-label">🔫 WEAPON NO.</div><div class="pf-value">'+(t.weaponNumber||'Not recorded')+'</div></div>'+
+    '<div><div class="pf-label">🎖 ROLE</div><div class="pf-value">'+(t.trade||'Not set')+'</div></div>'+
     '<div><div class="pf-label">🩸 BLOOD GROUP</div><div class="pf-value" style="'+(t.bloodGroup?'color:var(--red-light);':'')+'">'+(t.bloodGroup||'Not recorded')+'</div></div>'+
     '<div><div class="pf-label">📞 LOCAL NO.</div><div class="pf-value">'+(t.phoneLocal?'<a href="tel:'+t.phoneLocal.replace(/\s+/g,'')+'" style="color:var(--tan);text-decoration:none;">'+t.phoneLocal+'</a>':'—')+'</div></div>'+
     '<div><div class="pf-label">💬 WHATSAPP NO.</div><div class="pf-value">'+(t.phoneWa?'<a href="https://wa.me/'+t.phoneWa.replace(/[^0-9]/g,'')+'" target="_blank" style="color:var(--tan);text-decoration:none;">'+t.phoneWa+'</a>':'—')+'</div></div>'+
