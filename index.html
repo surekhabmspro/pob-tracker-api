@@ -2299,6 +2299,16 @@ function effectiveDeploymentDate(t){
   }
   return null;
 }
+// For a Driver, shows their qualified grade(s) folded into the Role itself
+// (e.g. "Heavy Driver", "APC/Heavy Driver") instead of a separate field —
+// keeps the info visible without a heading that's blank for everyone else.
+function roleDisplay(t){
+  if(t.trade==='Driver'){
+    var quals=(t.driverQuals||'').split(',').filter(Boolean);
+    return quals.length?quals.map(function(q){return q+' Driver';}).join(', '):'Driver';
+  }
+  return t.trade||'';
+}
 function troopById(id){ return D.troops.find(function(x){return x.id===id;})||D.archived.find(function(x){return x.id===id;}); }
 function troopLabel(id){ var t=troopById(id)||personById(id); return t?upLabel(t.rank,t.name):'?'; }
 function troopNames(p){ return (p.troops||[]).map(troopLabel).join(', '); }
@@ -3346,9 +3356,8 @@ function renderRoster(){
       '<div class="pc-chiprow tc-group">'+
       (t.sn?'<span class="pc-chip">🪪 <strong>'+t.sn+'</strong></span>':'')+
       (t.weaponNumber?'<span class="pc-chip">🔫 <strong>'+t.weaponNumber+'</strong></span>':'')+
-      (t.trade?'<span class="pc-chip">🎖 <strong>'+t.trade.toUpperCase()+'</strong></span>':'')+
+      (roleDisplay(t)?'<span class="pc-chip" style="border-color:var(--tan-dark);background:rgba(230,179,74,0.12);color:var(--tan);">🎖 <strong style="color:var(--tan);">'+roleDisplay(t).toUpperCase()+'</strong></span>':'')+
       (t.gender?'<span class="pc-chip">⚧ '+t.gender+'</span>':'')+
-      (t.trade==='Driver'&&t.driverQuals?'<span class="pc-chip">🚚 '+t.driverQuals.split(',').filter(Boolean).join('/')+'</span>':'')+
       (t.unit?'<span class="pc-chip">🏢 '+t.unit+'</span>':'')+
       '</div>'+
       '<div class="pc-chiprow-oneline tc-group">'+
@@ -3412,13 +3421,12 @@ function showProfile(id, fromArch){
     '<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border);">'+
     '<div class="pf-grid">'+
     '<div><div class="pf-label">RANK</div><div class="pf-value">'+t.rank+'</div></div>'+
-    '<div><div class="pf-label">🎖 ROLE</div><div class="pf-value">'+(t.trade||'Not set')+'</div></div>'+
+    '<div><div class="pf-label">🎖 ROLE</div><div class="pf-value" style="'+(roleDisplay(t)?'color:var(--tan);':'')+'">'+(roleDisplay(t)||'Not set')+'</div></div>'+
     '<div><div class="pf-label">⚧ GENDER</div><div class="pf-value">'+(t.gender||'Not recorded')+'</div></div>'+
     '<div><div class="pf-label">UNIT</div><div class="pf-value">'+(t.unit||'—')+'</div></div>'+
-    '<div><div class="pf-label">STATUS</div><div style="margin-top:2px;">'+statusBadge(t.status||'available')+'</div></div>'+
-    '<div><div class="pf-label">🚚 DRIVER TYPE</div><div class="pf-value">'+(t.trade==='Driver'?((t.driverQuals||'').split(',').filter(Boolean).join(', ')||'Not set'):'—')+'</div></div>'+
     '<div><div class="pf-label">PERSONAL NO.</div><div class="pf-value">'+(t.sn||'—')+'</div></div>'+
     '<div><div class="pf-label">🔫 WEAPON NO.</div><div class="pf-value">'+(t.weaponNumber||'Not recorded')+'</div></div>'+
+    '<div><div class="pf-label">STATUS</div><div style="margin-top:2px;">'+statusBadge(t.status||'available')+'</div></div>'+
     '<div><div class="pf-label">🩸 BLOOD GROUP</div><div class="pf-value" style="'+(t.bloodGroup?'color:var(--red-light);':'')+'">'+(t.bloodGroup||'Not recorded')+'</div></div>'+
     '<div><div class="pf-label">DEPLOYMENT DATE</div><div class="pf-value">'+(t.deploymentDate?fmtDateLong(t.deploymentDate):'Not recorded')+'</div></div>'+
     '<div><div class="pf-label">📞 LOCAL NO.</div><div class="pf-value">'+(t.phoneLocal?'<a href="tel:'+t.phoneLocal.replace(/\s+/g,'')+'" style="color:var(--tan);text-decoration:none;">'+t.phoneLocal+'</a>':'—')+'</div></div>'+
