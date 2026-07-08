@@ -2070,6 +2070,24 @@ function stmToggleOfficer(){
 }
 function backToStmConfig(){ document.getElementById('stm-config').style.display=''; document.getElementById('stm-results').style.display='none'; }
 
+function stmDutyPctMap(){
+  // Same formula as the Participation page: a troop's patrol hours since
+  // their own effective deployment date, divided by total unit patrol
+  // hours over that same window. This is the "duty percentage" used for
+  // rotation — lower % means less-used and more due for selection.
+  var todayISO=new Date().toISOString().slice(0,10);
+  var map={};
+  D.troops.forEach(function(t){
+    var dep=effectiveDeploymentDate(t);
+    var unitPats=dep?D.patrols.filter(function(p){return p.date>=dep&&p.date<=todayISO;}):[];
+    var unitHours=unitPats.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0);
+    var troopHours=unitPats.filter(function(p){return (p.troops||[]).indexOf(t.id)>=0;})
+      .reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0);
+    map[t.id]=unitHours>0?(troopHours/unitHours*100):0;
+  });
+  return map;
+}
+
 function generateSuggestion(){
   var base=stmEligibleBase();
   var officerNeeded=document.getElementById('stm-officer-need').checked;
@@ -2088,9 +2106,26 @@ function generateSuggestion(){
   var warnings=[];
   function isFemale(id){ var t=troopById(id); return t&&t.gender==='Female'; }
 
-  var FEMALE_CAP=3; // "normally limited to 2 or 3 maximum per patrol"
+  var dutyPct=stmDutyPctMap();
+  // Category-based rotation: lowest duty % first. Ties broken by longest
+  // time since last patrol, then name, for a stable, explainable order.
+  function rankByDuty(pool){
+    return pool.slice().sort(function(a,b){
+      var d=dutyPct[a.id]-dutyPct[b.id];
+      if(d!==0) return d;
+      var ds=daysSince(lastPatrol(b.id))-daysSince(lastPatrol(a.id));
+      if(ds!==0) return ds;
+      return (a.name||'').localeCompare(b.name||'');
+    }).map(function(t){ return t.id; });
+  }
+
+  var FEMALE_CAP=3; // total female-quota ceiling for the whole patrol
   var femaleCount=0;
 
+  // Pure category rotation — no gender check at all. A category's own
+  // rotation queue decides its seat; a female JCO/Signaller/Medic/Driver
+  // is never skipped for being female, and simultaneously fulfills both
+  // her specialty seat AND one female-quota slot.
   function take(pool,role,forceId){
     var candidates=pool.filter(function(id){ return !used[id]; });
     var chosen=forceId&&!used[forceId]?forceId:(candidates[0]||null);
@@ -2099,155 +2134,127 @@ function generateSuggestion(){
     return chosen;
   }
 
-  // Medical/Signal/Driver honor "rotation, THEN gender balance" — once the
-  // patrol-wide female cap is reached, skip to the next most-overdue male
-  // in that SAME pool if one is available. If no male is available for
-  // that role, the role requirement still wins and the female is taken
-  // anyway (the role must be filled — gender only skips when there's a
-  // real alternative).
-  function takeCapped(pool,role){
-    var candidates=pool.filter(function(id){ return !used[id]; });
-    var chosen=null;
-    if(candidates.length){
-      if(femaleCount>=FEMALE_CAP){
-        chosen=candidates.find(function(id){return !isFemale(id);})||candidates[0];
-      } else {
-        chosen=candidates[0];
-      }
-    }
-    if(chosen){ used[chosen]=true; if(isFemale(chosen)) femaleCount++; }
-    slots.push({role:role,chosenId:chosen,pool:pool,poolPos:pool.indexOf(chosen)});
-    return chosen;
-  }
-
-  // ── STAGE 1: Role/rank-required seats. ──────────────────────────────────
-  // Every pool below is ranked ONLY by rotation/overdue score (stmRank) —
-  // gender plays no part here. Rank/role always outranks gender, so a
-  // requirement of "1 JCO" fills exactly one JCO seat (male or female,
-  // whichever is most overdue) and never adds a second person just because
-  // of gender. Rotation is independent per category (JCO among JCOs,
-  // Medical among Medical, Signal among Signal, Driver among Drivers,
-  // Other Rank among Other Ranks).
-
-  // Officer
+  // ── STAGE 1: Category-based rotation seats (Officer, JCO, Medical,
+  // Signal, Driver). Each category competes only against itself, ranked
+  // strictly by lowest duty %. ─────────────────────────────────────────
   if(officerNeeded){
-    var officerPool=stmRank(base.filter(function(t){return t.category==='Officer';}));
+    var officerPool=rankByDuty(base.filter(function(t){return t.category==='Officer';}));
     var chosen=take(officerPool,'Officer',officerPicked||null);
     if(!chosen) warnings.push('No available Officer found.');
   }
 
-  // JCO — category 'JCO' already means WO1/WO2 only (see classifyCategory).
-  var jcoPool=stmRank(base.filter(function(t){return t.category==='JCO';}));
+  // JCO — category 'JCO' already means WO1/WO2 only.
+  var jcoPool=rankByDuty(base.filter(function(t){return t.category==='JCO';}));
   for(var i=0;i<jcoCount;i++){
     var c=take(jcoPool,'JCO');
     if(!c) warnings.push('No available JCO found for slot '+(i+1)+'.');
   }
 
-  // Medical — fills exactly the entered requirement, no more.
-  var medicalPool=stmRank(base.filter(function(t){return t.trade==='Medical';}));
+  // Medical
+  var medicalPool=rankByDuty(base.filter(function(t){return t.trade==='Medical';}));
   for(var m=0;m<medicalCount;m++){
-    var cm=takeCapped(medicalPool,'Medical');
+    var cm=take(medicalPool,'Medical');
     if(!cm) warnings.push('No available Medical troop found for slot '+(m+1)+'.');
   }
 
-  // Signal — fills exactly the entered requirement, no more.
-  var signalPool=stmRank(base.filter(function(t){return t.trade==='Signal';}));
+  // Signal
+  var signalPool=rankByDuty(base.filter(function(t){return t.trade==='Signal';}));
   for(var s=0;s<signalCount;s++){
-    var cs=takeCapped(signalPool,'Signal');
+    var cs=take(signalPool,'Signal');
     if(!cs) warnings.push('No available Signal troop found for slot '+(s+1)+'.');
   }
 
   if(mechanicNeeded){
-    var mechPool=stmRank(base.filter(function(t){return t.trade==='Mechanic';}));
+    var mechPool=rankByDuty(base.filter(function(t){return t.trade==='Mechanic';}));
     var cme=take(mechPool,'Vehicle Mechanic');
     if(!cme) warnings.push('No available Vehicle Mechanic found.');
   }
 
-  // Drivers — APC hard-restricted; Heavy prefers Heavy/APC-qualified, falls
-  // back to any non-Light-only driver; Light accepts any driver.
+  // Drivers — licence-restricted eligibility:
+  //   APC-qualified   → may drive APC or Light only (not Heavy)
+  //   Heavy-qualified  → may drive Heavy or Light only (not APC)
+  //   Light-only       → may drive Light only
+  // So: APC seat ← APC-qualified pool. Heavy seat ← Heavy-qualified pool
+  // (no APC fallback). Light seat ← any driver. Within each eligible
+  // pool, the lowest-duty-% driver is selected.
   var drivers=base.filter(function(t){return t.trade==='Driver';});
   function hasQual(t,q){ return (t.driverQuals||'').split(',').indexOf(q)>=0; }
-  var apcDrivers=stmRank(drivers.filter(function(t){return hasQual(t,'APC');}));
-  var heavyPrimary=stmRank(drivers.filter(function(t){return hasQual(t,'Heavy');}));
-  var heavyFallback=stmRank(drivers.filter(function(t){return hasQual(t,'Heavy')||hasQual(t,'APC');}));
-  var lightAny=stmRank(drivers); // any driver — APC/Heavy quals cover Light too
+  var apcDrivers=rankByDuty(drivers.filter(function(t){return hasQual(t,'APC');}));
+  var heavyDrivers=rankByDuty(drivers.filter(function(t){return hasQual(t,'Heavy');}));
+  var lightAny=rankByDuty(drivers); // any driver — all quals cover Light
 
   for(var a=0;a<apcCount;a++){
-    var c=takeCapped(apcDrivers,'Driver (APC)');
+    var c=take(apcDrivers,'Driver (APC)');
     if(!c) warnings.push('No APC-qualified driver available for APC seat '+(a+1)+'.');
   }
   for(var h=0;h<heavyCount;h++){
-    var poolNow=heavyPrimary.filter(function(id){return !used[id];}).length?heavyPrimary:heavyFallback;
-    var c=takeCapped(poolNow,'Driver (Heavy)');
-    if(!c) warnings.push('No Heavy-capable driver available for Heavy seat '+(h+1)+'.');
+    var c=take(heavyDrivers,'Driver (Heavy)');
+    if(!c) warnings.push('No Heavy-qualified driver available for Heavy seat '+(h+1)+'.');
   }
   for(var l=0;l<lightCount;l++){
-    var c=takeCapped(lightAny,'Driver (Light)');
+    var c=take(lightAny,'Driver (Light)');
     if(!c) warnings.push('No driver available for Light seat '+(l+1)+'.');
   }
 
-  // ── STAGE 2: "Others" (general Other Rank) seats — rotation first, then
-  // gender balance applied only within this pool, never by inflating the
-  // requested headcount or by re-touching role seats already filled above. ──
-  var MAX_FEMALES_PER_PATROL=FEMALE_CAP; // per "normally limited to 2 or 3 maximum"
-
-  var committedFemales=femaleCount;
-  var femaleOfficerOrJco=slots.some(function(sl){return (sl.role==='Officer'||sl.role==='JCO')&&sl.chosenId&&isFemale(sl.chosenId);});
-
-  var generalRanked=stmRank(base.filter(function(t){
+  // ── STAGE 2: General ("Others") pool. ────────────────────────────────
+  // Female specialists/JCOs already counted in femaleCount above fill
+  // both their specialty seat AND a female-quota slot. After them, at
+  // most ONE additional female may come from the general pool — and even
+  // that one slot is not mandatory if general-role females are, on
+  // average, already carrying a higher duty % than general-role males
+  // (i.e. they're not under-utilized relative to the men in that pool).
+  var generalPool=base.filter(function(t){
     if(used[t.id]) return false;
-    // "Others" means general-duty Other Rank troops only. Anyone who
-    // belongs to a specialist category/trade (Officer, JCO, Medical,
-    // Signal, Driver, Mechanic) must NOT leak in here as filler just
-    // because their specialist count was set to 0 — if you excluded a
-    // role by setting its count to 0, that role's people stay excluded.
     if(t.category==='Officer'||t.category==='JCO') return false;
     if(t.trade==='Medical'||t.trade==='Signal'||t.trade==='Driver'||t.trade==='Mechanic') return false;
     return true;
-  }));
-  var femalePool=generalRanked.filter(function(id){return isFemale(id);});
-  var malePool=generalRanked.filter(function(id){return !isFemale(id);});
+  });
+  var genFemaleTroops=generalPool.filter(function(t){return t.gender==='Female';});
+  var genMaleTroops=generalPool.filter(function(t){return t.gender!=='Female';});
+  var genFemaleRanked=rankByDuty(genFemaleTroops);
+  var generalPoolRankedFull=rankByDuty(generalPool); // fixed order, computed once, used for Replace
+  function avgDuty(troopArr){
+    if(!troopArr.length) return null;
+    return troopArr.reduce(function(s,t){return s+dutyPct[t.id];},0)/troopArr.length;
+  }
+  var avgF=avgDuty(genFemaleTroops), avgM=avgDuty(genMaleTroops);
+  var femaleSelectionMandatory=!(avgF!=null&&avgM!=null&&avgF>avgM);
+
+  var generalFemaleAllowed=Math.min(1,Math.max(0,FEMALE_CAP-femaleCount));
 
   var othersChosen=[];
   var remaining=othersCount;
-  var roomForFemales=Math.max(0,MAX_FEMALES_PER_PATROL-committedFemales);
 
-  // Aim for a balanced 2 (buddy-paired) additional females when the pool,
-  // remaining seats and per-patrol cap allow it — never a lone addition
-  // that would leave exactly one female in the whole patrol.
-  var femalesToAdd=0;
-  if(remaining>0 && femalePool.length>0 && roomForFemales>0){
-    var idealPair=Math.min(2,femalePool.length,remaining,roomForFemales);
-    if(committedFemales===0){
-      // No female yet anywhere in the patrol: only add females in a pair
-      // (2), or skip entirely if a pair can't be formed — never exactly 1.
-      femalesToAdd=(idealPair>=2)?2:0;
-    } else {
-      // A female is already present (e.g. a female JCO/Medical/Signal/
-      // Driver) — she is not "alone" once at least one more Other Rank
-      // (any gender) is present, so we don't need to force another
-      // female here; but we still allow rotation to add up to the cap.
-      femalesToAdd=Math.min(idealPair,roomForFemales);
+  // If mandatory and a slot is available, reserve the lowest-duty-%
+  // general female for one seat up front.
+  if(femaleSelectionMandatory && generalFemaleAllowed>0 && genFemaleRanked.length>0 && remaining>0){
+    othersChosen.push(genFemaleRanked[0]);
+    used[genFemaleRanked[0]]=true;
+    remaining--;
+  }
+
+  // Fill the rest by pure duty-% rotation across the whole general pool,
+  // skipping any further female once the (at-most-one) general female
+  // allowance has already been used.
+  var femalesUsedFromGeneral=othersChosen.length; // 0 or 1 at this point
+  var mixedRanked=rankByDuty(generalPool.filter(function(t){return !used[t.id];}));
+  var idx=0;
+  while(remaining>0 && idx<mixedRanked.length){
+    var id=mixedRanked[idx];
+    if(!used[id]){
+      if(isFemale(id) && femalesUsedFromGeneral>=generalFemaleAllowed){
+        idx++; continue; // cap reached — skip to next-lowest-duty male
+      }
+      othersChosen.push(id); used[id]=true; remaining--;
+      if(isFemale(id)) femalesUsedFromGeneral++;
     }
+    idx++;
   }
-  for(var f=0;f<femalesToAdd;f++){ othersChosen.push(femalePool.shift()); remaining--; }
 
-  // Fill the rest by pure rotation (overdue score), regardless of gender.
-  var mergedRest=femalePool.concat(malePool).sort(function(x,y){return stmOverdueScore(troopById(y))-stmOverdueScore(troopById(x));});
-  while(remaining>0 && mergedRest.length>0){ othersChosen.push(mergedRest.shift()); remaining--; }
-
-  othersChosen.forEach(function(id){ used[id]=true; slots.push({role:'Other Rank',chosenId:id,pool:generalRanked,poolPos:generalRanked.indexOf(id)}); });
+  othersChosen.forEach(function(id){ if(isFemale(id)) femaleCount++; slots.push({role:'Other Rank',chosenId:id,pool:generalPoolRankedFull,poolPos:generalPoolRankedFull.indexOf(id)}); });
   if(othersChosen.length<othersCount) warnings.push('Only '+othersChosen.length+' of '+othersCount+' "Others" seats could be filled — not enough available troops left.');
-
-  // ── STAGE 3: Final safety checks (advisory only — never removes a
-  // role/rank-required selection to fix a gender-balance issue). ──────────
-  var totalFemales=slots.filter(function(sl){return sl.chosenId&&isFemale(sl.chosenId);}).length;
-  var totalOtherRanksIncludingRole=slots.filter(function(sl){return sl.chosenId&&(sl.role==='Other Rank'||sl.role==='JCO'||sl.role==='Medical'||sl.role==='Signal'||sl.role.indexOf('Driver')===0);}).length;
-  if(totalFemales===1){
-    warnings.push('Only one female is currently in this patrol — pairing was not possible with the available/eligible pool. Review before deploying, or add an "Other" seat and regenerate.');
-  }
-  if(femaleOfficerOrJco && totalOtherRanksIncludingRole===0){
-    warnings.push('A female Officer/JCO is selected but no Other Rank soldier accompanies her — increase "Others" (or another role count) so she is not on patrol without an escort.');
+  if(!femaleSelectionMandatory && genFemaleTroops.length>0){
+    warnings.push('General-role females currently average a higher duty % than general-role males, so a general-pool female seat was not force-reserved this time (still eligible to fill in by rotation if she comes up).');
   }
 
   _stmSlots=slots;
