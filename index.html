@@ -353,6 +353,13 @@ body.light-mode{background:
        narrower layout below. ── */
   .rep-summary-grid{grid-template-columns:repeat(2,1fr);max-width:520px;}
 
+  /* ── Roster cards on a wide desktop screen have a lot of empty space to
+       the right of a single stacked column of chip-rows. Two columns for
+       the Personal/Weapon/Role/Unit and Blood/Contact groups uses that
+       space properly; the patrol-stats group still spans the full width
+       underneath both. ── */
+  .tc-body-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;}
+
   /* ── Patrol history rows inside profile/full-record: a bit more room
        and larger text now that the modal isn't stretched full-width ── */
   .ph-row{padding:11px 0;}
@@ -588,6 +595,8 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 .patrol-card-meta{font-size:13.5px;color:var(--text-muted);margin-top:3px;line-height:1.4;}
 .patrol-card-actions{display:flex;gap:6px;align-items:center;flex-shrink:0;}
 /* Icon chips for sector/duration/troop-count meta row — replaces run-on inline text */
+.tc-body-grid{display:flex;flex-direction:column;gap:4px;margin-bottom:6px;}
+.tc-group{margin:0!important;}
 .pc-chiprow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:2px;}
 .pc-chiprow-oneline{display:flex;flex-wrap:nowrap;gap:5px;align-items:center;margin-top:2px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:1px;}
 .pc-chiprow-oneline .pc-chip{flex-shrink:0;font-size:11.5px;padding:3px 6px;}
@@ -2204,25 +2213,28 @@ function patrolDisplayId(p){
   return 'PTL-'+yr+'-'+String(p.ptlSeq||0).padStart(3,'0');
 }
 function nextPtlSeq(){ var n=D.counter; D.counter++; return n; }
-// Self-healing: assigns a permanent ptlSeq to any patrol that doesn't have
-// one yet (from an older version of this data), using its previously-set
-// ptlId's number as a starting point since that order was already
-// corrected once — and fixes the displayed year to match each patrol's
-// own date at the same time.
+// Self-healing: the ONE rule for patrol numbers is — sorted by date of
+// conduct (oldest first), ties on the same date broken by which was
+// entered first (patrol IDs embed their creation time, so they sort
+// chronologically). Sequence 1, 2, 3... never resets per year; the YEAR
+// shown always just reflects that patrol's own date. This runs every
+// load and only re-saves a patrol if its number actually changed, so it's
+// safe to run repeatedly and self-corrects if anything gets out of sync.
 function migratePatrolSeq(){
-  var toSave=[], maxSeq=0;
-  (D.patrols||[]).forEach(function(p){
+  var sorted=(D.patrols||[]).slice().sort(function(a,b){
+    if(a.date!==b.date) return a.date<b.date?-1:1;
+    return (a.id||'')<(b.id||'')?-1:((a.id||'')>(b.id||'')?1:0);
+  });
+  var toSave=[];
+  sorted.forEach(function(p,i){
+    var seq=i+1;
     var changedThis=false;
-    if(p.ptlSeq==null){
-      var m=/(\d+)$/.exec(p.ptlId||'');
-      p.ptlSeq=m?parseInt(m[1]):0;
-      changedThis=true;
-    }
-    if(p.ptlSeq>maxSeq) maxSeq=p.ptlSeq;
+    if(p.ptlSeq!==seq){ p.ptlSeq=seq; changedThis=true; }
     var correctId=patrolDisplayId(p);
     if(p.ptlId!==correctId){ p.ptlId=correctId; changedThis=true; }
     if(changedThis) toSave.push(p);
   });
+  var maxSeq=sorted.length;
   if(!D.counter||D.counter<=maxSeq) D.counter=maxSeq+1;
   if(toSave.length===0) return;
   saveData();
@@ -3131,9 +3143,9 @@ function renderTable(){
   if(ff) rows=rows.filter(function(p){return p.date>=ff;});
   if(fto) rows=rows.filter(function(p){return p.date<=fto;});
   if(s) rows=rows.filter(function(p){return troopNames(p).toLowerCase().indexOf(s)>=0||p.type.toLowerCase().indexOf(s)>=0||(p.area||'').toLowerCase().indexOf(s)>=0||(p.remarks||'').toLowerCase().indexOf(s)>=0||(p.ptlId||'').toLowerCase().indexOf(s)>=0||(p.route||'').toLowerCase().indexOf(s)>=0;});
-  if(sortMode==='date-asc') rows.sort(function(a,b){return a.date.localeCompare(b.date);});
+  if(sortMode==='date-asc') rows.sort(function(a,b){return (a.ptlSeq||0)-(b.ptlSeq||0);});
   else if(sortMode==='name-asc') rows.sort(function(a,b){return troopNames(a).localeCompare(troopNames(b));});
-  else rows.sort(function(a,b){return b.date.localeCompare(a.date);});
+  else rows.sort(function(a,b){return (b.ptlSeq||0)-(a.ptlSeq||0);});
   document.getElementById('patrol-count-lbl').textContent='('+rows.length+')';
   var summary=document.getElementById('filter-summary');
   if(s&&rows.length>0){ var tH=rows.reduce(function(sum,p){return sum+(parseFloat(p.duration)||0);},0); summary.style.display=''; summary.innerHTML='<strong>'+rows.length+'</strong> patrols · <strong>'+tH.toFixed(1)+'h</strong> total'; } else { summary.style.display='none'; }
@@ -3150,18 +3162,20 @@ function renderTable(){
       '<div class="patrol-card-header">'+
       '<div style="min-width:0;">'+
       '<div class="patrol-card-id">'+(p.ptlId||'—')+' <span style="color:var(--text-muted);font-weight:400;font-size:11px;">'+fmtDate(p.date)+'</span></div>'+
-      '<div class="pc-chiprow">'+
-      '<span class="'+typeBadge(p.type)+'">'+p.type+'</span>'+
-      (p.area?'<span class="pc-chip">📍 '+p.area+'</span>':'')+
-      (p.duration?'<span class="pc-chip">⏱ <strong>'+p.duration+'h</strong></span>':'')+
-      '</div>'+
       '</div>'+
       '<div class="patrol-card-actions">'+
       '<button class="count-pill" onclick="showTroopsModal(\''+p.id+'\')">👥 '+(p.troops||[]).length+'</button>'+
       '<button class="btn btn-ghost btn-sm" onclick="editPatrol(\''+p.id+'\')" style="font-size:9px;padding:3px 7px;min-height:28px;">✎</button>'+
       '<button class="del-btn" onclick="confirmDel(\'patrol\',\''+p.id+'\')">×</button>'+
       '</div></div>'+
-      (detailLines.length?'<div class="pc-detail">'+detailLines.join('')+'</div>':'')+
+      '<div class="tc-body-grid">'+
+      '<div class="pc-chiprow tc-group">'+
+      '<span class="'+typeBadge(p.type)+'">'+p.type+'</span>'+
+      (p.area?'<span class="pc-chip">📍 '+p.area+'</span>':'')+
+      (p.duration?'<span class="pc-chip">⏱ <strong>'+p.duration+'h</strong></span>':'')+
+      '</div>'+
+      (detailLines.length?'<div class="pc-detail tc-group">'+detailLines.join('')+'</div>':'')+
+      '</div>'+
       '</div>';
   }).join('');
 }
@@ -3323,22 +3337,31 @@ function renderRoster(){
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">'+
       '<div style="cursor:pointer;flex:1;min-width:0;" onclick="showProfile(\''+t.id+'\')">'+
       '<div class="troop-card-name">'+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong></div>'+
-      '<div class="troop-card-sub">'+(t.unit||'')+(t.sn?' · PN '+t.sn:'')+(t.weaponNumber?' · 🔫 '+t.weaponNumber:'')+'</div></div>'+
+      '</div>'+
       '<div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">'+
       statusBadge(t.status||'available')+
       (isAvailable(t)&&ds>inactiveThresholdDays(t)?'<span class="inactive-badge">'+(ds===9999?'N/A':ds+'d')+'</span>':'')+
       '</div></div>'+
-      '<div class="pc-chiprow" style="margin-bottom:4px;">'+
+      '<div class="tc-body-grid">'+
+      '<div class="pc-chiprow tc-group">'+
+      (t.sn?'<span class="pc-chip">🪪 <strong>'+t.sn+'</strong></span>':'')+
+      (t.weaponNumber?'<span class="pc-chip">🔫 <strong>'+t.weaponNumber+'</strong></span>':'')+
+      (t.trade?'<span class="pc-chip">🎖 <strong>'+t.trade.toUpperCase()+'</strong></span>':'')+
+      (t.gender?'<span class="pc-chip">⚧ '+t.gender+'</span>':'')+
+      (t.trade==='Driver'&&t.driverQuals?'<span class="pc-chip">🚚 '+t.driverQuals.split(',').filter(Boolean).join('/')+'</span>':'')+
+      (t.unit?'<span class="pc-chip">🏢 '+t.unit+'</span>':'')+
+      '</div>'+
+      '<div class="pc-chiprow-oneline tc-group">'+
+      '<span class="pc-chip">🩸 <strong style="color:var(--red-light);">'+(t.bloodGroup||'N/A')+'</strong></span>'+
+      (t.phoneLocal?'<span class="pc-chip">📞 <a href="tel:'+t.phoneLocal.replace(/\s+/g,'')+'" style="color:var(--tan);text-decoration:none;font-weight:700;">'+t.phoneLocal+'</a></span>':'')+
+      (t.phoneWa?'<span class="pc-chip">💬 <a href="https://wa.me/'+t.phoneWa.replace(/[^0-9]/g,'')+'" target="_blank" style="color:var(--tan);text-decoration:none;font-weight:700;">'+t.phoneWa+'</a></span>':'')+
+      '</div>'+
+      '<div class="pc-chiprow tc-group" style="grid-column:1/-1;">'+
       '<span class="pc-chip">📋 <strong>'+c+'</strong></span>'+
       '<span class="pc-chip">⏱ <strong>'+patrolHours(t.id).toFixed(1)+'h</strong></span>'+
       '<span class="pc-chip">📅 <strong>'+mo+'</strong> this mo.</span>'+
       '<span class="pc-chip">🕒 '+(lp?fmtDateLong(lp):'Never')+'</span>'+
-      (t.trade?'<span class="pc-chip">🎖 <strong>'+t.trade.toUpperCase()+'</strong></span>':'')+
       '</div>'+
-      '<div class="pc-chiprow-oneline" style="margin-bottom:6px;">'+
-      '<span class="pc-chip">🩸 <strong style="color:var(--red-light);">'+(t.bloodGroup||'N/A')+'</strong></span>'+
-      (t.phoneLocal?'<span class="pc-chip">📞 <a href="tel:'+t.phoneLocal.replace(/\s+/g,'')+'" style="color:var(--tan);text-decoration:none;font-weight:700;">'+t.phoneLocal+'</a></span>':'')+
-      (t.phoneWa?'<span class="pc-chip">💬 <a href="https://wa.me/'+t.phoneWa.replace(/[^0-9]/g,'')+'" target="_blank" style="color:var(--tan);text-decoration:none;font-weight:700;">'+t.phoneWa+'</a></span>':'')+
       '</div>'+
       (t.notes?'<div class="notes-field">'+escHtml(t.notes)+'</div>':'')+
       '<div class="troop-card-btns">'+
@@ -3390,8 +3413,10 @@ function showProfile(id, fromArch){
     '<div class="pf-grid">'+
     '<div><div class="pf-label">RANK</div><div class="pf-value">'+t.rank+'</div></div>'+
     '<div><div class="pf-label">🎖 ROLE</div><div class="pf-value">'+(t.trade||'Not set')+'</div></div>'+
+    '<div><div class="pf-label">⚧ GENDER</div><div class="pf-value">'+(t.gender||'Not recorded')+'</div></div>'+
     '<div><div class="pf-label">UNIT</div><div class="pf-value">'+(t.unit||'—')+'</div></div>'+
     '<div><div class="pf-label">STATUS</div><div style="margin-top:2px;">'+statusBadge(t.status||'available')+'</div></div>'+
+    '<div><div class="pf-label">🚚 DRIVER TYPE</div><div class="pf-value">'+(t.trade==='Driver'?((t.driverQuals||'').split(',').filter(Boolean).join(', ')||'Not set'):'—')+'</div></div>'+
     '<div><div class="pf-label">PERSONAL NO.</div><div class="pf-value">'+(t.sn||'—')+'</div></div>'+
     '<div><div class="pf-label">🔫 WEAPON NO.</div><div class="pf-value">'+(t.weaponNumber||'Not recorded')+'</div></div>'+
     '<div><div class="pf-label">🩸 BLOOD GROUP</div><div class="pf-value" style="'+(t.bloodGroup?'color:var(--red-light);':'')+'">'+(t.bloodGroup||'Not recorded')+'</div></div>'+
@@ -3751,9 +3776,9 @@ function printPatrolSummary(){
   if(ff) rows=rows.filter(function(p){return p.date>=ff;});
   if(fto) rows=rows.filter(function(p){return p.date<=fto;});
   if(fs) rows=rows.filter(function(p){return troopNames(p).toLowerCase().indexOf(fs)>=0||p.type.toLowerCase().indexOf(fs)>=0||(p.area||'').toLowerCase().indexOf(fs)>=0||(p.remarks||'').toLowerCase().indexOf(fs)>=0||(p.ptlId||'').toLowerCase().indexOf(fs)>=0||(p.route||'').toLowerCase().indexOf(fs)>=0;});
-  if(sortMode==='date-asc') rows.sort(function(a,b){return a.date.localeCompare(b.date);});
+  if(sortMode==='date-asc') rows.sort(function(a,b){return (a.ptlSeq||0)-(b.ptlSeq||0);});
   else if(sortMode==='name-asc') rows.sort(function(a,b){return troopNames(a).localeCompare(troopNames(b));});
-  else rows.sort(function(a,b){return b.date.localeCompare(a.date);});
+  else rows.sort(function(a,b){return (b.ptlSeq||0)-(a.ptlSeq||0);});
 
   var totalH=rows.reduce(function(sum,p){return sum+(parseFloat(p.duration)||0);},0);
   var totalTrp=new Set(rows.reduce(function(a,p){return a.concat(p.troops||[]);},[])).size;
