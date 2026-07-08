@@ -1370,6 +1370,9 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     </div>
     <div id="stm-config">
       <div class="fg" style="display:flex;align-items:center;gap:8px;">
+        <label class="cb-wrap" style="font-size:13.5px;"><input type="checkbox" id="stm-long-distance" onchange="stmRefreshOfficerList()"><span class="cb-box"></span>Patrol exceeds restricted range (excludes Restricted-range personnel — e.g. Armoury Keeper, Storeman)</label>
+      </div>
+      <div class="fg" style="display:flex;align-items:center;gap:8px;">
         <label class="cb-wrap" style="font-size:13.5px;"><input type="checkbox" id="stm-officer-need" checked onchange="stmToggleOfficer()"><span class="cb-box"></span>Include Officer</label>
       </div>
       <div class="fg" id="stm-officer-wrap"><label class="field-label">Officer (few available — pick manually if needed)</label><select id="stm-officer-pick"></select></div>
@@ -2047,17 +2050,28 @@ function stmOverdueScore(t){
   var scale=(t.targetPct!=null?t.targetPct:100)/100;
   return ds*scale; // lower target = "uses up" overdue budget slower
 }
-function stmEligibleBase(){
-  return D.troops.filter(function(t){ return isAvailable(t) && !t.neverSuggest; });
+function stmEligibleBase(excludeRestricted){
+  return D.troops.filter(function(t){
+    if(!isAvailable(t)||t.neverSuggest) return false;
+    if(excludeRestricted&&t.restrictedRange) return false;
+    return true;
+  });
 }
 function stmRank(pool){
   return pool.slice().sort(function(a,b){ return stmOverdueScore(b)-stmOverdueScore(a); }).map(function(t){ return t.id; });
 }
-function openSuggestTeamModal(){
-  var base=stmEligibleBase();
+function stmRefreshOfficerList(){
+  var excludeRestricted=document.getElementById('stm-long-distance').checked;
+  var base=stmEligibleBase(excludeRestricted);
   var officers=stmRank(base.filter(function(t){ return t.category==='Officer'; }));
   var sel=document.getElementById('stm-officer-pick');
+  var prevVal=sel.value;
   sel.innerHTML='<option value="">-- Most overdue (auto) --</option>'+officers.map(function(id){ var t=troopById(id); return '<option value="'+id+'">'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</option>'; }).join('');
+  if(officers.indexOf(prevVal)>=0) sel.value=prevVal; // keep a still-eligible manual pick selected
+}
+function openSuggestTeamModal(){
+  document.getElementById('stm-long-distance').checked=false;
+  stmRefreshOfficerList();
   document.getElementById('stm-officer-need').checked=true;
   stmToggleOfficer();
   document.getElementById('stm-config').style.display='';
@@ -2089,7 +2103,8 @@ function stmDutyPctMap(){
 }
 
 function generateSuggestion(){
-  var base=stmEligibleBase();
+  var excludeRestricted=document.getElementById('stm-long-distance').checked;
+  var base=stmEligibleBase(excludeRestricted);
   var officerNeeded=document.getElementById('stm-officer-need').checked;
   var officerPicked=document.getElementById('stm-officer-pick').value;
   var jcoCount=Math.max(0,parseInt(document.getElementById('stm-jco-count').value)||0);
@@ -2197,12 +2212,15 @@ function generateSuggestion(){
   }
 
   // ── STAGE 2: General ("Others") pool. ────────────────────────────────
-  // Female specialists/JCOs already counted in femaleCount above fill
-  // both their specialty seat AND a female-quota slot. After them, at
-  // most ONE additional female may come from the general pool — and even
-  // that one slot is not mandatory if general-role females are, on
-  // average, already carrying a higher duty % than general-role males
-  // (i.e. they're not under-utilized relative to the men in that pool).
+  // No female — regardless of rank or role — is ever left as the ONLY
+  // female in the patrol. A single female specialist (Officer, JCO,
+  // Medical, Signal, or Driver) MUST be accompanied by at least one
+  // general-role female. Overall female-count rules, based on how many
+  // female specialists were already selected in Stage 1:
+  //   0 specialists → general contributes 0 OR 2 (never a lone 1)
+  //   1 specialist  → general contributes 1 (mandatory) up to 2
+  //   2 specialists → general contributes 0 up to 1 (already not alone)
+  //   3+ specialists→ general contributes 0 (cap already met/exceeded)
   var generalPool=base.filter(function(t){
     if(used[t.id]) return false;
     if(t.category==='Officer'||t.category==='JCO') return false;
@@ -2217,32 +2235,63 @@ function generateSuggestion(){
     if(!troopArr.length) return null;
     return troopArr.reduce(function(s,t){return s+dutyPct[t.id];},0)/troopArr.length;
   }
-  var avgF=avgDuty(genFemaleTroops), avgM=avgDuty(genMaleTroops);
-  var femaleSelectionMandatory=!(avgF!=null&&avgM!=null&&avgF>avgM);
+  var avgM=avgDuty(genMaleTroops);
 
-  var generalFemaleAllowed=Math.min(1,Math.max(0,FEMALE_CAP-femaleCount));
+  var specialistFemaleCount=femaleCount; // tally from Stage 1 only, so far
+  var generalFemaleMin=0, generalFemaleMax=0;
+  if(specialistFemaleCount===0){ generalFemaleMin=0; generalFemaleMax=2; }
+  else if(specialistFemaleCount===1){ generalFemaleMin=1; generalFemaleMax=2; }
+  else if(specialistFemaleCount===2){ generalFemaleMin=0; generalFemaleMax=1; }
+  else { generalFemaleMin=0; generalFemaleMax=0; }
 
+  var requestedOthers=othersCount;
   var othersChosen=[];
   var remaining=othersCount;
+  var femalesUsedFromGeneral=0;
 
-  // If mandatory and a slot is available, reserve the lowest-duty-%
-  // general female for one seat up front.
-  if(femaleSelectionMandatory && generalFemaleAllowed>0 && genFemaleRanked.length>0 && remaining>0){
-    othersChosen.push(genFemaleRanked[0]);
-    used[genFemaleRanked[0]]=true;
-    remaining--;
+  if(specialistFemaleCount===1){
+    // Mandatory companion — this is a hard rule, not subject to the
+    // duty-% fairness exception: a lone specialist female is never sent
+    // without a general-role female alongside her.
+    if(genFemaleRanked.length>0){
+      if(remaining<=0){
+        othersCount++; remaining++;
+        warnings.push('Added one extra "Others" seat beyond your requested count: a single female specialist cannot patrol without a general-role female companion.');
+      }
+      othersChosen.push(genFemaleRanked[0]); used[genFemaleRanked[0]]=true; remaining--; femalesUsedFromGeneral=1;
+    } else {
+      warnings.push('A female specialist is selected but NO general-role female is available to accompany her — she would be the only female in this patrol. Review manually before deploying.');
+    }
+  } else if(specialistFemaleCount===0){
+    // No specialist female yet. Only ever add general females as a PAIR
+    // (never a lone 1). Whether to include the pair at all is judged
+    // against the most-overdue general female's own duty % vs. the
+    // general male average — the same individual-based fairness check as
+    // before, just now gating a pair instead of a single seat.
+    if(genFemaleRanked.length>=2 && remaining>=2){
+      var candidateDuty0=dutyPct[genFemaleRanked[0]];
+      var includePair=!(candidateDuty0!=null&&avgM!=null&&candidateDuty0>avgM);
+      if(includePair){
+        othersChosen.push(genFemaleRanked[0]); used[genFemaleRanked[0]]=true; remaining--;
+        othersChosen.push(genFemaleRanked[1]); used[genFemaleRanked[1]]=true; remaining--;
+        femalesUsedFromGeneral=2;
+      }
+    } else if(genFemaleRanked.length===1){
+      warnings.push('Only one general-role female is available and no female specialist is selected — she cannot be paired, so no general-role female was force-included this time (no lone-female patrols).');
+    }
   }
+  // 2 specialists: no reservation step — falls through to the capped mixed
+  // rotation below with generalFemaleMax=1. 3+ specialists: max=0, so the
+  // mixed rotation below simply skips every female it encounters.
 
   // Fill the rest by pure duty-% rotation across the whole general pool,
-  // skipping any further female once the (at-most-one) general female
-  // allowance has already been used.
-  var femalesUsedFromGeneral=othersChosen.length; // 0 or 1 at this point
+  // skipping any further female once generalFemaleMax has been reached.
   var mixedRanked=rankByDuty(generalPool.filter(function(t){return !used[t.id];}));
   var idx=0;
   while(remaining>0 && idx<mixedRanked.length){
     var id=mixedRanked[idx];
     if(!used[id]){
-      if(isFemale(id) && femalesUsedFromGeneral>=generalFemaleAllowed){
+      if(isFemale(id) && femalesUsedFromGeneral>=generalFemaleMax){
         idx++; continue; // cap reached — skip to next-lowest-duty male
       }
       othersChosen.push(id); used[id]=true; remaining--;
@@ -2252,10 +2301,7 @@ function generateSuggestion(){
   }
 
   othersChosen.forEach(function(id){ if(isFemale(id)) femaleCount++; slots.push({role:'Other Rank',chosenId:id,pool:generalPoolRankedFull,poolPos:generalPoolRankedFull.indexOf(id)}); });
-  if(othersChosen.length<othersCount) warnings.push('Only '+othersChosen.length+' of '+othersCount+' "Others" seats could be filled — not enough available troops left.');
-  if(!femaleSelectionMandatory && genFemaleTroops.length>0){
-    warnings.push('General-role females currently average a higher duty % than general-role males, so a general-pool female seat was not force-reserved this time (still eligible to fill in by rotation if she comes up).');
-  }
+  if(othersChosen.length<requestedOthers) warnings.push('Only '+othersChosen.length+' of '+requestedOthers+' "Others" seats could be filled — not enough available troops left.');
 
   _stmSlots=slots;
   renderStmResults(warnings);
@@ -2269,12 +2315,14 @@ function renderStmResults(warnings){
   document.getElementById('stm-slots').innerHTML=_stmSlots.map(function(s,i){
     var t=s.chosenId?troopById(s.chosenId):null;
     var restrictedNote=(t&&t.restrictedRange)?' <span style="color:var(--tan);font-size:10.5px;">⚠ Restricted range</span>':'';
-    return '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">'+
-      '<div style="width:110px;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;flex-shrink:0;">'+s.role+'</div>'+
-      '<div style="flex:1;min-width:0;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+
+    return '<div style="padding:8px 0;border-bottom:1px solid var(--border);">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'+
+      '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">'+s.role+'</div>'+
+      '<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:5px 9px;white-space:nowrap;flex-shrink:0;" onclick="replaceStmSlot('+i+')">🔁 Replace</button>'+
+      '</div>'+
+      '<div style="font-size:13.5px;margin-top:3px;white-space:normal;overflow-wrap:break-word;">'+
       (t?('<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>'+restrictedNote):'<span style="color:var(--red-light);">— none available —</span>')+
       '</div>'+
-      '<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:5px 9px;white-space:nowrap;" onclick="replaceStmSlot('+i+')">🔁 Replace</button>'+
       '</div>';
   }).join('');
 }
