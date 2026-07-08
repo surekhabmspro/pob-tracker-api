@@ -2170,7 +2170,17 @@ function generateSuggestion(){
   var committedFemales=slots.filter(function(sl){return sl.chosenId&&isFemale(sl.chosenId);}).length;
   var femaleOfficerOrJco=slots.some(function(sl){return (sl.role==='Officer'||sl.role==='JCO')&&sl.chosenId&&isFemale(sl.chosenId);});
 
-  var generalRanked=stmRank(base.filter(function(t){return !used[t.id];}));
+  var generalRanked=stmRank(base.filter(function(t){
+    if(used[t.id]) return false;
+    // "Others" means general-duty Other Rank troops only. Anyone who
+    // belongs to a specialist category/trade (Officer, JCO, Medical,
+    // Signal, Driver, Mechanic) must NOT leak in here as filler just
+    // because their specialist count was set to 0 — if you excluded a
+    // role by setting its count to 0, that role's people stay excluded.
+    if(t.category==='Officer'||t.category==='JCO') return false;
+    if(t.trade==='Medical'||t.trade==='Signal'||t.trade==='Driver'||t.trade==='Mechanic') return false;
+    return true;
+  }));
   var femalePool=generalRanked.filter(function(id){return isFemale(id);});
   var malePool=generalRanked.filter(function(id){return !isFemale(id);});
 
