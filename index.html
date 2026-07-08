@@ -2088,10 +2088,34 @@ function generateSuggestion(){
   var warnings=[];
   function isFemale(id){ var t=troopById(id); return t&&t.gender==='Female'; }
 
+  var FEMALE_CAP=3; // "normally limited to 2 or 3 maximum per patrol"
+  var femaleCount=0;
+
   function take(pool,role,forceId){
     var candidates=pool.filter(function(id){ return !used[id]; });
     var chosen=forceId&&!used[forceId]?forceId:(candidates[0]||null);
-    if(chosen) used[chosen]=true;
+    if(chosen){ used[chosen]=true; if(isFemale(chosen)) femaleCount++; }
+    slots.push({role:role,chosenId:chosen,pool:pool,poolPos:pool.indexOf(chosen)});
+    return chosen;
+  }
+
+  // Medical/Signal/Driver honor "rotation, THEN gender balance" — once the
+  // patrol-wide female cap is reached, skip to the next most-overdue male
+  // in that SAME pool if one is available. If no male is available for
+  // that role, the role requirement still wins and the female is taken
+  // anyway (the role must be filled — gender only skips when there's a
+  // real alternative).
+  function takeCapped(pool,role){
+    var candidates=pool.filter(function(id){ return !used[id]; });
+    var chosen=null;
+    if(candidates.length){
+      if(femaleCount>=FEMALE_CAP){
+        chosen=candidates.find(function(id){return !isFemale(id);})||candidates[0];
+      } else {
+        chosen=candidates[0];
+      }
+    }
+    if(chosen){ used[chosen]=true; if(isFemale(chosen)) femaleCount++; }
     slots.push({role:role,chosenId:chosen,pool:pool,poolPos:pool.indexOf(chosen)});
     return chosen;
   }
@@ -2122,14 +2146,14 @@ function generateSuggestion(){
   // Medical — fills exactly the entered requirement, no more.
   var medicalPool=stmRank(base.filter(function(t){return t.trade==='Medical';}));
   for(var m=0;m<medicalCount;m++){
-    var cm=take(medicalPool,'Medical');
+    var cm=takeCapped(medicalPool,'Medical');
     if(!cm) warnings.push('No available Medical troop found for slot '+(m+1)+'.');
   }
 
   // Signal — fills exactly the entered requirement, no more.
   var signalPool=stmRank(base.filter(function(t){return t.trade==='Signal';}));
   for(var s=0;s<signalCount;s++){
-    var cs=take(signalPool,'Signal');
+    var cs=takeCapped(signalPool,'Signal');
     if(!cs) warnings.push('No available Signal troop found for slot '+(s+1)+'.');
   }
 
@@ -2149,25 +2173,25 @@ function generateSuggestion(){
   var lightAny=stmRank(drivers); // any driver — APC/Heavy quals cover Light too
 
   for(var a=0;a<apcCount;a++){
-    var c=take(apcDrivers,'Driver (APC)');
+    var c=takeCapped(apcDrivers,'Driver (APC)');
     if(!c) warnings.push('No APC-qualified driver available for APC seat '+(a+1)+'.');
   }
   for(var h=0;h<heavyCount;h++){
     var poolNow=heavyPrimary.filter(function(id){return !used[id];}).length?heavyPrimary:heavyFallback;
-    var c=take(poolNow,'Driver (Heavy)');
+    var c=takeCapped(poolNow,'Driver (Heavy)');
     if(!c) warnings.push('No Heavy-capable driver available for Heavy seat '+(h+1)+'.');
   }
   for(var l=0;l<lightCount;l++){
-    var c=take(lightAny,'Driver (Light)');
+    var c=takeCapped(lightAny,'Driver (Light)');
     if(!c) warnings.push('No driver available for Light seat '+(l+1)+'.');
   }
 
   // ── STAGE 2: "Others" (general Other Rank) seats — rotation first, then
   // gender balance applied only within this pool, never by inflating the
   // requested headcount or by re-touching role seats already filled above. ──
-  var MAX_FEMALES_PER_PATROL=3; // per "normally limited to 2 or 3 maximum"
+  var MAX_FEMALES_PER_PATROL=FEMALE_CAP; // per "normally limited to 2 or 3 maximum"
 
-  var committedFemales=slots.filter(function(sl){return sl.chosenId&&isFemale(sl.chosenId);}).length;
+  var committedFemales=femaleCount;
   var femaleOfficerOrJco=slots.some(function(sl){return (sl.role==='Officer'||sl.role==='JCO')&&sl.chosenId&&isFemale(sl.chosenId);});
 
   var generalRanked=stmRank(base.filter(function(t){
