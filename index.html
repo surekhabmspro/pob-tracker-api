@@ -2332,9 +2332,17 @@ function replaceStmSlot(i){
   _stmSlots.forEach(function(s,idx){ if(idx!==i&&s.chosenId) usedElsewhere[s.chosenId]=true; });
   var pos=slot.poolPos;
   for(var j=pos+1;j<slot.pool.length;j++){
-    if(!usedElsewhere[slot.pool[j]]){ slot.chosenId=slot.pool[j]; slot.poolPos=j; renderStmResults([]); return; }
+    if(!usedElsewhere[slot.pool[j]]){
+      slot.chosenId=slot.pool[j]; slot.poolPos=j;
+      renderStmResults(stmLoneFemaleWarning());
+      return;
+    }
   }
   showAlert('stm-warnings','No more alternatives available for this slot.','warn');
+}
+function stmLoneFemaleWarning(){
+  var femaleCount=_stmSlots.filter(function(s){ var t=s.chosenId?troopById(s.chosenId):null; return t&&t.gender==='Female'; }).length;
+  return femaleCount===1?['⚠ Only ONE female is currently in this patrol after that change — she would be alone. Adjust another slot to add a companion, or pick a different replacement, before using this team.']:[];
 }
 function useSuggestedTeam(){
   var ids=_stmSlots.map(function(s){return s.chosenId;}).filter(Boolean);
