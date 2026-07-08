@@ -346,6 +346,13 @@ body.light-mode{background:
   .pf-label{font-size:10.5px;}
   .pf-value{font-size:16px;}
 
+  /* ── Report summary cards: on a wide desktop screen, a flat 4-across
+       grid stretches short "12 patrols" / "45.5h" style cards across huge
+       empty gutters. Capping to 2 columns keeps each card a sane width
+       instead of mostly-empty. Mobile is untouched — still its own
+       narrower layout below. ── */
+  .rep-summary-grid{grid-template-columns:repeat(2,1fr);max-width:520px;}
+
   /* ── Patrol history rows inside profile/full-record: a bit more room
        and larger text now that the modal isn't stretched full-width ── */
   .ph-row{padding:11px 0;}
@@ -440,9 +447,9 @@ body.light-mode .sidebar-item.active{background:#f5e8cc;color:var(--tan);}
 .tag-pill strong{color:#fff;background:var(--blue);padding:1px 7px;border-radius:5px;text-transform:uppercase;letter-spacing:0.3px;}
 
 /* ── PROFILE INFO GRID (troop profile modal) ── */
-.pf-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;}
+.pf-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;min-width:0;}
 .pf-label{font-size:9px;color:var(--text-muted);font-family:'Courier New',monospace;letter-spacing:0.5px;}
-.pf-value{font-size:15px;font-weight:700;margin-top:2px;}
+.pf-value{font-size:15px;font-weight:700;margin-top:2px;overflow-wrap:break-word;word-break:break-word;}
 
 /* ── PATROL HISTORY ROW (profile modal + full record print) ── */
 .ph-row{padding:8px 0;border-bottom:1px solid rgba(100,130,100,0.15);}
@@ -564,7 +571,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 
 /* ── PATROL CARDS (replaces table on mobile) ── */
 .patrol-card{background:linear-gradient(155deg,var(--surface2),var(--surface));border:var(--card-border);border-left:4px solid var(--border);
-  border-radius:12px;padding:12px 12px 12px 14px;margin-bottom:8px;box-shadow:var(--card-bevel),var(--shadow-sm);}
+  border-radius:12px;padding:12px 12px 12px 14px;margin-bottom:8px;box-shadow:var(--card-bevel),var(--shadow-sm);overflow:hidden;}
 /* ── ACCENT-BAR COLOR SYSTEM (shared by all list/card components) ──
    A colored left border keyed to type/status so any list can be scanned by
    color, not just text. Applies to patrol cards, troop cards, inactive cards,
@@ -595,7 +602,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 .pc-detail .pc-remarks{font-style:italic;}
 
 /* ── TROOP CARDS ── */
-.troop-card{background:linear-gradient(155deg,var(--surface2),var(--surface));border:var(--card-border);border-radius:12px;padding:12px 12px 12px 14px;margin-bottom:8px;box-shadow:var(--card-bevel),var(--shadow-sm);}
+.troop-card{background:linear-gradient(155deg,var(--surface2),var(--surface));border:var(--card-border);border-radius:12px;padding:12px 12px 12px 14px;margin-bottom:8px;box-shadow:var(--card-bevel),var(--shadow-sm);overflow:hidden;}
 #archived-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;}
 #archived-list .troop-card{margin-bottom:0;}
 @media (max-width:600px){#archived-list{grid-template-columns:1fr;}}
@@ -1243,16 +1250,6 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     <div id="admin-pct-alert" style="margin-top:8px;"></div>
   </div>
   <div class="card">
-    <div class="card-title">Renumber Patrol Numbers</div>
-    <p style="color:var(--text-muted);font-size:13px;margin-bottom:10px;">One-time fix so patrol numbers follow patrol <strong>date</strong> order instead of the order they were typed in. Same-date patrols are ordered using their current number, descending. This changes every patrol's number — export a backup first.</p>
-    <div class="fr">
-      <div class="fg"><label class="field-label">Starting Number</label><input type="number" id="renum-start" min="1" placeholder="e.g. 302"></div>
-      <div class="fg"><label class="field-label">Year Label</label><input type="number" id="renum-year" placeholder="e.g. 2026"></div>
-    </div>
-    <button class="btn btn-warning btn-full" onclick="renumberPatrols()">Renumber All Patrols Now</button>
-    <div id="renum-alert" style="margin-top:8px;"></div>
-  </div>
-  <div class="card">
     <div class="card-title">Patrol Types</div>
     <div style="display:flex;gap:8px;margin-bottom:8px;">
       <input type="text" id="new-type" placeholder="Add patrol type..." style="flex:1;">
@@ -1485,7 +1482,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
       <div class="fg" style="position:relative;"><label class="field-label">Unit / Section</label><input type="text" id="t-unit" placeholder="e.g. Alpha" autocomplete="off" oninput="fieldSuggest('t-unit','units',this.value)" onfocus="fieldSuggest('t-unit','units',this.value)"><div class="mini-suggest" id="sg-t-unit"></div></div>
     </div>
     <div class="fr">
-      <div class="fg" style="position:relative;"><label class="field-label">Service Number</label><input type="text" id="t-sn" placeholder="e.g. SN-0042" autocomplete="off" oninput="fieldSuggest('t-sn','sns',this.value)" onfocus="fieldSuggest('t-sn','sns',this.value)"><div class="mini-suggest" id="sg-t-sn"></div></div>
+      <div class="fg" style="position:relative;"><label class="field-label">Personal Number</label><input type="text" id="t-sn" placeholder="e.g. SN-0042" autocomplete="off" oninput="fieldSuggest('t-sn','sns',this.value)" onfocus="fieldSuggest('t-sn','sns',this.value)"><div class="mini-suggest" id="sg-t-sn"></div></div>
       <div class="fg"><label class="field-label">Status</label>
         <select id="t-status">
           <option value="available">Available</option>
@@ -1755,7 +1752,7 @@ var API_URL = 'https://pob-tracker-api.onrender.com';
 var API_KEY = 'ClCsXG9eY87D-PgpBJ7pxBMmHZpcRNAM0bnWBevOC1U';
 var APP_VERSION = '2026.07.03.1';
 var SK = 'pob_v4';
-var DEFAULT_RANKS = ['POB Commander','Major','Captain','WO1','WO2','CSM','Sergeant','Corporal','Lance Corporal','Private','NCE'];
+var DEFAULT_RANKS = ['Major','Captain','WO1','WO2','CSM','Sergeant','Corporal','Lance Corporal','Private','NCE'];
 var RANKS = DEFAULT_RANKS.slice();
 var DEFAULT_TYPES = ['Escort','Link-up','FET','Airport Security','FACA Ration Delivery','Security Meeting','Joint Patrol with FACA','SDP','MDP','LDP','Water Distribution','QRF','Recce'];
 var DEFAULT_SECTORS = ['Kongbo Linkup','Bangui-Kette Ferry Point','Boulangba','Langandji','Mobaye Center','Prefect Office','Mobaye Airport','Outer Perimeter','Others'];
@@ -1839,7 +1836,7 @@ function dbToTroop(r) {
   return {id:r.id,name:r.name,rank:r.rank,unit:r.unit,sn:r.sn||'',status:r.status||'available',notes:r.notes||'',phoneLocal:r.phone_local||'',phoneWa:r.phone_wa||'',bloodGroup:r.blood_group||'',deploymentDate:r.deployment_date?String(r.deployment_date).slice(0,10):'',weaponNumber:r.weapon_number||'',gender:r.gender||'',category:r.category||'',trade:r.trade||'',driverQuals:r.driver_quals||'',targetPct:(r.target_pct!=null?r.target_pct:100),neverSuggest:!!r.never_suggest,restrictedRange:!!r.restricted_range};
 }
 function dbToPatrol(r) {
-  return {id:r.id,ptlId:r.ptl_id,date:(r.date||'').slice(0,10),type:r.type,
+  return {id:r.id,ptlId:r.ptl_id,ptlSeq:(r.ptl_seq!=null?r.ptl_seq:null),date:(r.date||'').slice(0,10),type:r.type,
     troops:r.troops||[],area:r.area||'',duration:r.duration||'',route:r.route||'',remarks:r.remarks||'',commander:r.commander||null,commanderAuto:r.commander_auto===false?false:(r.commander_auto===true?true:null)};
 }
 function loadLocalFallback() {
@@ -1855,7 +1852,13 @@ function loadLocalFallback() {
   if (!D.config) D.config={types:DEFAULT_TYPES.slice(),sectors:DEFAULT_SECTORS.slice(),routes:DEFAULT_ROUTES.slice(),ranks:DEFAULT_RANKS.slice()};
   if (!D.config.ranks) D.config.ranks=DEFAULT_RANKS.slice();
   if (!D.security) D.security={pinHash:'',securityQ:'',securityAHash:''};
-  migrateCommanders();
+  // Each of these is a self-healing data fix-up, not core to loading itself.
+  // Wrapped individually so one bad/corrupt record can't throw and block
+  // the rest of the app from rendering with whatever local data IS valid —
+  // this is exactly the failure mode behind "offline mode shows nothing".
+  try{ migrateCommanders(); }catch(e){ console.error('migrateCommanders failed',e); }
+  try{ migratePobCommanderRank(); }catch(e){ console.error('migratePobCommanderRank failed',e); }
+  try{ migratePatrolSeq(); }catch(e){ console.error('migratePatrolSeq failed',e); }
 }
 
 // ── Sync indicator ────────────────────────────────────────────────────────
@@ -1929,6 +1932,8 @@ function pullFromServer(){
     RANKS=D.config.ranks;
     D.troops.forEach(function(t){if(!t.status)t.status='available';if(!t.notes)t.notes='';});
     migrateCommanders();
+  migratePobCommanderRank();
+  migratePatrolSeq();
     localStorage.setItem(SK,JSON.stringify(D));
     _lastSyncTime=new Date(); setSyncState('online'); _syncCountdown=_autoSyncSeconds;
     try {
@@ -1976,7 +1981,16 @@ function saveData(){ localStorage.setItem(SK,JSON.stringify(D)); }
 function remoteSaveTroop(t){ saveData(); return apiFetch('/troops',{method:'POST',body:JSON.stringify(t)}).catch(function(e){console.error('saveTroop failed',e); queueOp('saveTroop',t);}); }
 function remoteDeleteTroop(id){ saveData(); return apiFetch('/troops/'+id,{method:'DELETE'}).catch(function(e){console.error(e); queueOp('deleteTroop',{id:id});}); }
 function remoteArchiveTroop(id,archived){ saveData(); return apiFetch('/troops/'+id+'/archive',{method:'PATCH',body:JSON.stringify({archived:archived})}).catch(function(e){console.error(e); queueOp('archiveTroop',{id:id,archived:archived});}); }
-function remoteSavePatrol(p){ saveData(); var body={id:p.id,ptl_id:p.ptlId,date:p.date,type:p.type,troops:p.troops,area:p.area,duration:p.duration,route:p.route,remarks:p.remarks,commander:p.commander||null,commander_auto:p.commanderAuto===false?false:(p.commanderAuto===true?true:null)}; return apiFetch('/patrols',{method:'POST',body:JSON.stringify(body)}).catch(function(e){console.error(e); queueOp('savePatrol',body);}); }
+function remoteSavePatrol(p){ saveData(); var body={id:p.id,ptl_id:p.ptlId,ptl_seq:(p.ptlSeq!=null?p.ptlSeq:null),date:p.date,type:p.type,troops:p.troops,area:p.area,duration:p.duration,route:p.route,remarks:p.remarks,commander:p.commander||null,commander_auto:p.commanderAuto===false?false:(p.commanderAuto===true?true:null)}; return apiFetch('/patrols',{method:'POST',body:JSON.stringify(body)}).catch(function(e){console.error(e); queueOp('savePatrol',body);}); }
+// POB Commander is now a Role (set in Add/Edit Troop), not a Rank — this
+// quietly removes it from anyone's saved Rank list if it's still there
+// from before, so it doesn't show up twice in two different fields.
+function migratePobCommanderRank(){
+  if(D.config&&D.config.ranks){
+    var idx=D.config.ranks.indexOf('POB Commander');
+    if(idx>=0){ D.config.ranks.splice(idx,1); RANKS=D.config.ranks; remoteSaveConfig(); }
+  }
+}
 function migrateCommanders(){
   // Assigns/corrects the Commander field using the current (rank-first, service-number-second)
   // seniority rule for every patrol EXCEPT ones where a person explicitly chose the commander
@@ -2178,47 +2192,45 @@ function useSuggestedTeam(){
   renderSelected(); updatePtlPreview();
   document.getElementById('log-patrol-modal').classList.add('open');
 }
-function nextPtlId(){ var yr=new Date().getFullYear(),n=String(D.counter).padStart(3,'0'); D.counter++; return 'PTL-'+yr+'-'+n; }
-// ── RENUMBER PATROL NUMBERS ──────────────────────────────────────────
-// One-time fix: patrol numbers were originally assigned in entry order,
-// not patrol date order, since this system was set up after many patrols
-// already existed on paper. This re-sorts every patrol by its actual date
-// (oldest first) and reassigns sequential numbers so they line up with
-// the calendar. For patrols sharing the same date — all from the old,
-// pre-system backlog — there's no recorded time of day to sort by, so the
-// existing patrol number is used as the next-best stand-in for order,
-// descending, per how those were originally logged.
-function renumberPatrols(){
-  var startNum=parseInt(document.getElementById('renum-start').value);
-  var year=parseInt(document.getElementById('renum-year').value)||new Date().getFullYear();
-  if(!Number.isFinite(startNum)||startNum<1){ showAlert('renum-alert','Enter a valid starting number.','danger'); return; }
-  if(!confirm('This will change the patrol number on ALL '+D.patrols.length+' patrols, starting at '+startNum+' for '+year+'. Make sure you have exported a backup first. Continue?')) return;
-  function existingSeq(p){ var m=/(\d+)$/.exec(p.ptlId||''); return m?parseInt(m[1]):0; }
-  var sorted=D.patrols.slice().sort(function(a,b){
-    if(a.date!==b.date) return a.date<b.date?-1:1;
-    return existingSeq(b)-existingSeq(a); // same date: descending by old number
+// Patrol numbers now have a permanent sequence number (ptlSeq, assigned
+// once and never changed) and a DISPLAYED year that's always computed
+// from the patrol's own date — so if a patrol's date is edited, or if it
+// simply falls in a new year, the year in "PTL-YYYY-NNN" updates itself
+// automatically. The sequence keeps counting up across year boundaries
+// (patrol 10 in 2025, patrol 11 automatically becomes "PTL-2026-011" the
+// moment its date is in 2026) rather than resetting each year.
+function patrolDisplayId(p){
+  var yr=(p.date?p.date.slice(0,4):String(new Date().getFullYear()));
+  return 'PTL-'+yr+'-'+String(p.ptlSeq||0).padStart(3,'0');
+}
+function nextPtlSeq(){ var n=D.counter; D.counter++; return n; }
+// Self-healing: assigns a permanent ptlSeq to any patrol that doesn't have
+// one yet (from an older version of this data), using its previously-set
+// ptlId's number as a starting point since that order was already
+// corrected once — and fixes the displayed year to match each patrol's
+// own date at the same time.
+function migratePatrolSeq(){
+  var toSave=[], maxSeq=0;
+  (D.patrols||[]).forEach(function(p){
+    var changedThis=false;
+    if(p.ptlSeq==null){
+      var m=/(\d+)$/.exec(p.ptlId||'');
+      p.ptlSeq=m?parseInt(m[1]):0;
+      changedThis=true;
+    }
+    if(p.ptlSeq>maxSeq) maxSeq=p.ptlSeq;
+    var correctId=patrolDisplayId(p);
+    if(p.ptlId!==correctId){ p.ptlId=correctId; changedThis=true; }
+    if(changedThis) toSave.push(p);
   });
-  sorted.forEach(function(p,i){ p.ptlId='PTL-'+year+'-'+String(startNum+i).padStart(3,'0'); });
-  D.counter=startNum+sorted.length;
-  saveData(); renderTable(); renderDash();
-  showAlert('renum-alert','Renumbering '+sorted.length+' patrols… saving to server, please wait.','success');
-  // Saved a few at a time with a short pause between batches — firing 100+
-  // requests instantly can trip the server's rate limit and silently drop
-  // some of them. This keeps every single one reliable instead of fast.
+  if(!D.counter||D.counter<=maxSeq) D.counter=maxSeq+1;
+  if(toSave.length===0) return;
+  saveData();
   var i=0, batchSize=15;
   function nextBatch(){
-    var batch=sorted.slice(i,i+batchSize);
-    if(batch.length===0){
-      remoteSaveConfig();
-      showAlert('renum-alert','Renumbered all '+sorted.length+' patrols, starting at '+startNum+'.','success');
-      audit('Renumbered all patrols by date, starting at '+startNum+' ('+year+')');
-      return;
-    }
-    Promise.all(batch.map(function(p){ return remoteSavePatrol(p); })).then(function(){
-      i+=batchSize;
-      showAlert('renum-alert','Saved '+Math.min(i,sorted.length)+' of '+sorted.length+'…','success');
-      setTimeout(nextBatch,600);
-    });
+    var batch=toSave.slice(i,i+batchSize);
+    if(batch.length===0){ remoteSaveConfig(); return; }
+    Promise.all(batch.map(function(p){ return remoteSavePatrol(p); })).then(function(){ i+=batchSize; setTimeout(nextBatch,600); });
   }
   nextBatch();
 }
@@ -2288,15 +2300,20 @@ function showAlert(elId,msg,type){ var el=document.getElementById(elId); if(!el)
 function closeModal(id){ document.getElementById(id).classList.remove('open'); }
 function rankOrder(rank){ var i=RANKS.indexOf(rank); return i===-1?99:i; }
 // ── SENIORITY (single source of truth) ─────────────────────────────────
-// Rank always takes priority. Only within the same rank does a lower service number
-// indicate higher seniority. Every part of the app that orders or ranks personnel by
-// seniority (rosters, patrol participant lists, commander auto-assignment, Most Active
-// tie-breaks, reports, archives, etc.) must go through compareSeniority() — never compare
-// service numbers alone.
+// Rank always takes priority. Within the same rank, whoever holds the
+// Role "POB Commander" outranks everyone else at that rank (e.g. the
+// Major who is POB Commander is always senior-most among Majors),
+// regardless of Personal No. Only after that does a lower Personal No.
+// indicate higher seniority. Every part of the app that orders or ranks
+// personnel by seniority (rosters, patrol participant lists, commander
+// auto-assignment, Most Active tie-breaks, reports, archives, etc.) must
+// go through compareSeniority() — never compare Personal Numbers alone.
 function snSortValue(sn){ var m=(sn||'').match(/\d+/); return m?parseInt(m[0],10):Infinity; }
 function compareSeniority(a,b){
   var r=rankOrder(a.rank)-rankOrder(b.rank);
   if(r!==0) return r;
+  var aCmd=(a.trade==='POB Commander'), bCmd=(b.trade==='POB Commander');
+  if(aCmd!==bCmd) return aCmd?-1:1;
   var s=snSortValue(a.sn)-snSortValue(b.sn);
   if(s!==0) return s;
   return (a.name||'').localeCompare(b.name||'');
@@ -3073,6 +3090,7 @@ function logPatrol(){
     if(!ep){editingPatrolId=null;showAlert('log-alert','Patrol no longer exists.','danger');return;}
     ep.date=date; ep.type=type; ep.area=area; ep.duration=dur; ep.route=route; ep.remarks=rem;
     ep.troops=selectedTroops.slice(); ep.commander=selectedCommander||null; ep.commanderAuto=selectedCommander?false:ep.commanderAuto;
+    ep.ptlId=patrolDisplayId(ep); // keep the displayed year in sync if the date changed
     remoteSavePatrol(ep);
     audit('Patrol edited: '+ep.ptlId+' | '+type+' | '+(area||'No sector'));
     showAlert('log-alert','Patrol '+ep.ptlId+' updated successfully!','success');
@@ -3082,8 +3100,9 @@ function logPatrol(){
     var lpTitle=document.getElementById('log-patrol-modal-title'); if(lpTitle) lpTitle.textContent='Log New Patrol';
   } else {
     var dup=D.patrols.find(function(p){if(p.date!==date||p.type!==type)return false;return (p.troops||[]).some(function(tid){return selectedTroops.indexOf(tid)>=0;});});
-    var ptlId=nextPtlId();
-    var newPatrol={id:uid('p'),ptlId:ptlId,date:date,type:type,troops:selectedTroops.slice(),duration:dur,area:area,route:route,remarks:rem,commander:selectedCommander||null,commanderAuto:selectedCommander?false:null};
+    var newPatrol={id:uid('p'),ptlSeq:nextPtlSeq(),date:date,type:type,troops:selectedTroops.slice(),duration:dur,area:area,route:route,remarks:rem,commander:selectedCommander||null,commanderAuto:selectedCommander?false:null};
+    newPatrol.ptlId=patrolDisplayId(newPatrol);
+    var ptlId=newPatrol.ptlId;
     D.patrols.push(newPatrol);
     remoteSavePatrol(newPatrol);
     remoteSaveConfig();
@@ -3304,7 +3323,7 @@ function renderRoster(){
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">'+
       '<div style="cursor:pointer;flex:1;min-width:0;" onclick="showProfile(\''+t.id+'\')">'+
       '<div class="troop-card-name">'+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong></div>'+
-      '<div class="troop-card-sub">'+(t.unit||'')+(t.sn?' · SVC '+t.sn:'')+(t.weaponNumber?' · 🔫 '+t.weaponNumber:'')+'</div></div>'+
+      '<div class="troop-card-sub">'+(t.unit||'')+(t.sn?' · PN '+t.sn:'')+(t.weaponNumber?' · 🔫 '+t.weaponNumber:'')+'</div></div>'+
       '<div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">'+
       statusBadge(t.status||'available')+
       (isAvailable(t)&&ds>inactiveThresholdDays(t)?'<span class="inactive-badge">'+(ds===9999?'N/A':ds+'d')+'</span>':'')+
@@ -3370,13 +3389,13 @@ function showProfile(id, fromArch){
     '<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border);">'+
     '<div class="pf-grid">'+
     '<div><div class="pf-label">RANK</div><div class="pf-value">'+t.rank+'</div></div>'+
-    '<div><div class="pf-label">STATUS</div><div style="margin-top:2px;">'+statusBadge(t.status||'available')+'</div></div>'+
-    '<div><div class="pf-label">UNIT</div><div class="pf-value">'+(t.unit||'—')+'</div></div>'+
-    '<div><div class="pf-label">DEPLOYMENT DATE</div><div class="pf-value">'+(t.deploymentDate?fmtDateLong(t.deploymentDate):'Not recorded')+'</div></div>'+
-    '<div><div class="pf-label">SVC NO.</div><div class="pf-value">'+(t.sn||'—')+'</div></div>'+
-    '<div><div class="pf-label">🔫 WEAPON NO.</div><div class="pf-value">'+(t.weaponNumber||'Not recorded')+'</div></div>'+
     '<div><div class="pf-label">🎖 ROLE</div><div class="pf-value">'+(t.trade||'Not set')+'</div></div>'+
+    '<div><div class="pf-label">UNIT</div><div class="pf-value">'+(t.unit||'—')+'</div></div>'+
+    '<div><div class="pf-label">STATUS</div><div style="margin-top:2px;">'+statusBadge(t.status||'available')+'</div></div>'+
+    '<div><div class="pf-label">PERSONAL NO.</div><div class="pf-value">'+(t.sn||'—')+'</div></div>'+
+    '<div><div class="pf-label">🔫 WEAPON NO.</div><div class="pf-value">'+(t.weaponNumber||'Not recorded')+'</div></div>'+
     '<div><div class="pf-label">🩸 BLOOD GROUP</div><div class="pf-value" style="'+(t.bloodGroup?'color:var(--red-light);':'')+'">'+(t.bloodGroup||'Not recorded')+'</div></div>'+
+    '<div><div class="pf-label">DEPLOYMENT DATE</div><div class="pf-value">'+(t.deploymentDate?fmtDateLong(t.deploymentDate):'Not recorded')+'</div></div>'+
     '<div><div class="pf-label">📞 LOCAL NO.</div><div class="pf-value">'+(t.phoneLocal?'<a href="tel:'+t.phoneLocal.replace(/\s+/g,'')+'" style="color:var(--tan);text-decoration:none;">'+t.phoneLocal+'</a>':'—')+'</div></div>'+
     '<div><div class="pf-label">💬 WHATSAPP NO.</div><div class="pf-value">'+(t.phoneWa?'<a href="https://wa.me/'+t.phoneWa.replace(/[^0-9]/g,'')+'" target="_blank" style="color:var(--tan);text-decoration:none;">'+t.phoneWa+'</a>':'—')+'</div></div>'+
     '</div>'+
@@ -3924,7 +3943,7 @@ function doExport(){ var backup={version:4,exportDate:new Date().toISOString(),e
 function dlFile(content,type,filename){ var blob=new Blob([content],{type:type}); var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a);a.click(); document.body.removeChild(a);URL.revokeObjectURL(a.href); }
 var pendingRestore=null;
 function previewRestore(input){ var file=input.files[0]; if(!file) return; var reader=new FileReader(); reader.onload=function(e){ try{var backup=JSON.parse(e.target.result);if(!backup.data) throw new Error('Invalid');pendingRestore=backup;var d=backup.data;var prev=document.getElementById('restore-preview');prev.style.display='';prev.className='alert al-info';prev.innerHTML='Valid backup: <strong>'+(backup.exportDate?backup.exportDate.slice(0,10):'?')+'</strong><br>Troops: <strong>'+(d.troops||[]).length+'</strong> · Archived: <strong>'+(d.archived||[]).length+'</strong> · Patrols: <strong>'+(d.patrols||[]).length+'</strong><br><strong style="color:#ff9999;">This will overwrite all current data.</strong>';document.getElementById('restore-btn').style.display='';document.getElementById('restore-cancel').style.display='';}catch(err){var prev=document.getElementById('restore-preview');prev.style.display='';prev.className='alert al-danger';prev.innerHTML='Invalid backup file.';document.getElementById('restore-btn').style.display='none';document.getElementById('restore-cancel').style.display='none';} }; reader.readAsText(file); }
-function doRestore(){ if(!pendingRestore||!pendingRestore.data){alert('No valid backup.');return;} D=pendingRestore.data; if(!D.archived) D.archived=[]; if(!D.counter) D.counter=D.patrols.length+1; if(!D.audit) D.audit=[]; if(!D.settings) D.settings={pob:'POB Mobaye',mission:'',commander:'',classification:'CONFIDENTIAL'}; if(!D.config) D.config={types:DEFAULT_TYPES.slice(),sectors:DEFAULT_SECTORS.slice(),routes:DEFAULT_ROUTES.slice(),ranks:DEFAULT_RANKS.slice()}; if(!D.config.ranks) D.config.ranks=DEFAULT_RANKS.slice(); RANKS=D.config.ranks; D.troops.forEach(function(t){if(!t.status)t.status='available';if(!t.notes)t.notes='';}); saveData(); var allTroops=D.troops.concat(D.archived); Promise.all(allTroops.map(function(t){return apiFetch('/troops',{method:'POST',body:JSON.stringify(t)}).catch(function(){});}).concat(D.patrols.map(function(p){return apiFetch('/patrols',{method:'POST',body:JSON.stringify({id:p.id,ptl_id:p.ptlId,date:p.date,type:p.type,troops:p.troops,area:p.area,duration:p.duration,route:p.route,remarks:p.remarks})}).catch(function(){});}))).then(function(){return remoteSaveConfig();}); D.archived.forEach(function(t){apiFetch('/troops/'+t.id+'/archive',{method:'PATCH',body:JSON.stringify({archived:true})}).catch(function(){});}); document.getElementById('restore-alert').innerHTML='<div class="alert al-success">Restore successful!</div>'; cancelRestore(); applySettings(); populateDropdowns(); populateRankDropdowns(); renderDash(); renderSysInfo(); audit('Data restored from backup'); setTimeout(function(){document.getElementById('restore-alert').innerHTML='';},5000); }
+function doRestore(){ if(!pendingRestore||!pendingRestore.data){alert('No valid backup.');return;} D=pendingRestore.data; if(!D.archived) D.archived=[]; if(!D.counter) D.counter=D.patrols.length+1; if(!D.audit) D.audit=[]; if(!D.settings) D.settings={pob:'POB Mobaye',mission:'',commander:'',classification:'CONFIDENTIAL'}; if(!D.config) D.config={types:DEFAULT_TYPES.slice(),sectors:DEFAULT_SECTORS.slice(),routes:DEFAULT_ROUTES.slice(),ranks:DEFAULT_RANKS.slice()}; if(!D.config.ranks) D.config.ranks=DEFAULT_RANKS.slice(); RANKS=D.config.ranks; D.troops.forEach(function(t){if(!t.status)t.status='available';if(!t.notes)t.notes='';}); migratePatrolSeq(); saveData(); var allTroops=D.troops.concat(D.archived); Promise.all(allTroops.map(function(t){return apiFetch('/troops',{method:'POST',body:JSON.stringify(t)}).catch(function(){});}).concat(D.patrols.map(function(p){return remoteSavePatrol(p);}))).then(function(){return remoteSaveConfig();}); D.archived.forEach(function(t){apiFetch('/troops/'+t.id+'/archive',{method:'PATCH',body:JSON.stringify({archived:true})}).catch(function(){});}); document.getElementById('restore-alert').innerHTML='<div class="alert al-success">Restore successful!</div>'; cancelRestore(); applySettings(); populateDropdowns(); populateRankDropdowns(); renderDash(); renderSysInfo(); audit('Data restored from backup'); setTimeout(function(){document.getElementById('restore-alert').innerHTML='';},5000); }
 function cancelRestore(){ pendingRestore=null; document.getElementById('restore-file').value=''; document.getElementById('restore-preview').style.display='none'; document.getElementById('restore-btn').style.display='none'; document.getElementById('restore-cancel').style.display='none'; }
 function renderSysInfo(){ var sz=JSON.stringify(D).length; document.getElementById('sys-info').innerHTML='Version: v4 (Mobile)<br>Active Troops: '+D.troops.length+'<br>Archived Troops: '+(D.archived||[]).length+'<br>Total Patrols: '+D.patrols.length+'<br>Total Hours: '+D.patrols.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0).toFixed(1)+'h<br>Patrol Types: '+D.config.types.length+'<br>Sectors: '+D.config.sectors.length+'<br>Audit Entries: '+D.audit.length+'<br>Next Patrol ID: PTL-'+new Date().getFullYear()+'-'+String(D.counter).padStart(3,'0')+'<br>Storage Used: ~'+(sz/1024).toFixed(1)+' KB<br>API: '+API_URL; }
 

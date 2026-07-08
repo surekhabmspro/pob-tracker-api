@@ -175,7 +175,8 @@ async function migrateSchema() {
     await pool.query('ALTER TABLE troops ADD COLUMN IF NOT EXISTS target_pct INTEGER DEFAULT 100');
     await pool.query('ALTER TABLE troops ADD COLUMN IF NOT EXISTS never_suggest BOOLEAN DEFAULT FALSE');
     await pool.query('ALTER TABLE troops ADD COLUMN IF NOT EXISTS restricted_range BOOLEAN DEFAULT FALSE');
-    console.log('Schema check OK: blood_group, deployment_date, weapon_number, gender, category, trade, driver_quals, target_pct, never_suggest, restricted_range present on troops table.');
+    await pool.query('ALTER TABLE patrols ADD COLUMN IF NOT EXISTS ptl_seq INTEGER');
+    console.log('Schema check OK: blood_group, deployment_date, weapon_number, gender, category, trade, driver_quals, target_pct, never_suggest, restricted_range, ptl_seq present.');
   } catch (e) {
     console.error('Schema migration failed:', e.message);
   }
@@ -267,18 +268,18 @@ app.get('/patrols', async (req, res) => {
 // ── UPSERT PATROL ─────────────────────────────────────────────────────
 app.post('/patrols', async (req, res) => {
   try {
-    const { id, ptl_id, date, type, troops, area, duration, route, remarks, commander, commander_auto } = req.body;
+    const { id, ptl_id, ptl_seq, date, type, troops, area, duration, route, remarks, commander, commander_auto } = req.body;
     if (!isValidId(id)) return res.status(400).json({ error: 'Invalid patrol id.' });
     if (!Array.isArray(troops) || !troops.every(t => typeof t === 'string' && t.length <= 100)) {
       return res.status(400).json({ error: 'Invalid troops list.' });
     }
     await pool.query(
-      `INSERT INTO patrols (id, ptl_id, date, type, troops, area, duration, route, remarks, commander, commander_auto)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      `INSERT INTO patrols (id, ptl_id, ptl_seq, date, type, troops, area, duration, route, remarks, commander, commander_auto)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        ON CONFLICT (id) DO UPDATE
-         SET ptl_id=$2, date=$3, type=$4, troops=$5, area=$6,
-             duration=$7, route=$8, remarks=$9, commander=$10, commander_auto=$11`,
-      [id, clip(ptl_id||'',50), date, clip(type||'',50), troops || [], clip(area||'',200),
+         SET ptl_id=$2, ptl_seq=$3, date=$4, type=$5, troops=$6, area=$7,
+             duration=$8, route=$9, remarks=$10, commander=$11, commander_auto=$12`,
+      [id, clip(ptl_id||'',50), (Number.isFinite(parseInt(ptl_seq))?parseInt(ptl_seq):null), date, clip(type||'',50), troops || [], clip(area||'',200),
        parseFloat(duration) || null, clip(route||'',500), clip(remarks||'',5000), commander || null, (commander_auto === null || commander_auto === undefined) ? null : !!commander_auto]
     );
     res.json({ ok: true });
