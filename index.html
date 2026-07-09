@@ -1369,30 +1369,80 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
       <button class="btn btn-ghost btn-sm" onclick="closeSuggestTeamModal()">Close</button>
     </div>
     <div id="stm-config">
+      <div id="stm-reuse-note"></div>
+      <button id="stm-reuse-btn" class="btn btn-ghost btn-full" style="display:none;margin-bottom:12px;font-size:12.5px;" onclick="stmApplyLastConfig()">↩️ Reuse last patrol's settings</button>
+      <div style="font-size:11px;font-weight:700;color:var(--tan);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;">Personnel</div>
       <div class="fg" style="display:flex;align-items:center;gap:8px;">
-        <label class="cb-wrap" style="font-size:13.5px;"><input type="checkbox" id="stm-long-distance" onchange="stmRefreshOfficerList()"><span class="cb-box"></span>Patrol exceeds restricted range (excludes Restricted-range personnel — e.g. Armoury Keeper, Storeman)</label>
-      </div>
-      <div class="fg" style="display:flex;align-items:center;gap:8px;">
-        <label class="cb-wrap" style="font-size:13.5px;"><input type="checkbox" id="stm-officer-need" checked onchange="stmToggleOfficer()"><span class="cb-box"></span>Include Officer</label>
+        <label class="cb-wrap" style="font-size:13.5px;"><input type="checkbox" id="stm-officer-need" checked onchange="stmToggleOfficer();stmUpdateTotal();"><span class="cb-box"></span>Include Officer</label>
       </div>
       <div class="fg" id="stm-officer-wrap"><label class="field-label">Officer (few available — pick manually if needed)</label><select id="stm-officer-pick"></select></div>
       <div class="fr">
-        <div class="fg"><label class="field-label">JCOs Needed (WO1/WO2)</label><input type="number" id="stm-jco-count" min="0" value="1"></div>
-        <div class="fg"><label class="field-label">Others (general troops)</label><input type="number" id="stm-others" min="0" value="4"></div>
-      </div>
-      <div class="fr">
-        <div class="fg"><label class="field-label">Medical Needed</label><input type="number" id="stm-medical-count" min="0" value="1"></div>
-        <div class="fg"><label class="field-label">Signal Needed</label><input type="number" id="stm-signal-count" min="0" value="1"></div>
-      </div>
-      <div class="fg"><label class="cb-wrap" style="font-size:13.5px;"><input type="checkbox" id="stm-mechanic-need"><span class="cb-box"></span>Needs Vehicle Mechanic</label></div>
-      <div class="fg"><label class="field-label">Vehicles for this Patrol</label>
-        <div class="fr" style="gap:8px;">
-          <div class="fg"><label class="field-label" style="font-size:10.5px;">🛡 APC</label><input type="number" id="stm-apc" min="0" value="0"></div>
-          <div class="fg"><label class="field-label" style="font-size:10.5px;">🚛 Heavy</label><input type="number" id="stm-heavy" min="0" value="0"></div>
-          <div class="fg"><label class="field-label" style="font-size:10.5px;">🚙 Light</label><input type="number" id="stm-light" min="0" value="1"></div>
+        <div class="fg"><label class="field-label">JCOs Needed (WO1/WO2)</label>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <button type="button" class="btn btn-ghost btn-sm" style="width:34px;padding:0;font-size:16px;font-weight:700;flex-shrink:0;" onclick="stmStep('stm-jco-count',-1)">−</button>
+            <input type="number" id="stm-jco-count" min="0" value="1" style="text-align:center;" oninput="stmUpdateTotal()">
+            <button type="button" class="btn btn-ghost btn-sm" style="width:34px;padding:0;font-size:16px;font-weight:700;flex-shrink:0;" onclick="stmStep('stm-jco-count',1)">+</button>
+          </div>
+        </div>
+        <div class="fg"><label class="field-label">Others (general troops)</label>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <button type="button" class="btn btn-ghost btn-sm" style="width:34px;padding:0;font-size:16px;font-weight:700;flex-shrink:0;" onclick="stmStep('stm-others',-1)">−</button>
+            <input type="number" id="stm-others" min="0" value="15" style="text-align:center;" oninput="stmUpdateTotal()">
+            <button type="button" class="btn btn-ghost btn-sm" style="width:34px;padding:0;font-size:16px;font-weight:700;flex-shrink:0;" onclick="stmStep('stm-others',1)">+</button>
+          </div>
         </div>
       </div>
-      <button class="btn btn-primary btn-full" onclick="generateSuggestion()">Generate Suggestion</button>
+      <div class="fr">
+        <div class="fg"><label class="field-label">Medical Needed</label>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <button type="button" class="btn btn-ghost btn-sm" style="width:34px;padding:0;font-size:16px;font-weight:700;flex-shrink:0;" onclick="stmStep('stm-medical-count',-1)">−</button>
+            <input type="number" id="stm-medical-count" min="0" value="1" style="text-align:center;" oninput="stmUpdateTotal()">
+            <button type="button" class="btn btn-ghost btn-sm" style="width:34px;padding:0;font-size:16px;font-weight:700;flex-shrink:0;" onclick="stmStep('stm-medical-count',1)">+</button>
+          </div>
+        </div>
+        <div class="fg"><label class="field-label">Signal Needed</label>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <button type="button" class="btn btn-ghost btn-sm" style="width:34px;padding:0;font-size:16px;font-weight:700;flex-shrink:0;" onclick="stmStep('stm-signal-count',-1)">−</button>
+            <input type="number" id="stm-signal-count" min="0" value="1" style="text-align:center;" oninput="stmUpdateTotal()">
+            <button type="button" class="btn btn-ghost btn-sm" style="width:34px;padding:0;font-size:16px;font-weight:700;flex-shrink:0;" onclick="stmStep('stm-signal-count',1)">+</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:var(--tan);text-transform:uppercase;letter-spacing:0.6px;margin:16px 0 6px;">Vehicle</div>
+      <div class="fg"><label class="field-label">Vehicles for this Patrol</label>
+        <div class="fr" style="gap:8px;">
+          <div class="fg"><label class="field-label" style="font-size:10.5px;">🛡 APC</label>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <button type="button" class="btn btn-ghost btn-sm" style="width:28px;padding:0;font-size:14px;font-weight:700;flex-shrink:0;" onclick="stmStep('stm-apc',-1)">−</button>
+              <input type="number" id="stm-apc" min="0" value="0" style="text-align:center;" oninput="stmUpdateTotal()">
+              <button type="button" class="btn btn-ghost btn-sm" style="width:28px;padding:0;font-size:14px;font-weight:700;flex-shrink:0;" onclick="stmStep('stm-apc',1)">+</button>
+            </div>
+          </div>
+          <div class="fg"><label class="field-label" style="font-size:10.5px;">🚛 Heavy</label>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <button type="button" class="btn btn-ghost btn-sm" style="width:28px;padding:0;font-size:14px;font-weight:700;flex-shrink:0;" onclick="stmStep('stm-heavy',-1)">−</button>
+              <input type="number" id="stm-heavy" min="0" value="0" style="text-align:center;" oninput="stmUpdateTotal()">
+              <button type="button" class="btn btn-ghost btn-sm" style="width:28px;padding:0;font-size:14px;font-weight:700;flex-shrink:0;" onclick="stmStep('stm-heavy',1)">+</button>
+            </div>
+          </div>
+          <div class="fg"><label class="field-label" style="font-size:10.5px;">🚙 Light</label>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <button type="button" class="btn btn-ghost btn-sm" style="width:28px;padding:0;font-size:14px;font-weight:700;flex-shrink:0;" onclick="stmStep('stm-light',-1)">−</button>
+              <input type="number" id="stm-light" min="0" value="1" style="text-align:center;" oninput="stmUpdateTotal()">
+              <button type="button" class="btn btn-ghost btn-sm" style="width:28px;padding:0;font-size:14px;font-weight:700;flex-shrink:0;" onclick="stmStep('stm-light',1)">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:var(--tan);text-transform:uppercase;letter-spacing:0.6px;margin:16px 0 6px;">Special Conditions</div>
+      <div class="fg"><label class="cb-wrap" style="font-size:13.5px;"><input type="checkbox" id="stm-mechanic-need" onchange="stmUpdateTotal()"><span class="cb-box"></span>Needs Vehicle Mechanic</label></div>
+      <div class="fg"><label class="cb-wrap" style="font-size:13.5px;"><input type="checkbox" id="stm-long-distance" onchange="stmRefreshOfficerList()"><span class="cb-box"></span>Patrol exceeds restricted range (excludes Restricted-range personnel — e.g. Armoury Keeper, Storeman)</label></div>
+
+      <div id="stm-total-display" style="margin-top:16px;padding:10px 12px;border-radius:8px;background:var(--surface2);font-size:14px;font-weight:600;text-align:center;"></div>
+
+      <button class="btn btn-primary btn-full" style="margin-top:12px;" onclick="generateSuggestion()">Generate Suggestion</button>
     </div>
     <div id="stm-results" style="display:none;">
       <div id="stm-warnings"></div>
@@ -2069,11 +2119,86 @@ function stmRefreshOfficerList(){
   sel.innerHTML='<option value="">-- Most overdue (auto) --</option>'+officers.map(function(id){ var t=troopById(id); return '<option value="'+id+'">'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</option>'; }).join('');
   if(officers.indexOf(prevVal)>=0) sel.value=prevVal; // keep a still-eligible manual pick selected
 }
-function openSuggestTeamModal(){
-  document.getElementById('stm-long-distance').checked=false;
-  stmRefreshOfficerList();
+function stmSaveConfig(){
+  try{
+    var cfg={
+      officerNeed:document.getElementById('stm-officer-need').checked,
+      jco:document.getElementById('stm-jco-count').value,
+      others:document.getElementById('stm-others').value,
+      medical:document.getElementById('stm-medical-count').value,
+      signal:document.getElementById('stm-signal-count').value,
+      mechanic:document.getElementById('stm-mechanic-need').checked,
+      longDistance:document.getElementById('stm-long-distance').checked,
+      apc:document.getElementById('stm-apc').value,
+      heavy:document.getElementById('stm-heavy').value,
+      light:document.getElementById('stm-light').value
+    };
+    localStorage.setItem('pob_stm_last_config',JSON.stringify(cfg));
+  }catch(e){}
+}
+function stmStep(id,delta){
+  var el=document.getElementById(id);
+  var min=parseInt(el.min)||0;
+  var v=(parseInt(el.value)||0)+delta;
+  if(v<min) v=min;
+  el.value=v;
+  stmUpdateTotal();
+}
+function stmUpdateTotal(){
+  var g=function(id){ return Math.max(0,parseInt(document.getElementById(id).value)||0); };
+  var officer=document.getElementById('stm-officer-need').checked?1:0;
+  var mechanic=document.getElementById('stm-mechanic-need').checked?1:0;
+  var total=officer+g('stm-jco-count')+g('stm-others')+g('stm-medical-count')+g('stm-signal-count')+g('stm-apc')+g('stm-heavy')+g('stm-light')+mechanic;
+  var el=document.getElementById('stm-total-display');
+  if(el) el.textContent='👥 Total patrol size: '+total+' personnel';
+}
+function stmLoadConfig(){
+  try{
+    var raw=localStorage.getItem('pob_stm_last_config');
+    if(!raw) return;
+    var cfg=JSON.parse(raw);
+    document.getElementById('stm-officer-need').checked=cfg.officerNeed!==false;
+    document.getElementById('stm-jco-count').value=cfg.jco!=null?cfg.jco:1;
+    document.getElementById('stm-others').value=cfg.others!=null?cfg.others:15;
+    document.getElementById('stm-medical-count').value=cfg.medical!=null?cfg.medical:1;
+    document.getElementById('stm-signal-count').value=cfg.signal!=null?cfg.signal:1;
+    document.getElementById('stm-mechanic-need').checked=!!cfg.mechanic;
+    // Note: long-distance is intentionally NOT restored — it resets fresh
+    // each time so a restricted-range exclusion never silently carries
+    // over onto a different, closer patrol.
+    document.getElementById('stm-apc').value=cfg.apc!=null?cfg.apc:0;
+    document.getElementById('stm-heavy').value=cfg.heavy!=null?cfg.heavy:0;
+    document.getElementById('stm-light').value=cfg.light!=null?cfg.light:1;
+  }catch(e){}
+}
+function stmResetDefaults(){
   document.getElementById('stm-officer-need').checked=true;
+  document.getElementById('stm-jco-count').value=1;
+  document.getElementById('stm-others').value=15;
+  document.getElementById('stm-medical-count').value=1;
+  document.getElementById('stm-signal-count').value=1;
+  document.getElementById('stm-mechanic-need').checked=false;
+  document.getElementById('stm-long-distance').checked=false;
+  document.getElementById('stm-apc').value=0;
+  document.getElementById('stm-heavy').value=0;
+  document.getElementById('stm-light').value=1;
+  stmUpdateTotal();
+}
+function stmApplyLastConfig(){
+  stmLoadConfig();
+  stmRefreshOfficerList();
   stmToggleOfficer();
+  stmUpdateTotal();
+  showAlert('stm-reuse-note','Loaded your last-used settings — double-check every field before generating.','warn');
+}
+function openSuggestTeamModal(){
+  stmResetDefaults(); // always starts clean/safe — nothing carries over silently
+  document.getElementById('stm-reuse-note').innerHTML='';
+  var reuseBtn=document.getElementById('stm-reuse-btn');
+  reuseBtn.style.display=localStorage.getItem('pob_stm_last_config')?'':'none';
+  stmRefreshOfficerList();
+  stmToggleOfficer();
+  stmUpdateTotal();
   document.getElementById('stm-config').style.display='';
   document.getElementById('stm-results').style.display='none';
   document.getElementById('suggest-team-modal').classList.add('open');
@@ -2103,6 +2228,7 @@ function stmDutyPctMap(){
 }
 
 function generateSuggestion(){
+  stmSaveConfig(); // remember these values so next time the form opens pre-filled
   var excludeRestricted=document.getElementById('stm-long-distance').checked;
   var base=stmEligibleBase(excludeRestricted);
   var officerNeeded=document.getElementById('stm-officer-need').checked;
