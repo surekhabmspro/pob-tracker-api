@@ -815,7 +815,17 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 .filter-row input,.filter-row select{flex:1;min-width:100px;}
 
 /* ── SELECTED TROOPS AREA ── */
-#selected-troops{display:flex;flex-wrap:wrap;gap:6px;min-height:32px;padding:4px 0;}
+#selected-troops,#draft-selected-troops{display:flex;flex-wrap:wrap;gap:6px;min-height:32px;padding:4px 0;}
+
+/* ── SUGGEST TEAM MODAL — READABILITY ── */
+.stm-section-hdr{font-size:13px;font-weight:700;color:var(--tan);text-transform:uppercase;letter-spacing:0.7px;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid var(--border);}
+#suggest-team-modal .field-label{font-size:13.5px;}
+#suggest-team-modal .fg{margin-bottom:14px;}
+#suggest-team-modal input[type=number]{font-size:15px;}
+#stm-warnings-sticky{position:sticky;top:0;z-index:6;background:var(--surface);margin:0 -20px;padding:0 20px;}
+#stm-warnings-sticky #stm-warnings:empty{display:none;}
+#stm-warnings-sticky .alert{box-shadow:0 4px 10px rgba(0,0,0,0.35);}
+#stm-slots{font-size:14.5px;}
 
 /* ── PRINT ── */
 .watermark{display:none;}
@@ -979,7 +989,8 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 <div id="dashboard" class="section active">
   <div id="dash-alerts"></div>
 
-  <button class="btn btn-primary btn-full" style="margin-bottom:14px;font-size:14.5px;" onclick="openSuggestTeamModal()">🎯 Suggest Patrol Team</button>
+  <button class="btn btn-primary btn-full" style="margin-bottom:8px;font-size:14.5px;" onclick="openSuggestTeamModal()">🎯 Suggest Patrol Team</button>
+  <button class="btn btn-ghost btn-full" style="margin-bottom:14px;font-size:13.5px;" onclick="openDraftsModal()">📋 Saved Drafts <span id="drafts-count-badge"></span></button>
 
   <!-- Stats Bar — 4 cols mobile, 4-5 cols desktop via CSS -->
   <div class="stat-grid" id="dash-stats"></div>
@@ -1371,7 +1382,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     <div id="stm-config">
       <div id="stm-reuse-note"></div>
       <button id="stm-reuse-btn" class="btn btn-ghost btn-full" style="display:none;margin-bottom:12px;font-size:12.5px;" onclick="stmApplyLastConfig()">↩️ Reuse last patrol's settings</button>
-      <div style="font-size:11px;font-weight:700;color:var(--tan);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;">Personnel</div>
+      <div class="stm-section-hdr">Personnel</div>
       <div class="fg" style="display:flex;align-items:center;gap:8px;">
         <label class="cb-wrap" style="font-size:13.5px;"><input type="checkbox" id="stm-officer-need" checked onchange="stmToggleOfficer();stmUpdateTotal();"><span class="cb-box"></span>Include Officer</label>
       </div>
@@ -1409,7 +1420,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
         </div>
       </div>
 
-      <div style="font-size:11px;font-weight:700;color:var(--tan);text-transform:uppercase;letter-spacing:0.6px;margin:16px 0 6px;">Vehicle</div>
+      <div class="stm-section-hdr" style="margin-top:20px;">Vehicle</div>
       <div class="fg"><label class="field-label">Vehicles for this Patrol</label>
         <div class="fr" style="gap:8px;">
           <div class="fg"><label class="field-label" style="font-size:10.5px;">🛡 APC</label>
@@ -1436,21 +1447,56 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
         </div>
       </div>
 
-      <div style="font-size:11px;font-weight:700;color:var(--tan);text-transform:uppercase;letter-spacing:0.6px;margin:16px 0 6px;">Special Conditions</div>
-      <div class="fg"><label class="cb-wrap" style="font-size:13.5px;"><input type="checkbox" id="stm-mechanic-need" onchange="stmUpdateTotal()"><span class="cb-box"></span>Needs Vehicle Mechanic</label></div>
-      <div class="fg"><label class="cb-wrap" style="font-size:13.5px;"><input type="checkbox" id="stm-long-distance" onchange="stmRefreshOfficerList()"><span class="cb-box"></span>Patrol exceeds restricted range (excludes Restricted-range personnel — e.g. Armoury Keeper, Storeman)</label></div>
+      <div class="stm-section-hdr" style="margin-top:20px;">Special Conditions</div>
+      <div class="fg"><label class="cb-wrap" style="font-size:14.5px;line-height:1.4;"><input type="checkbox" id="stm-mechanic-need" onchange="stmUpdateTotal()"><span class="cb-box"></span>Needs Vehicle Mechanic</label></div>
+      <div class="fg"><label class="cb-wrap" style="font-size:14.5px;line-height:1.4;"><input type="checkbox" id="stm-long-distance" onchange="stmRefreshOfficerList()"><span class="cb-box"></span>Patrol exceeds restricted range (excludes Restricted-range personnel — e.g. Armoury Keeper, Storeman)</label></div>
 
       <div id="stm-total-display" style="margin-top:16px;padding:10px 12px;border-radius:8px;background:var(--surface2);font-size:14px;font-weight:600;text-align:center;"></div>
 
       <button class="btn btn-primary btn-full" style="margin-top:12px;" onclick="generateSuggestion()">Generate Suggestion</button>
     </div>
     <div id="stm-results" style="display:none;">
-      <div id="stm-warnings"></div>
+      <div id="stm-warnings-sticky"><div id="stm-warnings"></div></div>
       <div id="stm-slots"></div>
-      <div style="display:flex;gap:8px;margin-top:14px;">
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
         <button class="btn btn-ghost" onclick="backToStmConfig()">← Adjust</button>
+        <button class="btn btn-ghost" onclick="saveDraftFromSuggestion()">💾 Save Draft</button>
         <button class="btn btn-primary btn-full" onclick="useSuggestedTeam()">Use This Team →</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Saved Drafts — suggested teams stored for later, editable before a patrol
+     is logged. Sits between Suggest Team and Log Patrol in the workflow. -->
+<div class="modal-ov" id="drafts-modal">
+  <div class="modal" style="max-width:640px;">
+    <div class="card-title" style="border-bottom:none;margin-bottom:10px;">
+      <span>📋 Saved Drafts</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeDraftsModal()">Close</button>
+    </div>
+    <div id="drafts-list"></div>
+  </div>
+</div>
+
+<!-- Draft Editor — add/remove troops on a saved draft before it's used. -->
+<div class="modal-ov" id="draft-edit-modal">
+  <div class="modal" style="max-width:640px;">
+    <div class="card-title" style="border-bottom:none;margin-bottom:10px;">
+      <span>✏️ Edit Draft</span>
+    </div>
+    <div class="fg" style="position:relative;">
+      <label class="field-label">Search &amp; Add Troops</label>
+      <input type="text" id="draft-troop-search" placeholder="Type name or rank..." oninput="draftTroopSuggest(this.value)" autocomplete="off">
+      <div class="suggest-box" id="draft-troop-suggest" style="display:none;"></div>
+    </div>
+    <div class="fg">
+      <label class="field-label">Selected Troops</label>
+      <div id="draft-selected-troops"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="btn btn-primary btn-full" onclick="saveDraftEdits()">💾 Save Draft</button>
+      <button class="btn btn-ghost" onclick="cancelDraftEdit()">Cancel</button>
     </div>
   </div>
 </div>
@@ -1918,6 +1964,7 @@ function loadLocalFallback() {
   if (!D.config) D.config={types:DEFAULT_TYPES.slice(),sectors:DEFAULT_SECTORS.slice(),routes:DEFAULT_ROUTES.slice(),ranks:DEFAULT_RANKS.slice()};
   if (!D.config.ranks) D.config.ranks=DEFAULT_RANKS.slice();
   if (!D.security) D.security={pinHash:'',securityQ:'',securityAHash:''};
+  if (!D.drafts) D.drafts=[];
   // Each of these is a self-healing data fix-up, not core to loading itself.
   // Wrapped individually so one bad/corrupt record can't throw and block
   // the rest of the app from rendering with whatever local data IS valid —
@@ -1994,6 +2041,8 @@ function pullFromServer(){
     if(config.counter) D.counter=parseInt(config.counter)||1;
     if(config.security) D.security=config.security;
     if(!D.security) D.security={pinHash:'',securityQ:'',securityAHash:''};
+    if(config.drafts) D.drafts=config.drafts;
+    if(!D.drafts) D.drafts=[];
     if(!D.config.ranks) D.config.ranks=DEFAULT_RANKS.slice();
     RANKS=D.config.ranks;
     D.troops.forEach(function(t){if(!t.status)t.status='available';if(!t.notes)t.notes='';});
@@ -2002,6 +2051,7 @@ function pullFromServer(){
   migratePatrolSeq();
     localStorage.setItem(SK,JSON.stringify(D));
     _lastSyncTime=new Date(); setSyncState('online'); _syncCountdown=_autoSyncSeconds;
+    updateDraftsBadge();
     try {
       var active=document.querySelector('.section.active');
       if(active){var aid=active.id;
@@ -2080,7 +2130,7 @@ function remoteDeletePatrol(id){ saveData(); return apiFetch('/patrols/'+id,{met
 function remoteSaveAudit(entry){ return apiFetch('/audit',{method:'POST',body:JSON.stringify(entry)}).catch(function(e){console.error(e); queueOp('saveAudit',entry);}); }
 function remoteSaveConfig(){
   saveData();
-  var jobs=[{key:'settings',value:D.settings},{key:'config',value:D.config},{key:'counter',value:D.counter},{key:'security',value:D.security}];
+  var jobs=[{key:'settings',value:D.settings},{key:'config',value:D.config},{key:'counter',value:D.counter},{key:'security',value:D.security},{key:'drafts',value:D.drafts}];
   return Promise.all(jobs.map(function(j){
     return apiFetch('/config',{method:'POST',body:JSON.stringify(j)}).catch(function(e){console.error(e); queueOp('saveConfig',j);});
   }));
@@ -2474,9 +2524,148 @@ function useSuggestedTeam(){
   var ids=_stmSlots.map(function(s){return s.chosenId;}).filter(Boolean);
   selectedTroops=ids.slice();
   selectedCommander=null;
+  pendingDraftLogId=null;
   closeSuggestTeamModal();
   editingPatrolId=null;
   document.getElementById('log-patrol-modal-title').textContent='Log New Patrol';
+  document.getElementById('p-submit-btn').textContent='⚡ Log Patrol';
+  document.getElementById('p-cancel-edit-btn').style.display='none';
+  renderSelected(); updatePtlPreview();
+  document.getElementById('log-patrol-modal').classList.add('open');
+}
+
+// ── SAVED DRAFTS ──────────────────────────────────────────────────────
+// A draft is a suggested team stored for later — between "Suggest Team"
+// and "Log Patrol" in the workflow. It can be edited (troops swapped) and
+// then either logged as-is or logged after last-minute changes, all through
+// the normal Log Patrol form. Synced via the same /config channel as
+// settings/counter/security, so it works offline and needs no schema change.
+function saveDraftFromSuggestion(){
+  var ids=_stmSlots.map(function(s){return s.chosenId;}).filter(Boolean);
+  if(ids.length===0){ showAlert('stm-warnings','No troops in this suggestion to save.','danger'); return; }
+  var draft={
+    id:uid('draft'),
+    createdAt:new Date().toISOString(),
+    troops:ids.slice(),
+    slots:_stmSlots.map(function(s){return {role:s.role,chosenId:s.chosenId};})
+  };
+  D.drafts.unshift(draft);
+  remoteSaveConfig();
+  audit('Patrol team draft saved: '+ids.length+' troops');
+  updateDraftsBadge();
+  closeSuggestTeamModal();
+  openDraftsModal();
+}
+function updateDraftsBadge(){
+  var b=document.getElementById('drafts-count-badge');
+  if(!b) return;
+  var n=(D.drafts||[]).length;
+  b.textContent=n>0?'('+n+')':'';
+}
+function openDraftsModal(){ renderDraftsList(); document.getElementById('drafts-modal').classList.add('open'); }
+function closeDraftsModal(){ document.getElementById('drafts-modal').classList.remove('open'); }
+function renderDraftsList(){
+  var el=document.getElementById('drafts-list');
+  if(!D.drafts||D.drafts.length===0){
+    el.innerHTML='<div style="padding:24px 4px;text-align:center;color:var(--text-muted);font-size:13.5px;">No saved drafts yet. Generate a suggestion and tap "💾 Save Draft" to store one here for later.</div>';
+    return;
+  }
+  el.innerHTML=D.drafts.map(function(d){
+    var troops=(d.troops||[]).map(troopById).filter(Boolean);
+    var missing=(d.troops||[]).length-troops.length;
+    var names=sortTroops(troops).slice(0,3).map(function(t){return t.rank.toUpperCase()+' '+t.name.toUpperCase();}).join(', ');
+    var more=troops.length>3?(' +'+(troops.length-3)+' more'):'';
+    var when=fmtDateLong(d.createdAt.slice(0,10))+' · '+new Date(d.createdAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    return '<div style="padding:12px 0;border-bottom:1px solid var(--border);">'+
+      '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">'+when+' · '+(d.troops||[]).length+' troops'+'</div>'+
+      '<div style="font-size:14px;margin:5px 0 8px;">'+(names?escHtml(names)+escHtml(more):'<span style="color:var(--text-muted);">No troops</span>')+'</div>'+
+      (missing>0?'<div style="font-size:12px;color:var(--red-light);margin-bottom:8px;">⚠ '+missing+' troop(s) in this draft no longer exist in the roster.</div>':'')+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;">'+
+      '<button class="btn btn-ghost btn-sm" onclick="editDraft(\''+d.id+'\')">✏️ Edit</button>'+
+      '<button class="btn btn-primary btn-sm" onclick="logDraftAsPatrol(\''+d.id+'\')">⚡ Log Patrol</button>'+
+      '<button class="btn btn-ghost btn-sm" style="color:var(--red-light);border-color:var(--red-light);" onclick="deleteDraft(\''+d.id+'\')">🗑️ Delete</button>'+
+      '</div></div>';
+  }).join('');
+}
+function deleteDraft(id){
+  if(!confirm('Delete this saved draft? This cannot be undone.')) return;
+  D.drafts=D.drafts.filter(function(d){return d.id!==id;});
+  remoteSaveConfig();
+  audit('Patrol team draft deleted');
+  updateDraftsBadge();
+  renderDraftsList();
+}
+var draftEditingId=null;
+var draftEditTroops=[];
+function editDraft(id){
+  var d=D.drafts.find(function(x){return x.id===id;});
+  if(!d) return;
+  draftEditingId=id;
+  draftEditTroops=(d.troops||[]).filter(function(tid){return troopById(tid);});
+  renderDraftSelected();
+  document.getElementById('draft-troop-search').value='';
+  document.getElementById('draft-troop-suggest').style.display='none';
+  closeDraftsModal();
+  document.getElementById('draft-edit-modal').classList.add('open');
+}
+function cancelDraftEdit(){
+  draftEditingId=null; draftEditTroops=[];
+  document.getElementById('draft-edit-modal').classList.remove('open');
+  openDraftsModal();
+}
+function draftTroopSuggest(val){
+  var box=document.getElementById('draft-troop-suggest');
+  if(!val||val.length===0){box.style.display='none';return;}
+  var q=val.toLowerCase();
+  var matches=sortTroops(D.troops.filter(isAvailable)).filter(function(t){return (t.rank+' '+t.name+' '+t.unit).toLowerCase().indexOf(q)>=0&&draftEditTroops.indexOf(t.id)<0;});
+  if(matches.length===0){box.style.display='none';return;}
+  box.style.display='block';
+  box.innerHTML=matches.slice(0,8).map(function(t){ return '<div class="suggest-item" onclick="addTroopToDraft(\''+t.id+'\')">'+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>'+' <span style="color:var(--text-muted);font-size:11px;">('+t.unit+')</span></div>'; }).join('');
+}
+function addTroopToDraft(id){
+  if(draftEditTroops.indexOf(id)<0) draftEditTroops.push(id);
+  document.getElementById('draft-troop-search').value='';
+  document.getElementById('draft-troop-suggest').style.display='none';
+  renderDraftSelected();
+}
+function removeTroopFromDraft(id){
+  draftEditTroops=draftEditTroops.filter(function(x){return x!==id;});
+  renderDraftSelected();
+}
+function renderDraftSelected(){
+  var el=document.getElementById('draft-selected-troops');
+  if(draftEditTroops.length===0){ el.innerHTML='<span style="color:var(--text-muted);font-size:12px;">No troops selected. Search above to add.</span>'; return; }
+  el.innerHTML=sortTroops(D.troops.filter(function(t){return draftEditTroops.indexOf(t.id)>=0;}))
+    .map(function(t){
+      return '<div style="display:flex;align-items:center;gap:6px;background:rgba(230,179,74,0.14);border:1px solid var(--tan);padding:5px 10px;border-radius:6px;font-size:13px;">'+
+        '<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>'+
+        '<button onclick="removeTroopFromDraft(\''+t.id+'\')" style="background:none;border:none;color:var(--red-light);cursor:pointer;font-size:18px;padding:0 2px;line-height:1;">×</button></div>';
+    }).join('');
+}
+function saveDraftEdits(){
+  var d=D.drafts.find(function(x){return x.id===draftEditingId;});
+  if(!d){ document.getElementById('draft-edit-modal').classList.remove('open'); return; }
+  d.troops=draftEditTroops.slice();
+  d.slots=null; // composition may no longer match the original suggested roles
+  d.editedAt=new Date().toISOString();
+  remoteSaveConfig();
+  audit('Patrol team draft edited: '+d.troops.length+' troops');
+  updateDraftsBadge();
+  draftEditingId=null; draftEditTroops=[];
+  document.getElementById('draft-edit-modal').classList.remove('open');
+  openDraftsModal();
+}
+var pendingDraftLogId=null;
+function logDraftAsPatrol(id){
+  var d=D.drafts.find(function(x){return x.id===id;});
+  if(!d) return;
+  var ids=(d.troops||[]).filter(function(tid){return troopById(tid);});
+  selectedTroops=ids.slice();
+  selectedCommander=null;
+  pendingDraftLogId=id;
+  closeDraftsModal();
+  editingPatrolId=null;
+  document.getElementById('log-patrol-modal-title').textContent='Log Patrol (from Draft)';
   document.getElementById('p-submit-btn').textContent='⚡ Log Patrol';
   document.getElementById('p-cancel-edit-btn').style.display='none';
   renderSelected(); updatePtlPreview();
@@ -3187,6 +3376,7 @@ document.addEventListener('click',function(e){
     document.getElementById('global-results').style.display='none';
   }
   if(!e.target.closest('#troop-search')&&!e.target.closest('#troop-suggest')){ var s=document.getElementById('troop-suggest'); if(s) s.style.display='none'; }
+  if(!e.target.closest('#draft-troop-search')&&!e.target.closest('#draft-troop-suggest')){ var ds=document.getElementById('draft-troop-suggest'); if(ds) ds.style.display='none'; }
 });
 
 // =====================================================================
@@ -3370,11 +3560,13 @@ function editPatrol(id){
 }
 function cancelEditPatrol(){
   editingPatrolId=null;
+  pendingDraftLogId=null;
   selectedTroops=[]; selectedCommander=null;
   document.getElementById('p-date').value=''; document.getElementById('p-area').value=''; document.getElementById('p-dur').value=''; document.getElementById('p-route').value=''; document.getElementById('p-rem').value='';
   renderSelected();
   document.getElementById('p-submit-btn').textContent='⚡ Log Patrol';
   document.getElementById('p-cancel-edit-btn').style.display='none';
+  var lpTitle3=document.getElementById('log-patrol-modal-title'); if(lpTitle3) lpTitle3.textContent='Log New Patrol';
   updatePtlPreview();
   var modal=document.getElementById('log-patrol-modal'); if(modal) modal.classList.remove('open');
 }
@@ -3412,6 +3604,13 @@ function logPatrol(){
     audit('Patrol logged: '+ptlId+' | '+type+' | '+(area||'No sector')+' | '+selectedTroops.length+' troops');
     if(dup) showAlert('log-alert','Patrol '+ptlId+' logged. WARNING: Possible duplicate.','warn');
     else showAlert('log-alert','Patrol '+ptlId+' logged successfully!','success');
+    if(pendingDraftLogId){
+      D.drafts=D.drafts.filter(function(d){return d.id!==pendingDraftLogId;});
+      remoteSaveConfig();
+      updateDraftsBadge();
+      pendingDraftLogId=null;
+      var lpTitle2=document.getElementById('log-patrol-modal-title'); if(lpTitle2) lpTitle2.textContent='Log New Patrol';
+    }
   }
   document.getElementById('p-dur').value=''; document.getElementById('p-area').value=''; document.getElementById('p-route').value=''; document.getElementById('p-rem').value='';
   selectedTroops=[]; selectedCommander=null; renderSelected(); updatePtlPreview();
@@ -4257,7 +4456,7 @@ function doExport(){ var backup={version:4,exportDate:new Date().toISOString(),e
 function dlFile(content,type,filename){ var blob=new Blob([content],{type:type}); var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a);a.click(); document.body.removeChild(a);URL.revokeObjectURL(a.href); }
 var pendingRestore=null;
 function previewRestore(input){ var file=input.files[0]; if(!file) return; var reader=new FileReader(); reader.onload=function(e){ try{var backup=JSON.parse(e.target.result);if(!backup.data) throw new Error('Invalid');pendingRestore=backup;var d=backup.data;var prev=document.getElementById('restore-preview');prev.style.display='';prev.className='alert al-info';prev.innerHTML='Valid backup: <strong>'+(backup.exportDate?backup.exportDate.slice(0,10):'?')+'</strong><br>Troops: <strong>'+(d.troops||[]).length+'</strong> · Archived: <strong>'+(d.archived||[]).length+'</strong> · Patrols: <strong>'+(d.patrols||[]).length+'</strong><br><strong style="color:#ff9999;">This will overwrite all current data.</strong>';document.getElementById('restore-btn').style.display='';document.getElementById('restore-cancel').style.display='';}catch(err){var prev=document.getElementById('restore-preview');prev.style.display='';prev.className='alert al-danger';prev.innerHTML='Invalid backup file.';document.getElementById('restore-btn').style.display='none';document.getElementById('restore-cancel').style.display='none';} }; reader.readAsText(file); }
-function doRestore(){ if(!pendingRestore||!pendingRestore.data){alert('No valid backup.');return;} D=pendingRestore.data; if(!D.archived) D.archived=[]; if(!D.counter) D.counter=D.patrols.length+1; if(!D.audit) D.audit=[]; if(!D.settings) D.settings={pob:'POB Mobaye',mission:'',commander:'',classification:'CONFIDENTIAL'}; if(!D.config) D.config={types:DEFAULT_TYPES.slice(),sectors:DEFAULT_SECTORS.slice(),routes:DEFAULT_ROUTES.slice(),ranks:DEFAULT_RANKS.slice()}; if(!D.config.ranks) D.config.ranks=DEFAULT_RANKS.slice(); RANKS=D.config.ranks; D.troops.forEach(function(t){if(!t.status)t.status='available';if(!t.notes)t.notes='';}); migratePatrolSeq(); saveData(); var allTroops=D.troops.concat(D.archived); Promise.all(allTroops.map(function(t){return apiFetch('/troops',{method:'POST',body:JSON.stringify(t)}).catch(function(){});}).concat(D.patrols.map(function(p){return remoteSavePatrol(p);}))).then(function(){return remoteSaveConfig();}); D.archived.forEach(function(t){apiFetch('/troops/'+t.id+'/archive',{method:'PATCH',body:JSON.stringify({archived:true})}).catch(function(){});}); document.getElementById('restore-alert').innerHTML='<div class="alert al-success">Restore successful!</div>'; cancelRestore(); applySettings(); populateDropdowns(); populateRankDropdowns(); renderDash(); renderSysInfo(); audit('Data restored from backup'); setTimeout(function(){document.getElementById('restore-alert').innerHTML='';},5000); }
+function doRestore(){ if(!pendingRestore||!pendingRestore.data){alert('No valid backup.');return;} D=pendingRestore.data; if(!D.archived) D.archived=[]; if(!D.counter) D.counter=D.patrols.length+1; if(!D.audit) D.audit=[]; if(!D.settings) D.settings={pob:'POB Mobaye',mission:'',commander:'',classification:'CONFIDENTIAL'}; if(!D.config) D.config={types:DEFAULT_TYPES.slice(),sectors:DEFAULT_SECTORS.slice(),routes:DEFAULT_ROUTES.slice(),ranks:DEFAULT_RANKS.slice()}; if(!D.config.ranks) D.config.ranks=DEFAULT_RANKS.slice(); if(!D.drafts) D.drafts=[]; RANKS=D.config.ranks; D.troops.forEach(function(t){if(!t.status)t.status='available';if(!t.notes)t.notes='';}); migratePatrolSeq(); saveData(); var allTroops=D.troops.concat(D.archived); Promise.all(allTroops.map(function(t){return apiFetch('/troops',{method:'POST',body:JSON.stringify(t)}).catch(function(){});}).concat(D.patrols.map(function(p){return remoteSavePatrol(p);}))).then(function(){return remoteSaveConfig();}); D.archived.forEach(function(t){apiFetch('/troops/'+t.id+'/archive',{method:'PATCH',body:JSON.stringify({archived:true})}).catch(function(){});}); document.getElementById('restore-alert').innerHTML='<div class="alert al-success">Restore successful!</div>'; cancelRestore(); applySettings(); populateDropdowns(); populateRankDropdowns(); renderDash(); renderSysInfo(); updateDraftsBadge(); audit('Data restored from backup'); setTimeout(function(){document.getElementById('restore-alert').innerHTML='';},5000); }
 function cancelRestore(){ pendingRestore=null; document.getElementById('restore-file').value=''; document.getElementById('restore-preview').style.display='none'; document.getElementById('restore-btn').style.display='none'; document.getElementById('restore-cancel').style.display='none'; }
 function renderSysInfo(){ var sz=JSON.stringify(D).length; document.getElementById('sys-info').innerHTML='Version: v4 (Mobile)<br>Active Troops: '+D.troops.length+'<br>Archived Troops: '+(D.archived||[]).length+'<br>Total Patrols: '+D.patrols.length+'<br>Total Hours: '+D.patrols.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0).toFixed(1)+'h<br>Patrol Types: '+D.config.types.length+'<br>Sectors: '+D.config.sectors.length+'<br>Audit Entries: '+D.audit.length+'<br>Next Patrol ID: PTL-'+new Date().getFullYear()+'-'+String(D.counter).padStart(3,'0')+'<br>Storage Used: ~'+(sz/1024).toFixed(1)+' KB<br>API: '+API_URL; }
 
@@ -4267,7 +4466,8 @@ function renderSysInfo(){ var sz=JSON.stringify(D).length; document.getElementBy
 var pendingDel=null;
 function confirmDel(type,id){ requirePin(function(){ pendingDel={type:type,id:id}; document.getElementById('del-modal').classList.add('open'); document.getElementById('del-confirm').onclick=function(){ if(pendingDel.type==='patrol'){var p=D.patrols.find(function(x){return x.id===pendingDel.id;});if(p) audit('Patrol deleted: '+(p.ptlId||p.id));D.patrols=D.patrols.filter(function(p){return p.id!==pendingDel.id;});remoteDeletePatrol(pendingDel.id);}else{var t=D.troops.find(function(x){return x.id===pendingDel.id;});if(t) audit('Troop deleted: '+upLabel(t.rank,t.name));D.troops=D.troops.filter(function(t){return t.id!==pendingDel.id;});D.patrols.forEach(function(p){p.troops=(p.troops||[]).filter(function(id){return id!==pendingDel.id;});});remoteDeleteTroop(pendingDel.id);} saveData(); closeModal('del-modal'); pendingDel=null; var active=document.querySelector('.section.active'); if(active){var aid=active.id;if(aid==='dashboard') renderDash();if(aid==='patrol-log') renderTable();if(aid==='troops') renderRoster();if(aid==='report') genReport();if(aid==='inactive') renderInactive(0);} }; }); }
 
-['del-modal','troops-modal','profile-modal','dash-detail-modal','troop-form-modal','donors-modal'].forEach(function(id){ document.getElementById(id).addEventListener('click',function(e){if(e.target===this)closeModal(id);}); });
+['del-modal','troops-modal','profile-modal','dash-detail-modal','troop-form-modal','donors-modal','drafts-modal'].forEach(function(id){ document.getElementById(id).addEventListener('click',function(e){if(e.target===this)closeModal(id);}); });
+document.getElementById('draft-edit-modal').addEventListener('click',function(e){ if(e.target===this) cancelDraftEdit(); });
 document.getElementById('edit-confirm-modal').addEventListener('click',function(e){if(e.target===this)closeConfirmEdit();});
 document.getElementById('pin-modal').addEventListener('click',function(e){if(e.target===this)closePinModal();});
 document.getElementById('pin-setup-modal').addEventListener('click',function(e){if(e.target===this)closePinSetupModal();});
@@ -4417,6 +4617,7 @@ document.addEventListener('DOMContentLoaded',resetSearchFields);
       document.getElementById('print-date-line').textContent='Generated: '+nowStr();
       startCountdown();
       updatePendingBadge();
+      updateDraftsBadge();
     }catch(e){console.error('Init error:',e);}
     // App is already fully usable offline at this point. Now try to reach the server —
     // this pushes any queued offline edits and pulls fresh data, but never blocks the UI above.
