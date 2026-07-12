@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#1a3a2a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Troops Mgmt">
+<meta name="apple-mobile-web-app-title" content="TMS">
 <meta name="application-name" content="Troops Management System">
 <meta name="description" content="POB Mobaye Troops Management System — Military patrol logging and duty command dashboard">
 <!-- Icons (inline SVG data URI for portability — replace paths for production) -->
@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
-<title>Troops Management System — POB Mobaye</title>
+<title>Troops Management System</title>
 <style>
 :root{
   /* Modern command-center theme: neutral charcoal base, gold as brand accent,
@@ -73,10 +73,11 @@ body.light-mode{background:
   display:flex;align-items:center;justify-content:space-between;
   padding:0 12px;gap:8px;
 }
-.logo{display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.logo{display:flex;align-items:center;gap:10px;flex-shrink:1;min-width:0;}
 .logo-hex{width:38px;height:38px;object-fit:contain;flex-shrink:0;
   filter:drop-shadow(0 2px 6px rgba(230,179,74,0.25));}
-.logo-text h1{font-family:var(--font-display);font-size:18px;font-weight:700;color:var(--tan);letter-spacing:2px;text-transform:uppercase;line-height:1.15;text-shadow:0 0 18px rgba(230,179,74,0.25);}
+.logo-text{min-width:0;}
+.logo-text h1{font-family:var(--font-display);font-size:15px;font-weight:700;color:var(--tan);letter-spacing:1px;text-transform:uppercase;line-height:1.15;text-shadow:0 0 18px rgba(230,179,74,0.25);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
 .logo-text p{font-size:13.5px;color:var(--text-muted);letter-spacing:0.5px;font-weight:600;}
 .header-center{flex:1;display:flex;align-items:center;gap:6px;min-width:0;justify-content:flex-end;}
 /* Mobile: search is just a round icon button; overlay appears below header */
@@ -157,7 +158,7 @@ body.light-mode{background:
 .sync-status-strip.show{transform:translateY(0);}
 @media (min-width:900px) and (pointer:fine){.sync-status-strip{left:var(--sidebar-w);}}
 @media (min-width:1024px){.sync-status-strip{left:var(--sidebar-w);}}
-#mode-toggle-bar{position:fixed;top:var(--header-h);left:0;right:0;height:var(--modebar-h);z-index:120;
+#mode-toggle-bar{position:absolute;top:100%;left:0;right:0;height:var(--modebar-h);z-index:120;
   display:flex;background:var(--surface2);border-bottom:1px solid var(--border);}
 .mode-toggle-btn{flex:1;border:none;background:none;cursor:pointer;font-family:var(--font-display);
   font-size:14px;font-weight:700;letter-spacing:0.5px;color:var(--text-muted);
@@ -292,9 +293,19 @@ body.light-mode{background:
 
   /* ── Header ── */
   #app-header{padding:0 20px;}
-  .logo-text h1{font-size:17px;letter-spacing:2.5px;}
+  .logo-text h1{font-size:16px;letter-spacing:1.5px;}
   .logo-text p{display:block;font-size:12px;}
   .logo-hex{width:40px;height:40px;}
+
+  /* ── Mode toggle: inline pill in the header itself, not a stacked bar
+       (was pushing all content down and wasting a full row on desktop) ── */
+  #mode-toggle-bar{position:static;height:auto;flex-shrink:0;width:auto;
+    margin-left:18px;border:1px solid var(--border);border-bottom:1px solid var(--border);
+    border-radius:10px;overflow:hidden;background:var(--surface2);}
+  .mode-toggle-btn{padding:9px 16px;font-size:12.5px;border-bottom:none;border-right:1px solid var(--border);}
+  .mode-toggle-btn:last-child{border-right:none;}
+  .mode-toggle-btn.active{border-bottom:none;box-shadow:inset 0 -2px 0 var(--tan);}
+  :root{--content-top:var(--header-h);}
 
   /* ── Dashboard: stat bar spans full width ── */
   .stat-grid{grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;}
@@ -337,14 +348,10 @@ body.light-mode{background:
   .audit-time{min-width:130px;font-size:12px;}
   .audit-msg{font-size:14px;}
 
-  /* ── Modals: centered dialog instead of full-width bottom sheet.
-       On desktop the bottom-sheet was stretching edge-to-edge (2500px+ wide
-       on large monitors), so 2/4-column info grids inside spread their short
-       text across huge empty gutters. Capping + centering fixes that without
-       touching the mobile bottom-sheet behavior (this rule only applies here). ── */
-  .modal-ov{align-items:center;padding:30px;box-sizing:border-box;}
-  .modal{width:100%;max-width:680px;border-radius:16px;max-height:85vh;}
-  .modal-handle{display:none;}
+  /* ── Modals: desktop gets a wider cap and more breathing room than
+       phones, but centering itself is now the same on every screen size. ── */
+  .modal-ov{padding:30px;box-sizing:border-box;}
+  .modal{width:100%;max-width:680px;max-height:85vh;}
 
   /* ── Profile info grid: 3 columns fit the 9 fields evenly, and with the
        modal now a sane width, larger label/value text stays readable
@@ -482,6 +489,27 @@ body.light-mode .sidebar-item.active{background:#f5e8cc;color:var(--tan);}
 .stat-icon{font-size:18px;opacity:0.85;margin-bottom:4px;line-height:1;}
 .stat-num{font-size:28px;font-weight:700;color:var(--tan);font-family:var(--font-mono);line-height:1;text-shadow:0 0 20px rgba(230,179,74,0.2);}
 .stat-label{font-size:12px;color:var(--text-muted);letter-spacing:0.5px;text-transform:uppercase;margin-top:4px;font-weight:600;}
+
+/* ── DUTY MANAGEMENT — its own crimson/shield accent, distinct from
+     Patrol's tan/gold, so the two modes feel visually distinguishable
+     while sharing the same card/stat/button structure. ── */
+#duty-dashboard .card-title,#duty-roster .card-title,#duty-settings .card-title,
+#duty-suggest-modal .card-title,#duty-drafts-modal .card-title,#contingency-modal .card-title{color:var(--red-light);}
+#duty-dashboard .stat-num{color:var(--red-light);text-shadow:0 0 20px rgba(242,73,90,0.25);}
+#duty-dashboard .stat{background:linear-gradient(155deg,rgba(242,73,90,0.10),var(--surface));border-color:rgba(242,73,90,0.35);}
+#duty-dashboard .stat.clickable:hover{border-color:var(--red-light);box-shadow:var(--card-bevel),0 4px 16px rgba(242,73,90,0.18);}
+#duty-dashboard .stat.clickable:active{border-color:var(--red-light);}
+#duty-dashboard .btn-primary,#duty-roster .btn-primary,#duty-settings .btn-primary,
+#duty-suggest-modal .btn-primary,#duty-drafts-modal .btn-primary,#contingency-modal .btn-primary{
+  background:linear-gradient(160deg,var(--red-light),var(--red));border-color:var(--red);color:#fff;}
+#duty-dashboard #dash-today-duty .card{border-left:3px solid var(--red-light);
+  background:linear-gradient(120deg,rgba(242,73,90,0.08),var(--surface) 55%);}
+.mode-toggle-btn#mode-btn-duty.active{color:var(--red-light);border-bottom-color:var(--red-light);background:rgba(242,73,90,0.10);}
+@media (min-width:900px) and (pointer:fine){
+  .mode-toggle-btn#mode-btn-duty.active{box-shadow:inset 0 -2px 0 var(--red-light);}
+}
+.sidebar-item[data-mode="duty"].active{color:var(--red-light);border-left-color:var(--red-light);}
+
 
 /* ── FORMS ── */
 label.field-label{display:block;font-size:12.5px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;font-family:'Courier New',monospace;font-weight:700;}
@@ -702,16 +730,16 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 
 /* ── MODALS ── */
 .modal-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:300;
-  align-items:flex-end;justify-content:center;padding:0;}
+  align-items:center;justify-content:center;padding:16px;box-sizing:border-box;}
 .modal-ov.open{display:flex;}
 @media (max-width:899px){
-  .modal-ov{padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom));box-sizing:border-box;}
+  .modal-ov{padding-bottom:calc(16px + var(--nav-h) + env(safe-area-inset-bottom));box-sizing:border-box;}
 }
-.modal{background:var(--surface);border:1px solid var(--tan);border-radius:16px 16px 0 0;
-  padding:20px;width:100%;max-height:88vh;overflow-y:auto;}
+.modal{background:var(--surface);border:1px solid var(--tan);border-radius:16px;
+  padding:20px;width:100%;max-width:520px;max-height:88vh;overflow-y:auto;}
 .modal-title{font-size:14.5px;font-weight:700;color:var(--tan);letter-spacing:2px;text-transform:uppercase;
   margin-bottom:14px;font-family:'Courier New',monospace;}
-.modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px;}
+.modal-handle{display:none;}
 .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap;}
 
 /* ── CONFIRM MODAL ── */
@@ -926,9 +954,13 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
   <div class="logo">
     <img class="logo-hex" id="logo-img" alt="Troops Management System">
     <div class="logo-text">
-      <h1 id="pob-title">Troops Mgmt</h1>
+      <h1 id="pob-title">Troops Management System</h1>
       <p id="clock-disp">--:--:--</p>
     </div>
+  </div>
+  <div id="mode-toggle-bar">
+    <button class="mode-toggle-btn active" id="mode-btn-patrol" onclick="setAppMode('patrol')">🚶 Patrol</button>
+    <button class="mode-toggle-btn" id="mode-btn-duty" onclick="setAppMode('duty')">🛡 Duty Management</button>
   </div>
   <div class="header-center">
     <!-- Mobile: round icon button only -->
@@ -953,10 +985,6 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
   </div>
 </header>
 <div class="sync-status-strip" id="sync-status-strip"></div>
-<div id="mode-toggle-bar">
-  <button class="mode-toggle-btn active" id="mode-btn-patrol" onclick="setAppMode('patrol')">🚶 Patrol</button>
-  <button class="mode-toggle-btn" id="mode-btn-duty" onclick="setAppMode('duty')">🛡 Duty Management</button>
-</div>
 
 <!-- MOBILE SEARCH OVERLAY -->
 <div id="search-overlay">
@@ -1181,10 +1209,10 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 <div id="duty-dashboard" class="section">
   <div id="duty-dash-alerts"></div>
   <div id="dash-today-duty" style="margin-bottom:14px;"></div>
-  <button class="btn btn-primary btn-full" style="margin-bottom:8px;font-size:14.5px;" onclick="openDutySuggestModal()">🎯 Suggest Duty Roster</button>
-  <div style="display:flex;gap:8px;margin-bottom:14px;">
-    <button class="btn btn-ghost" style="flex:2;font-size:13px;white-space:nowrap;" onclick="openDutyDraftsModal()">📋 Duty Drafts <span id="duty-drafts-count-badge"></span></button>
-    <button class="btn btn-ghost" style="flex:1;font-size:13px;white-space:nowrap;" onclick="openContingencyModal()">🚧 Contingency</button>
+  <div style="display:flex;gap:6px;margin-bottom:14px;">
+    <button class="btn btn-primary" style="flex:1.3;font-size:12.5px;white-space:nowrap;padding:10px 4px;" onclick="openDutySuggestModal()">🎯 Suggest</button>
+    <button class="btn btn-ghost" style="flex:1;font-size:12.5px;white-space:nowrap;padding:10px 4px;" onclick="openDutyDraftsModal()">📋 Drafts <span id="duty-drafts-count-badge"></span></button>
+    <button class="btn btn-ghost" style="flex:1.3;font-size:12.5px;white-space:nowrap;padding:10px 4px;" onclick="openContingencyModal()">🚧 Contingency</button>
   </div>
   <div class="stat-grid" id="duty-dash-stats"></div>
   <div class="card">
@@ -1201,7 +1229,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
       <button class="btn btn-ghost btn-sm" onclick="closeDutySuggestModal()">Close</button>
     </div>
     <div id="ds-config">
-      <div class="fg"><label class="field-label">Date</label><input type="text" id="ds-date" placeholder="DD/MM/YYYY" maxlength="10" oninput="fmtDateInp(this)"></div>
+      <div class="fg cal-field"><label class="field-label">Date</label><input type="text" id="ds-date" placeholder="DD/MM/YYYY" maxlength="10" oninput="fmtDateInp(this)" autocomplete="off" readonly onclick="toggleCal('cal-ds-date',this)" style="padding-right:36px;"><span class="cal-icon" onclick="toggleCal('cal-ds-date',document.getElementById('ds-date'))">📅</span><div class="cal-wrap" id="cal-ds-date"></div></div>
       <div class="fg">
         <label class="field-label">Period</label>
         <select id="ds-period">
@@ -1639,9 +1667,9 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     <div id="stm-results" style="display:none;">
       <div id="stm-warnings-sticky"><div id="stm-warnings"></div></div>
       <div id="stm-slots"></div>
-      <div class="fg" id="stm-draft-date-wrap" style="margin-top:10px;">
+      <div class="fg cal-field" id="stm-draft-date-wrap" style="margin-top:10px;">
         <label class="field-label">Planned Date (for Save Draft — blocks these troops from duty that date)</label>
-        <input type="text" id="stm-draft-date" placeholder="DD/MM/YYYY" maxlength="10" oninput="fmtDateInp(this)">
+        <input type="text" id="stm-draft-date" placeholder="DD/MM/YYYY" maxlength="10" oninput="fmtDateInp(this)" autocomplete="off" readonly onclick="toggleCal('cal-stm-draft-date',this)" style="padding-right:36px;"><span class="cal-icon" onclick="toggleCal('cal-stm-draft-date',document.getElementById('stm-draft-date'))">📅</span><div class="cal-wrap" id="cal-stm-draft-date"></div>
       </div>
       <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
         <button class="btn btn-ghost" onclick="backToStmConfig()">← Adjust</button>
@@ -1670,9 +1698,9 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     <div class="card-title" style="border-bottom:none;margin-bottom:10px;">
       <span>✏️ Edit Draft</span>
     </div>
-    <div class="fg">
+    <div class="fg cal-field">
       <label class="field-label">Planned Date <span style="font-weight:400;color:var(--text-muted);">(blocks these troops from duty that date)</span></label>
-      <input type="text" id="draft-planned-date" placeholder="DD/MM/YYYY" maxlength="10" oninput="fmtDateInp(this)">
+      <input type="text" id="draft-planned-date" placeholder="DD/MM/YYYY" maxlength="10" oninput="fmtDateInp(this)" autocomplete="off" readonly onclick="toggleCal('cal-draft-planned-date',this)" style="padding-right:36px;"><span class="cal-icon" onclick="toggleCal('cal-draft-planned-date',document.getElementById('draft-planned-date'))">📅</span><div class="cal-wrap" id="cal-draft-planned-date"></div>
     </div>
     <div class="fg" style="position:relative;">
       <label class="field-label">Search &amp; Add Troops</label>
@@ -1700,7 +1728,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     <div class="fg"><label class="field-label">1. Duty Type</label><select id="duty-type-sel" onchange="onDutyTypeChange()"></select></div>
     <div class="fg" id="duty-post-wrap"><label class="field-label">2. Post / Location</label><select id="duty-post-sel" onchange="dutyAutoFillDuration();dutyRefreshConflicts();"></select></div>
     <div class="fr">
-      <div class="fg"><label class="field-label">3. Date</label><input type="text" id="duty-date" placeholder="DD/MM/YYYY" maxlength="10" oninput="fmtDateInp(this)" onchange="dutyRefreshConflicts()"></div>
+      <div class="fg cal-field"><label class="field-label">3. Date</label><input type="text" id="duty-date" placeholder="DD/MM/YYYY" maxlength="10" oninput="fmtDateInp(this)" onchange="dutyRefreshConflicts()" autocomplete="off" readonly onclick="toggleCal('cal-duty-date',this)" style="padding-right:36px;"><span class="cal-icon" onclick="toggleCal('cal-duty-date',document.getElementById('duty-date'))">📅</span><div class="cal-wrap" id="cal-duty-date"></div></div>
       <div class="fg"><label class="field-label">Start Time</label><input type="time" id="duty-start" onchange="dutyAutoFillDuration();dutyRefreshConflicts();"></div>
     </div>
     <div id="duty-shift-presets" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;"></div>
@@ -1743,8 +1771,8 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     <div class="card-title" style="border-bottom:none;font-size:13px;margin-bottom:8px;"><span>New Exclusion Group</span></div>
     <div class="fg"><input type="text" id="cg-reason" placeholder="Reason (e.g. Committed to Op X)"></div>
     <div class="fr">
-      <div class="fg"><label class="field-label">Start Date</label><input type="text" id="cg-start" placeholder="DD/MM/YYYY" maxlength="10" oninput="fmtDateInp(this)"></div>
-      <div class="fg"><label class="field-label">End Date</label><input type="text" id="cg-end" placeholder="DD/MM/YYYY (optional)" maxlength="10" oninput="fmtDateInp(this)"></div>
+      <div class="fg cal-field"><label class="field-label">Start Date</label><input type="text" id="cg-start" placeholder="DD/MM/YYYY" maxlength="10" oninput="fmtDateInp(this)" autocomplete="off" readonly onclick="toggleCal('cal-cg-start',this)" style="padding-right:36px;"><span class="cal-icon" onclick="toggleCal('cal-cg-start',document.getElementById('cg-start'))">📅</span><div class="cal-wrap" id="cal-cg-start"></div></div>
+      <div class="fg cal-field"><label class="field-label">End Date</label><input type="text" id="cg-end" placeholder="DD/MM/YYYY (optional)" maxlength="10" oninput="fmtDateInp(this)" autocomplete="off" readonly onclick="toggleCal('cal-cg-end',this)" style="padding-right:36px;"><span class="cal-icon" onclick="toggleCal('cal-cg-end',document.getElementById('cg-end'))">📅</span><div class="cal-wrap" id="cal-cg-end"></div></div>
     </div>
     <div class="fg" style="position:relative;">
       <label class="field-label">Search &amp; Add Troops</label>
@@ -1922,7 +1950,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
       <label class="cb-wrap" style="font-size:13px;"><input type="checkbox" id="t-never-suggest"><span class="cb-box"></span>Never suggest for patrol (e.g. Medical Officer / Doctor)</label>
       <label class="cb-wrap" style="font-size:13px;"><input type="checkbox" id="t-never-duty"><span class="cb-box"></span>Never assign to duty roster</label>
       <label class="cb-wrap" style="font-size:13px;"><input type="checkbox" id="t-restricted-range"><span class="cb-box"></span>Restricted range — not suitable for distant patrols (e.g. Armoury Keeper, Storeman)</label>
-      <label class="cb-wrap" style="font-size:13px;"><input type="checkbox" id="t-senior-sgt"><span class="cb-box"></span>Designated Senior Sergeant (eligible for Roaming duty)</label>
+      <label class="cb-wrap" style="font-size:13px;"><input type="checkbox" id="t-senior-sgt"><span class="cb-box"></span>Eligible for Roaming duty</label>
     </div>
     <div class="fg" id="t-duty-quals-wrap">
       <label class="field-label">🛡 Duty Qualifications</label>
@@ -3545,6 +3573,7 @@ function generateDutySuggestion(){
   document.getElementById('ds-modal-title').textContent='🎯 '+(period==='day'?'Day':'Night')+' Duty Suggestion — '+fmtDate(date);
   dsScrollTop();
 }
+var _dsManualPickSlot=-1;
 function renderDsResults(){
   var warnEl=document.getElementById('ds-warnings');
   warnEl.innerHTML=_dsWarnings.length?'<div class="alert al-warn" style="margin-bottom:10px;">⚠ '+_dsWarnings.map(escHtml).join('<br>⚠ ')+'</div>':'';
@@ -3559,15 +3588,65 @@ function renderDsResults(){
     var rows=g.idxs.map(function(i){
       var s=_dsSlots[i];
       var t=s.chosenId?troopById(s.chosenId):null;
-      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;">'+
+      var manualOpen=(_dsManualPickSlot===i);
+      return '<div style="padding:5px 0;">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'+
         '<div style="font-size:13.5px;">'+(t?('<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>'):'<span style="color:var(--red-light);">— none available —</span>')+'</div>'+
-        '<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:5px 9px;white-space:nowrap;flex-shrink:0;" onclick="dsReplaceSlot('+i+')">🔁</button>'+
+        '<div style="display:flex;gap:6px;flex-shrink:0;">'+
+        '<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:5px 9px;white-space:nowrap;" onclick="dsReplaceSlot('+i+')" title="Next fairest alternative">🔁</button>'+
+        '<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:5px 9px;white-space:nowrap;'+(manualOpen?'border-color:var(--tan);color:var(--tan);':'')+'" onclick="dsToggleManualPick('+i+')" title="Pick a specific troop">🔍</button>'+
+        '</div></div>'+
+        (manualOpen?('<div style="position:relative;margin-top:6px;">'+
+          '<input type="text" placeholder="Type name or rank to pick directly..." autocomplete="off" oninput="dsManualSearch('+i+',this.value)" style="font-size:13px;">'+
+          '<div class="suggest-box" id="ds-manual-suggest-'+i+'" style="display:none;"></div>'+
+          '</div>'):'')+
         '</div>';
     }).join('');
     return '<div style="padding:8px 0;border-bottom:1px solid var(--border);">'+
       '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">'+escHtml(g.label)+(g.sub?' · '+g.sub:'')+'</div>'+
       rows+'</div>';
   }).join('');
+}
+function dsToggleManualPick(i){ _dsManualPickSlot=(_dsManualPickSlot===i)?-1:i; renderDsResults(); }
+function dsManualSearch(i,val){
+  var box=document.getElementById('ds-manual-suggest-'+i);
+  if(!box) return;
+  if(!val||val.length===0){ box.style.display='none'; return; }
+  var q=val.toLowerCase();
+  var slot=_dsSlots[i];
+  var usedElsewhere={};
+  _dsSlots.forEach(function(s,idx){ if(idx!==i&&s.chosenId) usedElsewhere[s.chosenId]=true; });
+  var matches=sortTroops(D.troops.filter(isAvailable)).filter(function(t){return !usedElsewhere[t.id]&&(t.rank+' '+t.name+' '+t.unit).toLowerCase().indexOf(q)>=0;});
+  if(matches.length===0){ box.style.display='none'; return; }
+  box.style.display='block';
+  var type=dutyTypeByName(slot.category==='Sentry'?'Sentry':slot.category);
+  var post=slot.postId?dutyPostById(slot.postId):null;
+  box.innerHTML=matches.slice(0,8).map(function(t){
+    var issues=dutyEligibilityIssuesRaw(t,type,post,slot);
+    var flag=issues.length?' <span style="color:var(--orange);font-size:10px;">⚠ '+escHtml(issues[0])+'</span>':'';
+    return '<div class="suggest-item" onclick="dsManualPick('+i+',\''+t.id+'\')"><strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong> <span style="color:var(--text-muted);font-size:11px;">('+t.unit+')</span>'+flag+'</div>';
+  }).join('');
+}
+function dsManualPick(i,troopId){
+  var slot=_dsSlots[i];
+  slot.chosenId=troopId;
+  if(slot.pool.indexOf(troopId)<0) slot.pool.push(troopId);
+  slot.poolPos=slot.pool.indexOf(troopId);
+  _dsManualPickSlot=-1;
+  renderDsResults();
+}
+// Same rule-set as dutyEligibilityIssues, but usable outside the Assign Duty
+// modal's own DOM (the Suggest Duty Roster screen has its own date/type/post
+// context per slot rather than shared duty-date/duty-type-sel fields).
+function dutyEligibilityIssuesRaw(t,type,post,slot){
+  var issues=[];
+  if(slot&&slot.category==='Roaming'&&!isRoamingEligible(t)) issues.push('not eligible for Roaming duty');
+  if(slot&&slot.category!=='Roaming'&&isRoamingOnlyRank(t)) issues.push('Officers/JCOs are only assigned Roaming duty');
+  if(slot&&slot.category==='Sentry'&&isNCE(t)) issues.push('NCE not assigned Sentry duty');
+  if(t.neverDuty) issues.push('marked Never Assign to Duty');
+  if(isAdminTrade(t)) issues.push('Administration/HQ staff');
+  if(_dsDate&&isContingencyExcluded(t.id,_dsDate)) issues.push('Contingency Mode active for this date');
+  return issues;
 }
 function dsReplaceSlot(i){
   var slot=_dsSlots[i];
@@ -4094,11 +4173,12 @@ function daysSince(dateStr){ if(!dateStr) return 9999; return Math.floor((new Da
 // on the same flat 7-day clock as a frontline troop is misleading, so the
 // allowed gap scales inversely with their target — a 25% target troop is
 // only flagged after ~4x as long (28 days), not 7.
-function inactiveThresholdDays(t){
-  var pct=(t&&t.targetPct!=null)?t.targetPct:100;
-  if(pct<=0) pct=1;
-  return Math.round(7*(100/pct));
-}
+// Inactivity is a plain fact (days since last patrol) — it applies the
+// same flat threshold to every troop, Administration role or not. This is
+// deliberately separate from the Participation Status target %, which is
+// a different metric (share of unit hours) that Administration troops are
+// correctly held to a lower bar on.
+function inactiveThresholdDays(t){ return 7; }
 function lastPatrol(tid){ var pts=D.patrols.filter(function(p){return (p.troops||[]).indexOf(tid)>=0;}); pts.sort(function(a,b){return b.date.localeCompare(a.date);}); return pts.length?pts[0].date:null; }
 function patrolCount(tid){ return D.patrols.filter(function(p){return (p.troops||[]).indexOf(tid)>=0;}).length; }
 function patrolHours(tid){ return D.patrols.filter(function(p){return (p.troops||[]).indexOf(tid)>=0;}).reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0); }
@@ -4317,7 +4397,7 @@ function setAppMode(mode){
     showTab('dashboard');
   } else {
     bnDash.dataset.tab='duty-dashboard'; bnDash.onclick=function(){showTab('duty-dashboard');}; bnDash.querySelector('.nav-label').textContent='Dash';
-    bnAdd.onclick=function(){openDutyModal();}; bnAdd.querySelector('.nav-icon').textContent='🛡'; bnAdd.querySelector('.nav-label').textContent='Assign';
+    bnAdd.onclick=function(){openDutySuggestModal();}; bnAdd.querySelector('.nav-icon').textContent='🎯'; bnAdd.querySelector('.nav-label').textContent='Suggest';
     bnList.dataset.tab='duty-roster'; bnList.onclick=function(){showTab('duty-roster');}; bnList.querySelector('.nav-icon').textContent='📋'; bnList.querySelector('.nav-label').textContent='Roster';
     showTab('duty-dashboard');
   }
@@ -4849,7 +4929,7 @@ function submitPinReset(){
   showAlert('cfg-alert','PIN reset successfully. You may now log in with your new PIN.','success');
   audit('Security PIN reset via recovery');
 }
-function applySettings(){ var s=D.settings; document.getElementById('pob-title').textContent='Troops Mgmt'; document.title='Troops Management System — '+(s.pob||'POB Mobaye'); if(document.getElementById('print-org-name')) document.getElementById('print-org-name').textContent=s.pob; if(document.getElementById('print-mission')) document.getElementById('print-mission').textContent=s.mission||'Patrol Report'; var wm=document.getElementById('watermark-text'); if(wm) wm.textContent=s.classification||''; }
+function applySettings(){ var s=D.settings; document.getElementById('pob-title').textContent='Troops Management System'; document.title='Troops Management System'; if(document.getElementById('print-org-name')) document.getElementById('print-org-name').textContent=s.pob; if(document.getElementById('print-mission')) document.getElementById('print-mission').textContent=s.mission||'Patrol Report'; var wm=document.getElementById('watermark-text'); if(wm) wm.textContent=s.classification||''; }
 function populateDropdowns(){ var types=D.config.types,sectors=D.config.sectors; var ptEl=document.getElementById('p-type'); if(ptEl) ptEl.innerHTML=types.map(function(t){return '<option>'+t+'</option>';}).join(''); var paEl=document.getElementById('p-area'); if(paEl) paEl.innerHTML='<option value="">-- Select Sector --</option>'+sectors.map(function(s){return '<option>'+s+'</option>';}).join(''); var ftEl=document.getElementById('ft'); if(ftEl) ftEl.innerHTML='<option value="">All Types</option>'+types.map(function(t){return '<option>'+t+'</option>';}).join(''); var faEl=document.getElementById('fa'); if(faEl) faEl.innerHTML='<option value="">All Sectors</option>'+sectors.map(function(s){return '<option>'+s+'</option>';}).join(''); }
 function populateReportYears(){ var sel=document.getElementById('report-year-sel'); if(!sel) return; var years=new Set(); var now=new Date().getFullYear(); D.patrols.forEach(function(p){if(p.date) years.add(parseInt(p.date.slice(0,4)));}); years.add(now); var sorted=Array.from(years).sort(function(a,b){return b-a;}); sel.innerHTML=sorted.map(function(y){return '<option value="'+y+'"'+(y===now?' selected':'')+'>'+y+'</option>';}).join(''); }
 
@@ -6124,12 +6204,17 @@ function positionCalDesktop(wrap,inputEl){
   if(!inputEl){ return; }
   var r=inputEl.getBoundingClientRect();
   var w=wrap.offsetWidth||300;
+  var h=wrap.offsetHeight||360;
   var left=r.left;
   var maxLeft=window.innerWidth-w-12;
   if(left>maxLeft) left=Math.max(12,maxLeft);
+  if(left<12) left=12;
   var top=r.bottom+4;
-  var maxTop=window.innerHeight-12;
-  if(top+300>maxTop && r.top>320){ top=r.top-4-Math.min(420,wrap.offsetHeight||360); }
+  var maxTop=window.innerHeight-h-12;
+  if(top>maxTop){
+    var above=r.top-4-h;
+    top=(above>=12)?above:Math.max(12,maxTop);
+  }
   wrap.style.left=left+'px';
   wrap.style.top=top+'px';
 }
@@ -6195,7 +6280,7 @@ function calYearRangeShift(calId,delta,evt){ if(evt){evt.stopPropagation();evt.p
 function calPickYear(calId,year){ var s=_calState[calId]; if(!s) return; s.year=year; s.view='months'; renderCal(calId); }
 
 function calShift(calId,delta,evt){ if(evt){evt.stopPropagation();evt.preventDefault();} var s=_calState[calId]; if(!s) return; s.month+=delta; if(s.month>11){s.month=0;s.year++;} if(s.month<0){s.month=11;s.year--;} renderCal(calId); }
-function pickDate(calId,isoStr){ var s=_calState[calId]; if(!s) return; if(s.inputId){var inp=document.getElementById(s.inputId);if(inp){var parts=isoStr.split('-');inp.value=parts[2]+'/'+parts[1]+'/'+parts[0];if(s.inputId==='ff'||s.inputId==='fto') renderTable();if(s.inputId==='week-start') genReport();}} document.getElementById(calId).classList.remove('open'); document.getElementById('cal-backdrop').classList.remove('open'); }
+function pickDate(calId,isoStr){ var s=_calState[calId]; if(!s) return; if(s.inputId){var inp=document.getElementById(s.inputId);if(inp){var parts=isoStr.split('-');inp.value=parts[2]+'/'+parts[1]+'/'+parts[0];if(s.inputId==='ff'||s.inputId==='fto') renderTable();if(s.inputId==='week-start') genReport();if(s.inputId==='duty-date') dutyRefreshConflicts();}} document.getElementById(calId).classList.remove('open'); document.getElementById('cal-backdrop').classList.remove('open'); }
 
 // =====================================================================
 // ASYNC INIT
