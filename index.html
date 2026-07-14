@@ -1233,8 +1233,8 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
       <div class="fg">
         <label class="field-label">Period</label>
         <select id="ds-period">
-          <option value="day">☀ Day — Sentry posts only</option>
-          <option value="night">🌙 Night — Sentry + Roaming + Line Duty</option>
+          <option value="day">☀ Day — all Sentry shifts</option>
+          <option value="night">🌙 Night — all Sentry shifts + Roaming + Line Duty</option>
         </select>
       </div>
       <div id="ds-config-alert"></div>
@@ -1466,8 +1466,8 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     </div>
   </div>
   <div class="card">
-    <div class="card-title">Sentry Quick-Fill Times</div>
-    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Buttons shown on the Assign Duty screen for Sentry — tap one to fill the start time instantly.</div>
+    <div class="card-title">Sentry Shifts</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">This is the real shift schedule — Suggest Duty Roster generates one round of Sentry posts for every shift listed here that falls in the Day or Night window. Add as many as you actually run (e.g. 3-4 shifts each for day and night); also used as quick-fill buttons when editing a single entry.</div>
     <div id="duty-shift-rows"></div>
     <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
       <input type="text" id="new-shift-name" placeholder="Name" style="flex:1;min-width:100px;">
@@ -3506,13 +3506,31 @@ function dsBuildSlots(date,period){
   var sentryType=dutyTypeByName('Sentry');
   var dayDur=sentryType?(sentryType.dayDuration!=null?sentryType.dayDuration:(sentryType.defaultDuration||3)):3;
   var nightDur=sentryType?(sentryType.nightDuration!=null?sentryType.nightDuration:(sentryType.defaultDuration||4)):4;
+  // The configured Sentry shifts (Duty Settings → Sentry Quick-Fill Times)
+  // double as the real generation schedule now: every shift that falls in
+  // this period gets its own set of slots per post, so a day built from
+  // 3-4 shifts produces suggestions for all of them in one pass — not
+  // just a single flat "day" block. If no shifts are configured for a
+  // period, falls back to one flat block using the Sentry type's day/night
+  // duration, so nothing breaks for anyone who hasn't set shifts up yet.
+  var allShifts=(D.config.dutyShifts||[]).filter(function(sh){return sh&&sh.start&&sh.end;});
+  var periodShifts=allShifts.filter(function(sh){return period==='day'?isDayTime(sh.start):!isDayTime(sh.start);});
+  if(periodShifts.length===0){
+    periodShifts=[{name:period==='day'?'Day':'Night',start:period==='day'?dayStart:nightStart,_flatDur:period==='day'?dayDur:nightDur}];
+  }
   posts.forEach(function(post){
     if(post.continuous){
       if(period==='day') for(var i=0;i<post.dayStrength;i++) slots.push({category:'Sentry',label:post.name+' — Continuous',postId:post.id,postName:post.name,startTime:dayStart,durationHours:24,chosenId:null,pool:[],poolPos:-1});
-    } else {
-      if(period==='day') for(var i=0;i<post.dayStrength;i++) slots.push({category:'Sentry',label:post.name+' — Day',postId:post.id,postName:post.name,startTime:dayStart,durationHours:dayDur,chosenId:null,pool:[],poolPos:-1});
-      if(period==='night') for(var i=0;i<post.nightStrength;i++) slots.push({category:'Sentry',label:post.name+' — Night',postId:post.id,postName:post.name,startTime:nightStart,durationHours:nightDur,chosenId:null,pool:[],poolPos:-1});
+      return;
     }
+    var strength=period==='day'?post.dayStrength:post.nightStrength;
+    if(strength<=0) return;
+    periodShifts.forEach(function(sh){
+      var dur=sh._flatDur!=null?sh._flatDur:legacyShiftDurationHours(sh.start,sh.end);
+      for(var i=0;i<strength;i++){
+        slots.push({category:'Sentry',label:post.name+' — '+sh.name,postId:post.id,postName:post.name,startTime:sh.start,durationHours:dur,chosenId:null,pool:[],poolPos:-1});
+      }
+    });
   });
   if(period==='night'){
     var roamType=dutyTypeByName('Roaming');
@@ -3606,34 +3624,43 @@ var _dsManualPickSlot=-1;
 function renderDsResults(){
   var warnEl=document.getElementById('ds-warnings');
   warnEl.innerHTML=_dsWarnings.length?'<div class="alert al-warn" style="margin-bottom:10px;">⚠ '+_dsWarnings.map(escHtml).join('<br>⚠ ')+'</div>':'';
-  // Group by post/category so multi-troop posts show together
+  // Group by post (or standalone category for Roaming/Line Duty), then by
+  // shift within that post — a post can now have several shifts in one
+  // period (e.g. Morning/Midday/Afternoon), each with its own troops.
   var groups=[], seen={};
   _dsSlots.forEach(function(s,i){
     var key=s.category+'|'+(s.postId||'');
-    if(!seen[key]){ seen[key]={label:s.label.replace(/ — (Day|Night|Continuous)$/,''),sub:s.label.match(/ — (Day|Night|Continuous)$/)?RegExp.$1:'',idxs:[]}; groups.push(seen[key]); }
-    seen[key].idxs.push(i);
+    if(!seen[key]){ seen[key]={postLabel:s.postName||s.category,shifts:[],shiftSeen:{}}; groups.push(seen[key]); }
+    var g=seen[key];
+    if(!g.shiftSeen[s.label]){ g.shiftSeen[s.label]={shiftLabel:(s.label.indexOf(' — ')>=0?s.label.split(' — ')[1]:s.label),time:s.startTime+' ('+s.durationHours+'h)',idxs:[]}; g.shifts.push(g.shiftSeen[s.label]); }
+    g.shiftSeen[s.label].idxs.push(i);
   });
   document.getElementById('ds-slots').innerHTML=groups.map(function(g){
-    var rows=g.idxs.map(function(i){
-      var s=_dsSlots[i];
-      var t=s.chosenId?troopById(s.chosenId):null;
-      var manualOpen=(_dsManualPickSlot===i);
-      return '<div style="padding:5px 0;">'+
-        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'+
-        '<div style="font-size:13.5px;">'+(t?('<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>'):'<span style="color:var(--red-light);">— none available —</span>')+'</div>'+
-        '<div style="display:flex;gap:6px;flex-shrink:0;">'+
-        '<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:5px 9px;white-space:nowrap;" onclick="dsReplaceSlot('+i+')" title="Next fairest alternative">🔁</button>'+
-        '<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:5px 9px;white-space:nowrap;'+(manualOpen?'border-color:var(--tan);color:var(--tan);':'')+'" onclick="dsToggleManualPick('+i+')" title="Pick a specific troop">🔍</button>'+
-        '</div></div>'+
-        (manualOpen?('<div style="position:relative;margin-top:6px;">'+
-          '<input type="text" placeholder="Type name or rank to pick directly..." autocomplete="off" oninput="dsManualSearch('+i+',this.value)" style="font-size:13px;">'+
-          '<div class="suggest-box" id="ds-manual-suggest-'+i+'" style="display:none;"></div>'+
-          '</div>'):'')+
-        '</div>';
+    var shiftBlocks=g.shifts.map(function(sh){
+      var rows=sh.idxs.map(function(i){
+        var s=_dsSlots[i];
+        var t=s.chosenId?troopById(s.chosenId):null;
+        var manualOpen=(_dsManualPickSlot===i);
+        return '<div style="padding:5px 0;">'+
+          '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'+
+          '<div style="font-size:13.5px;">'+(t?('<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>'):'<span style="color:var(--red-light);">— none available —</span>')+'</div>'+
+          '<div style="display:flex;gap:6px;flex-shrink:0;">'+
+          '<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:5px 9px;white-space:nowrap;" onclick="dsReplaceSlot('+i+')" title="Next fairest alternative">🔁</button>'+
+          '<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:5px 9px;white-space:nowrap;'+(manualOpen?'border-color:var(--tan);color:var(--tan);':'')+'" onclick="dsToggleManualPick('+i+')" title="Pick a specific troop">🔍</button>'+
+          '</div></div>'+
+          (manualOpen?('<div style="position:relative;margin-top:6px;">'+
+            '<input type="text" placeholder="Type name or rank to pick directly..." autocomplete="off" oninput="dsManualSearch('+i+',this.value)" style="font-size:13px;">'+
+            '<div class="suggest-box" id="ds-manual-suggest-'+i+'" style="display:none;"></div>'+
+            '</div>'):'')+
+          '</div>';
+      }).join('');
+      return '<div style="margin:6px 0 10px;padding-left:8px;border-left:2px solid var(--border);">'+
+        '<div style="font-size:10.5px;color:var(--tan);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:2px;">'+escHtml(sh.shiftLabel)+' <span style="color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0;">'+sh.time+'</span></div>'+
+        rows+'</div>';
     }).join('');
     return '<div style="padding:8px 0;border-bottom:1px solid var(--border);">'+
-      '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">'+escHtml(g.label)+(g.sub?' · '+g.sub:'')+'</div>'+
-      rows+'</div>';
+      '<div style="font-size:13px;font-weight:700;color:var(--text);">'+escHtml(g.postLabel)+'</div>'+
+      shiftBlocks+'</div>';
   }).join('');
 }
 function dsToggleManualPick(i){ _dsManualPickSlot=(_dsManualPickSlot===i)?-1:i; renderDsResults(); }
@@ -3762,8 +3789,15 @@ function editDutyDraft(id){
   _editingDutyDraftId=id;
   _dsDate=d.plannedDate; _dsPeriod=d.period;
   _dsSlots=(d.records||[]).reduce(function(acc,r){
+    var label;
+    if(r.category!=='Sentry') label=r.postName||r.category;
+    else if(r.durationHours===24) label=(r.postName||'')+' — Continuous';
+    else {
+      var matchShift=(D.config.dutyShifts||[]).find(function(sh){return sh.start===r.startTime;});
+      label=(r.postName||'')+' — '+(matchShift?matchShift.name:(isDayTime(r.startTime)?'Day':'Night'));
+    }
     r.troops.forEach(function(tid){
-      acc.push({category:r.category,label:(r.postName||r.category)+(r.durationHours===24?' — Continuous':(r.startTime===D.config.dayNight.start?' — Day':' — Night')),postId:r.postId,postName:r.postName,startTime:r.startTime,durationHours:r.durationHours,chosenId:tid,pool:[tid],poolPos:0});
+      acc.push({category:r.category,label:label,postId:r.postId,postName:r.postName,startTime:r.startTime,durationHours:r.durationHours,chosenId:tid,pool:[tid],poolPos:0});
     });
     return acc;
   },[]);
