@@ -2047,6 +2047,17 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
       <label class="field-label">🛡 Duty Qualifications</label>
       <div id="t-duty-quals-boxes" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding-top:6px;font-size:13px;"></div>
     </div>
+    <div class="fg" id="t-absence-wrap">
+      <label class="field-label">🏥 Leave / Sick / Absence Record <span style="font-weight:400;color:var(--text-muted);">(excluded from participation %)</span></label>
+      <div id="t-absence-list" style="margin-bottom:8px;"></div>
+      <div class="fr" style="align-items:flex-end;">
+        <div class="fg" style="margin-bottom:0;"><label class="field-label">Type</label><select id="t-absence-type"><option value="Leave">Leave</option><option value="Sick">Sick</option><option value="Other">Other</option></select></div>
+        <div class="fg" style="margin-bottom:0;"><label class="field-label">From</label><input type="text" id="t-absence-start" placeholder="DD/MM/YYYY" maxlength="10" oninput="fmtDateInp(this)" autocomplete="off"></div>
+        <div class="fg" style="margin-bottom:0;"><label class="field-label">To</label><input type="text" id="t-absence-end" placeholder="DD/MM/YYYY" maxlength="10" oninput="fmtDateInp(this)" autocomplete="off"></div>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm btn-full" style="margin-top:6px;" onclick="addTroopAbsence()">➕ Add Record</button>
+      <div style="font-size:10.5px;color:var(--text-muted);margin-top:6px;">Covers time off before this was tracked automatically — every day logged here (plus any Leave/Sick stretch already tracked via Status) is pushed out of the troop's participation window so it can't unfairly lower their %.</div>
+    </div>
     <div class="fg"><label class="field-label">Notes / Skills / Restrictions</label><textarea id="t-notes" rows="2" placeholder="e.g. Medic trained, No night ops..."></textarea></div>
     <div class="modal-actions" style="justify-content:stretch;">
       <button class="btn btn-primary" id="t-submit-btn" onclick="saveTroop()" style="flex:1;">Add Troop</button>
@@ -2435,7 +2446,8 @@ function apiFetch(path, opts) {
 function dbToTroop(r) {
   return {id:r.id,name:r.name,rank:r.rank,unit:r.unit,sn:r.sn||'',status:r.status||'available',notes:r.notes||'',phoneLocal:r.phone_local||'',phoneWa:r.phone_wa||'',bloodGroup:r.blood_group||'',deploymentDate:r.deployment_date?String(r.deployment_date).slice(0,10):'',weaponNumber:r.weapon_number||'',gender:r.gender||'',category:r.category||'',trade:r.trade||'',driverQuals:r.driver_quals||'',targetPct:(r.target_pct!=null?r.target_pct:100),neverSuggest:!!r.never_suggest,restrictedRange:!!r.restricted_range,
     dutyQuals:r.duty_quals||r.dutyQuals||[],isSeniorSergeant:!!(r.is_senior_sergeant!=null?r.is_senior_sergeant:r.isSeniorSergeant),neverDuty:!!(r.never_duty!=null?r.never_duty:r.neverDuty),
-    statusSince:(r.status_since||r.statusSince)?String(r.status_since||r.statusSince).slice(0,10):'',excludedDays:(r.excluded_days!=null?r.excluded_days:(r.excludedDays!=null?r.excludedDays:0))};
+    statusSince:(r.status_since||r.statusSince)?String(r.status_since||r.statusSince).slice(0,10):'',excludedDays:(r.excluded_days!=null?r.excluded_days:(r.excludedDays!=null?r.excludedDays:0)),
+    absences:(function(){var a=r.absences!=null?r.absences:[]; if(typeof a==='string'){ try{a=JSON.parse(a);}catch(e){a=[];} } return Array.isArray(a)?a:[];})()};
 }
 function dbToPatrol(r) {
   return {id:r.id,ptlId:r.ptl_id,ptlSeq:(r.ptl_seq!=null?r.ptl_seq:null),date:(r.date||'').slice(0,10),type:r.type,
@@ -2649,15 +2661,30 @@ function uid(p){ return p+Date.now()+Math.random().toString(36).slice(2,5); }
 // is saved directly from here.
 var _stmSlots=[];
 function stmOverdueScore(t){
-  var ds=daysSince(lastPatrol(t.id));
+  var ds=daysSinceCapped(lastPatrol(t.id),t);
   var scale=(t.targetPct!=null?t.targetPct:100)/100;
   // Heavy guard-duty share counts against how "overdue" someone looks for
   // a patrol, so the two duty streams balance against each other.
   return ds*scale-dutyParticipationPct(t)*0.3;
 }
+// A troop already sitting in a saved draft is reserved for that patrol
+// until it's logged (the draft is only removed at that point — see
+// logPatrol's pendingDraftLogId handling) or the draft is deleted. Excluded
+// from other suggestions/searches in the meantime so nobody gets double-
+// booked across two different draft patrols (item 3).
+function draftReservedTroopIds(excludeDraftId){
+  var ids={};
+  (D.drafts||[]).forEach(function(d){
+    if(excludeDraftId&&d.id===excludeDraftId) return;
+    (d.troops||[]).forEach(function(tid){ ids[tid]=true; });
+  });
+  return ids;
+}
 function stmEligibleBase(excludeRestricted){
+  var reserved=draftReservedTroopIds();
   return D.troops.filter(function(t){
     if(!isAvailable(t)||t.neverSuggest) return false;
+    if(reserved[t.id]) return false;
     if(excludeRestricted&&t.restrictedRange) return false;
     return true;
   });
@@ -3147,7 +3174,8 @@ function draftTroopSuggest(val){
   var box=document.getElementById('draft-troop-suggest');
   if(!val||val.length===0){box.style.display='none';return;}
   var q=val.toLowerCase();
-  var matches=sortTroops(D.troops.filter(isAvailable)).filter(function(t){return (t.rank+' '+t.name+' '+t.unit).toLowerCase().indexOf(q)>=0&&draftEditTroops.indexOf(t.id)<0;});
+  var reserved=draftReservedTroopIds(draftEditingId);
+  var matches=sortTroops(D.troops.filter(isAvailable)).filter(function(t){return (t.rank+' '+t.name+' '+t.unit).toLowerCase().indexOf(q)>=0&&draftEditTroops.indexOf(t.id)<0&&!reserved[t.id];});
   if(matches.length===0){box.style.display='none';return;}
   box.style.display='block';
   box.innerHTML=matches.slice(0,8).map(function(t){ return '<div class="suggest-item" onclick="addTroopToDraft(\''+t.id+'\')">'+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>'+' <span style="color:var(--text-muted);font-size:11px;">('+t.unit+')</span></div>'; }).join('');
@@ -3757,19 +3785,34 @@ function dsAssignFemalePreferredGroups(date,slots,used,warnings){
 function dsFillSlots(date,slots){
   var used=[], warnings=[];
   dsAssignFemalePreferredGroups(date,slots,used,warnings);
-  // Process Roaming (and Line Duty) before Sentry: Roaming-eligible
-  // Sergeants need first pick for Roaming, with any surplus then flowing
-  // to Sentry — filling Sentry first would let it consume eligible
-  // Sergeants Roaming needed. This only changes processing/priority
-  // order — the shared `slots` array (and so the results display order)
-  // is left exactly as built.
-  var fillOrder=slots.slice().sort(function(a,b){
-    var pa=(a.category==='Roaming'||a.category==='Line Duty')?0:1;
-    var pb=(b.category==='Roaming'||b.category==='Line Duty')?0:1;
-    return pa-pb;
-  });
-  fillOrder.forEach(function(slot){
+  // Three passes so a shortage of Roaming-eligible Sergeants can never
+  // starve Sentry of the Sergeants it needs (item 1 — previously, once
+  // eligible Sergeants ran out, Roaming fell back to ANY Sergeant and
+  // used them all up before Sentry got a turn, leaving required-rank
+  // posts like Main Gate blank):
+  //   Pass 1 — Roaming/Line Duty, eligible candidates only (Officer/JCO/
+  //            Sergeants ticked "Eligible for Roaming duty"). No fallback
+  //            to a non-eligible Sergeant yet, so nothing is consumed
+  //            that Sentry might still need.
+  //   Pass 2 — Sentry, as normal (including its own required-rank and
+  //            NCE/Admin fallbacks). Runs with whatever's left after
+  //            pass 1 — genuinely eligible Roaming picks are honoured,
+  //            not overridden.
+  //   Pass 3 — Any Roaming slot still empty (not enough eligible
+  //            Sergeants existed) now gets the any-Sergeant fallback,
+  //            using only what Sentry didn't need — so the fallback
+  //            never bumps a required-rank Sentry post to blank.
+  var roamingLineSlots=slots.filter(function(s){return s.category==='Roaming'||s.category==='Line Duty';});
+  var sentrySlots=slots.filter(function(s){return s.category!=='Roaming'&&s.category!=='Line Duty';});
+  dsFillPass(date,roamingLineSlots,used,warnings,false);
+  dsFillPass(date,sentrySlots,used,warnings,true);
+  dsFillPass(date,roamingLineSlots.filter(function(s){return !s.chosenId&&!s._preFilled;}),used,warnings,true);
+  return warnings;
+}
+function dsFillPass(date,slotList,used,warnings,allowSgtFallback){
+  slotList.forEach(function(slot){
     if(slot._preFilled) return;
+    if(slot.chosenId) return; // already resolved in an earlier pass
     var post=slot.postId?dutyPostById(slot.postId):null;
     var qual=(post&&post.name!=='Medical'&&post.name!=='Signal')?post.qualRequired:'';
     var roleLocked=post&&(post.name==='Medical'||post.name==='Signal');
@@ -3815,7 +3858,7 @@ function dsFillSlots(date,slots){
     // seniority (rank, then lowest personal number), bypassing the usual
     // fairness rotation since this is an emergency substitution, not a
     // routine pick.
-    if(pool.length===0&&slot.category==='Roaming'){
+    if(pool.length===0&&slot.category==='Roaming'&&allowSgtFallback){
       var sgtFallback=D.troops.filter(function(t){
         if((t.rank||'').trim().toLowerCase()!=='sergeant') return false;
         if(t.trade==='Signal') return false;
@@ -3883,9 +3926,17 @@ function dsFillSlots(date,slots){
       if(adminfallback) warnings.push(slot.label+': troop pool exhausted — assigned Administration/HQ staff as a fallback.');
       if(sergeantSeniorityFallback) warnings.push(slot.label+': required rank/eligibility wasn\'t available — assigned the most senior available Sergeant instead.');
     }
-    else { slot.chosenId=null; slot.poolPos=-1; warnings.push(slot.label+(roleLocked?(': no troop with Role='+post.name+' available.'):': no eligible troop available.')); }
+    else {
+      slot.chosenId=null; slot.poolPos=-1;
+      // A Roaming slot left empty in the eligible-only pass (1) still has
+      // a chance at the any-Sergeant fallback in pass 3 — don't warn yet
+      // or it'll wrongly claim "no one available" for a slot that gets
+      // filled a moment later.
+      if(!(slot.category==='Roaming'&&!allowSgtFallback)){
+        warnings.push(slot.label+(roleLocked?(': no troop with Role='+post.name+' available.'):': no eligible troop available.'));
+      }
+    }
   });
-  return warnings;
 }
 function generateDutySuggestion(){
   var date=parseDate(document.getElementById('ds-date').value);
@@ -4183,8 +4234,10 @@ function renderDutyDashboard(){
   var onDutyCount=Object.keys(onDutyTroopIds).length;
   var coveredPostIds={}; activeNowDuties.forEach(function(d){ if(d.postId) coveredPostIds[d.postId]=true; });
   var vacantPostsNow=activePosts.filter(function(p){ return !coveredPostIds[p.id]; });
+  var freeNow=freeTroopsNow();
   document.getElementById('duty-dash-stats').innerHTML=
     '<div class="stat clickable" onclick="showDashDetail(\'duty-active-now\')"><div class="stat-icon">🛡</div><div class="stat-num" style="color:var(--green-light);">'+onDutyCount+'</div><div class="stat-label">On Duty Now</div></div>'+
+    '<div class="stat clickable" onclick="showDashDetail(\'free-now\')"><div class="stat-icon">🟢</div><div class="stat-num" style="color:var(--green-light);">'+freeNow.length+'</div><div class="stat-label">Free Now</div></div>'+
     '<div class="stat clickable" onclick="showDashDetail(\'duty-posts-vacant\')" style="'+(vacantPostsNow.length>0?'border-color:var(--red-light);':'')+'"><div class="stat-icon">'+(vacantPostsNow.length>0?'⚠':'✅')+'</div><div class="stat-num" style="color:'+(vacantPostsNow.length>0?'var(--red-light)':'var(--tan)')+';">'+vacantPostsNow.length+'</div><div class="stat-label">Vacant Posts Now</div></div>'+
     '<div class="stat clickable" onclick="showDashDetail(\'duty-week\')"><div class="stat-icon">📋</div><div class="stat-num">'+wkDuties.length+'</div><div class="stat-label">Duties This Week</div></div>'+
     '<div class="stat clickable" onclick="showDashDetail(\'duty-posts\')"><div class="stat-icon">📍</div><div class="stat-num">'+activePosts.length+'</div><div class="stat-label">Active Posts</div></div>'+
@@ -4305,6 +4358,48 @@ function dutyHistoryFilteredRows(){
   else rows.sort(function(a,b){return b.date.localeCompare(a.date)||(b.dutySeq||0)-(a.dutySeq||0);});
   return rows;
 }
+function dutyHistoryRowHTML(d){
+  var status=dutyStatusOf(d);
+  var troops=(d.troops||[]).map(troopById).filter(Boolean);
+  var names=sortTroops(troops).map(function(t){return upLabel(t.rank,t.name);}).join(', ');
+  var endT=shiftEndTime(d.startTime,d.durationHours);
+  return '<div class="troop-row" data-accent="'+(status==='cancelled'?'b-red':(status==='scheduled'?'b-green':''))+'">'+
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">'+
+    '<div style="min-width:0;"><div style="font-size:13px;"><strong>'+fmtDate(d.date)+' · '+escHtml(d.type)+'</strong></div>'+
+    '<div style="font-size:11px;color:var(--text-muted);">'+(d.postName?escHtml(d.postName)+' · ':'')+d.startTime+'–'+endT+' ('+d.durationHours+'h)</div></div>'+
+    '<div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">'+dutyStatusBadge(status)+'<span class="badge b-tan" style="font-size:9px;">'+(d.dutyId||'')+'</span></div>'+
+    '</div>'+
+    '<div style="font-size:12.5px;margin-top:6px;'+(status==='cancelled'?'text-decoration:line-through;color:var(--text-muted);':'')+'">'+(names||'<span style="color:var(--text-muted);">No troops</span>')+'</div>'+
+    (d.remarks?'<div style="font-size:11.5px;color:var(--text-muted);margin-top:4px;">📝 '+escHtml(d.remarks)+'</div>':'')+
+    '<div style="font-size:10px;color:var(--text-muted);margin-top:6px;">Created '+fmtDate((d.createdAt||'').slice(0,10))+(d.modifiedAt&&d.modifiedAt!==d.createdAt?' · Modified '+fmtDate((d.modifiedAt||'').slice(0,10)):'')+(d.cancelled&&d.cancelledAt?' · Cancelled '+fmtDate((d.cancelledAt||'').slice(0,10)):'')+'</div>'+
+    '<div style="display:flex;gap:6px;margin-top:8px;">'+
+    '<button class="btn btn-ghost btn-sm" onclick="showTab(\'duty-roster\');editDuty(\''+d.id+'\')" style="font-size:10.5px;padding:5px 10px;">✎ Edit</button>'+
+    (d.cancelled?
+      '<button class="btn btn-ghost btn-sm" onclick="restoreDutyRecord(\''+d.id+'\')" style="font-size:10.5px;padding:5px 10px;">↩ Restore</button>'
+      :'<button class="btn btn-ghost btn-sm" onclick="cancelDutyRecord(\''+d.id+'\')" style="font-size:10.5px;padding:5px 10px;color:var(--red-light);">🚫 Cancel</button>')+
+    '</div>'+
+    '</div>';
+}
+// Groups the flat, filtered row list by date, then by Day/Night shift
+// within that date (item 4) — so every post's entries for, say, the
+// night of the 14th sit together in one block, instead of one long list
+// only ordered by date where posts are interleaved. Kept to sort modes
+// where date order is meaningful; "Recently Modified" stays a flat list
+// since grouping by date would scatter the same date across the page.
+function dutyHistoryGroupedHTML(rows){
+  var order=[], byDate={};
+  rows.forEach(function(d){
+    if(!byDate[d.date]){ byDate[d.date]={day:[],night:[]}; order.push(d.date); }
+    (isDayTime(d.startTime)?byDate[d.date].day:byDate[d.date].night).push(d);
+  });
+  return order.map(function(date){
+    var grp=byDate[date];
+    var sections='';
+    if(grp.day.length) sections+='<div style="font-size:10.5px;color:var(--tan);text-transform:uppercase;letter-spacing:0.5px;margin:10px 0 4px;">☀ Day Shift</div>'+grp.day.map(dutyHistoryRowHTML).join('');
+    if(grp.night.length) sections+='<div style="font-size:10.5px;color:var(--tan);text-transform:uppercase;letter-spacing:0.5px;margin:10px 0 4px;">🌙 Night Shift</div>'+grp.night.map(dutyHistoryRowHTML).join('');
+    return '<div style="margin-bottom:16px;"><div style="font-size:14px;font-weight:700;border-bottom:1px solid var(--border);padding-bottom:5px;">'+fmtDate(date)+'</div>'+sections+'</div>';
+  }).join('');
+}
 function renderDutyHistoryList(){
   var el=document.getElementById('duty-history-list');
   if(!el) return;
@@ -4321,28 +4416,8 @@ function renderDutyHistoryList(){
   var em=document.getElementById('dhempty');
   if(rows.length===0){ el.innerHTML=''; em.style.display=''; return; }
   em.style.display='none';
-  el.innerHTML=rows.map(function(d){
-    var status=dutyStatusOf(d);
-    var troops=(d.troops||[]).map(troopById).filter(Boolean);
-    var names=sortTroops(troops).map(function(t){return upLabel(t.rank,t.name);}).join(', ');
-    var endT=shiftEndTime(d.startTime,d.durationHours);
-    return '<div class="troop-row" data-accent="'+(status==='cancelled'?'b-red':(status==='scheduled'?'b-green':''))+'">'+
-      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">'+
-      '<div style="min-width:0;"><div style="font-size:13px;"><strong>'+fmtDate(d.date)+' · '+escHtml(d.type)+'</strong></div>'+
-      '<div style="font-size:11px;color:var(--text-muted);">'+(d.postName?escHtml(d.postName)+' · ':'')+d.startTime+'–'+endT+' ('+d.durationHours+'h)</div></div>'+
-      '<div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">'+dutyStatusBadge(status)+'<span class="badge b-tan" style="font-size:9px;">'+(d.dutyId||'')+'</span></div>'+
-      '</div>'+
-      '<div style="font-size:12.5px;margin-top:6px;'+(status==='cancelled'?'text-decoration:line-through;color:var(--text-muted);':'')+'">'+(names||'<span style="color:var(--text-muted);">No troops</span>')+'</div>'+
-      (d.remarks?'<div style="font-size:11.5px;color:var(--text-muted);margin-top:4px;">📝 '+escHtml(d.remarks)+'</div>':'')+
-      '<div style="font-size:10px;color:var(--text-muted);margin-top:6px;">Created '+fmtDate((d.createdAt||'').slice(0,10))+(d.modifiedAt&&d.modifiedAt!==d.createdAt?' · Modified '+fmtDate((d.modifiedAt||'').slice(0,10)):'')+(d.cancelled&&d.cancelledAt?' · Cancelled '+fmtDate((d.cancelledAt||'').slice(0,10)):'')+'</div>'+
-      '<div style="display:flex;gap:6px;margin-top:8px;">'+
-      '<button class="btn btn-ghost btn-sm" onclick="showTab(\'duty-roster\');editDuty(\''+d.id+'\')" style="font-size:10.5px;padding:5px 10px;">✎ Edit</button>'+
-      (d.cancelled?
-        '<button class="btn btn-ghost btn-sm" onclick="restoreDutyRecord(\''+d.id+'\')" style="font-size:10.5px;padding:5px 10px;">↩ Restore</button>'
-        :'<button class="btn btn-ghost btn-sm" onclick="cancelDutyRecord(\''+d.id+'\')" style="font-size:10.5px;padding:5px 10px;color:var(--red-light);">🚫 Cancel</button>')+
-      '</div>'+
-      '</div>';
-  }).join('');
+  var sortMode=document.getElementById('dh-sort').value;
+  el.innerHTML=(sortMode==='modified-desc')?rows.map(dutyHistoryRowHTML).join(''):dutyHistoryGroupedHTML(rows);
 }
 function clearDutyHistoryFilters(){
   ['dh-search','dh-type','dh-post','dh-status','dh-from','dh-to'].forEach(function(id){var e=document.getElementById(id); if(e) e.value='';});
@@ -4438,6 +4513,19 @@ function dutiesActiveNow(){
     }
     return false;
   });
+}
+// Everyone who's genuinely free right now — available, not currently on
+// duty, and not out on a still-ongoing patrol (item 5) — so it's easy to
+// see at a glance who could take on something new this moment. Uses the
+// same "ongoing patrol" definition as dutyConflict: an unlogged draft with
+// today as its Planned Date, since patrols themselves are only recorded
+// once they're already finished.
+function freeTroopsNow(){
+  var today=new Date().toISOString().slice(0,10);
+  var busy={};
+  dutiesActiveNow().forEach(function(d){ (d.troops||[]).forEach(function(tid){ busy[tid]=true; }); });
+  (D.drafts||[]).forEach(function(d){ if(d.plannedDate===today) (d.troops||[]).forEach(function(tid){ busy[tid]=true; }); });
+  return sortTroops(D.troops.filter(function(t){ return isAvailable(t)&&!busy[t.id]; }));
 }
 function updateTodayDutyWidget(){
   var el=document.getElementById('dash-today-duty');
@@ -4658,7 +4746,7 @@ function effectiveDeploymentDate(t){
     base=D.patrols.reduce(function(min,p){return (!min||p.date<min)?p.date:min;},null);
   }
   if(!base) return null;
-  var excluded=(t&&t.excludedDays)||0;
+  var excluded=troopExcludedDaysTotal(t);
   if(excluded>0){
     var d=new Date(base+'T12:00:00');
     d.setDate(d.getDate()+excluded);
@@ -4711,6 +4799,34 @@ function compareSeniority(a,b){
 }
 function sortTroops(arr){ return arr.slice().sort(compareSeniority); }
 function daysSince(dateStr){ if(!dateStr) return 9999; return Math.floor((new Date()-new Date(dateStr+'T12:00:00'))/86400000); }
+// The most recent date a troop is known to have become available again —
+// either the last time their Status field flipped back to Available
+// (statusSince), or the end of their most recently logged absence,
+// whichever is later. Used to stop the "most overdue" fairness scoring
+// from crediting time spent away as if it were time waiting in line —
+// otherwise someone back from a long leave/sick spell looks maximally
+// overdue and gets front-loaded onto the very next patrol/duty the
+// moment they're marked available again.
+function returnFloorDate(t){
+  var dates=[];
+  if(t&&t.status==='available'&&t.statusSince) dates.push(t.statusSince);
+  ((t&&t.absences)||[]).forEach(function(a){ if(a&&a.end) dates.push(a.end); });
+  if(!dates.length) return null;
+  return dates.reduce(function(mx,d){return d>mx?d:mx;});
+}
+// Days since a troop's last patrol/duty, capped at days-since-they-became-
+// available-again so a returning troop gets a fair, short grace period
+// instead of an inflated "overdue" score covering the whole time they
+// were away.
+function daysSinceCapped(lastDateStr,t){
+  var base=daysSince(lastDateStr);
+  var floor=returnFloorDate(t);
+  if(floor){
+    var floorGap=daysSince(floor);
+    if(floorGap<base) return floorGap;
+  }
+  return base;
+}
 // Troops with a lower Patrol Participation Target (mainly Administration
 // role) are naturally expected to patrol less. Flagging them "inactive"
 // on the same flat 7-day clock as a frontline troop is misleading, so the
@@ -4800,7 +4916,7 @@ function dutyParticipationPct(t){
 // dsFillSlots so the roster rotates rather than reusing the same pairing.
 function dutyFairnessScore(t){
   var combinedPct=patrolParticipationPct(t)+dutyParticipationPct(t);
-  return combinedPct*10-daysSince(lastDuty(t.id));
+  return combinedPct*10-daysSinceCapped(lastDuty(t.id),t);
 }
 function dutyTypeByName(name){ return (D.config.dutyTypes||[]).find(function(x){return x.name===name;})||null; }
 function dutyPostById(id){ return (D.config.dutyPosts||[]).find(function(x){return x.id===id;})||null; }
@@ -5156,6 +5272,7 @@ function renderSentryPostRows(){
       '<span style="font-size:16px;color:var(--text-muted);">'+(open?'▲':'▼')+'</span></div>';
     if(!open) return '<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;'+(p.active?'':'opacity:0.55;')+'">'+head+'</div>';
     return '<div style="border:1px solid var(--tan);border-radius:8px;padding:12px;margin-bottom:8px;">'+head+
+      '<div class="fg" style="margin-bottom:10px;"><label class="field-label">Post Name</label><input type="text" value="'+escHtml(p.name)+'" onchange="updateSentryPostField('+i+',\'name\',this.value)"></div>'+
       '<div style="display:flex;gap:6px;margin-bottom:10px;">'+
       '<button class="btn btn-ghost btn-sm" style="flex:1;" onclick="toggleSentryPostActive('+i+')">'+(p.active?'⏸ Deactivate':'▶ Activate')+'</button>'+
       '<button class="btn btn-ghost btn-sm" style="color:var(--red-light);border-color:var(--red-light);" onclick="removeSentryPost('+i+')">🗑️ Remove</button>'+
@@ -5206,6 +5323,7 @@ function toggleSentryPostActive(i){
 function updateSentryPostField(i,field,val){
   var p=D.config.dutyPosts[i]; if(!p) return;
   if(field==='dayStrength'||field==='nightStrength') val=parseInt(val)||0;
+  if(field==='name'){ val=val.trim(); if(!val){ renderSentryPostRows(); return; } }
   p[field]=val;
   if(field==='continuous'&&val) p.nightStrength=p.dayStrength;
   remoteSaveConfig();
@@ -5297,11 +5415,23 @@ function renderDutyShiftRows(){
   var shifts=D.config.dutyShifts||[];
   if(shifts.length===0){ el.innerHTML='<div style="color:var(--text-muted);font-size:12.5px;">No shifts defined yet.</div>'; return; }
   el.innerHTML=shifts.map(function(sh,i){
-    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13.5px;">'+
-      '<strong style="flex:1;">'+escHtml(sh.name)+'</strong>'+
-      '<span style="color:var(--text-muted);">'+sh.start+' – '+sh.end+'</span>'+
+    return '<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--border);">'+
+      '<input type="text" value="'+escHtml(sh.name)+'" style="flex:1.2;min-width:70px;font-size:13px;" onchange="updateDutyShift('+i+',\'name\',this.value)">'+
+      '<input type="time" value="'+(sh.start||'')+'" style="flex:1;min-width:85px;font-size:13px;" onchange="updateDutyShift('+i+',\'start\',this.value)">'+
+      '<input type="time" value="'+(sh.end||'')+'" style="flex:1;min-width:85px;font-size:13px;" onchange="updateDutyShift('+i+',\'end\',this.value)">'+
       '<button class="tag-del" onclick="removeDutyShift('+i+')">×</button></div>';
   }).join('');
+}
+// Edits a shift's name/start/end in place (item 2) — previously the only
+// option was deleting and re-adding a whole new shift for any change.
+function updateDutyShift(i,field,val){
+  var sh=D.config.dutyShifts[i]; if(!sh) return;
+  var old=sh.name;
+  if(field==='name'&&!val.trim()) { renderDutyShiftRows(); return; }
+  sh[field]=field==='name'?val.trim():val;
+  remoteSaveConfig();
+  audit('Duty shift updated: '+old+' — '+field+'='+val);
+  renderDutyShiftRows();
 }
 function addDutyShift(){
   var name=document.getElementById('new-shift-name').value.trim();
@@ -5692,9 +5822,11 @@ function renderDash(){
   var moAbbr=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
   // ── STAT CARDS ──────────────────────────────────────────────────────
+  var freeNow2=freeTroopsNow();
   document.getElementById('dash-stats').innerHTML=
     '<div class="stat clickable" onclick="showDashDetail(\'total\')"><div class="stat-icon">👥</div><div class="stat-num">'+D.troops.length+'</div><div class="stat-label">Total Troops</div></div>'+
     '<div class="stat clickable" onclick="showDashDetail(\'available\')"><div class="stat-icon">✅</div><div class="stat-num" style="color:var(--green-light);">'+availTroops.length+'</div><div class="stat-label">Available</div></div>'+
+    '<div class="stat clickable" onclick="showDashDetail(\'free-now\')"><div class="stat-icon">🟢</div><div class="stat-num" style="color:var(--green-light);">'+freeNow2.length+'</div><div class="stat-label">Free Now</div></div>'+
     '<div class="stat clickable" onclick="showDashDetail(\'mo-patrols\')"><div class="stat-icon">🧭</div><div class="stat-num">'+moPats.length+'</div><div class="stat-label">Patrols This Month</div></div>'+
     '<div class="stat clickable" onclick="showTab(\'inactive\')" style="'+(inactive7.length>0?'border-color:var(--red-light);':'')+'">'+
     '<div class="stat-icon">'+(inactive7.length>0?'⚠':'🕒')+'</div><div class="stat-num" style="color:'+(inactive7.length>0?'var(--red-light)':'var(--tan)')+';">'+inactive7.length+'</div>'+
@@ -5805,6 +5937,10 @@ function showDashDetail(kind){
     var an=dutiesActiveNow().sort(function(a,b){return (a.postName||a.type).localeCompare(b.postName||b.type);});
     title='On Duty Now ('+an.length+')';
     body=an.length?an.map(function(d){var tn=sortTroops((d.troops||[]).map(troopById).filter(Boolean)).map(function(t){return upLabel(t.rank,t.name);}).join(', ');return dashDetailRow(d.type+(d.postName?' · '+d.postName:''),(d.startTime||'')+' ('+d.durationHours+'h) · '+(tn||'No troops'));}).join(''):'';
+  } else if(kind==='free-now'){
+    var fn=freeTroopsNow();
+    title='Free Now ('+fn.length+')';
+    body=fn.length?fn.map(function(t){return dashDetailRow(t.rank.toUpperCase()+' '+t.name.toUpperCase(),(t.unit||'')+' · not on duty or patrol right now');}).join(''):'<div class="empty">Nobody is currently free — everyone available is on duty or out on patrol.</div>';
   } else if(kind==='duty-posts-vacant'){
     var vAn=dutiesActiveNow();
     var vCovered={}; vAn.forEach(function(d){ if(d.postId) vCovered[d.postId]=true; });
@@ -6062,7 +6198,7 @@ function saveTroop(){
         }
         t.statusSince=new Date().toISOString().slice(0,10);
       }
-      t.name=name;t.rank=rank;t.unit=unit;t.sn=sn;t.status=status;t.bloodGroup=bloodGroup;t.weaponNumber=weaponNumber;t.deploymentDate=deploymentDate;t.phoneLocal=phoneLocal;t.phoneWa=phoneWa;t.notes=notes;t.gender=gender;t.category=category;t.trade=trade;t.driverQuals=driverQuals;t.neverSuggest=neverSuggest;t.neverDuty=neverDuty;t.restrictedRange=restrictedRange;t.isSeniorSergeant=isSeniorSergeant;t.dutyQuals=dutyQuals;
+      t.name=name;t.rank=rank;t.unit=unit;t.sn=sn;t.status=status;t.bloodGroup=bloodGroup;t.weaponNumber=weaponNumber;t.deploymentDate=deploymentDate;t.phoneLocal=phoneLocal;t.phoneWa=phoneWa;t.notes=notes;t.gender=gender;t.category=category;t.trade=trade;t.driverQuals=driverQuals;t.neverSuggest=neverSuggest;t.neverDuty=neverDuty;t.restrictedRange=restrictedRange;t.isSeniorSergeant=isSeniorSergeant;t.dutyQuals=dutyQuals;t.absences=_troopAbsenceEdits.slice();
       // Target % is otherwise only managed in Settings. It's only auto-adjusted
       // here the moment Trade actually switches to/from Administration or POB Commander.
       var nowAdmin=(trade==='Administration'||trade==='POB Commander');
@@ -6076,7 +6212,7 @@ function saveTroop(){
     audit('Troop updated: '+rank+' '+name); cancelEdit();
   } else {
     if(D.troops.find(function(t){return t.name.toLowerCase()===name.toLowerCase();})){showAlert('t-alert','Troop already exists.','danger');return;}
-    var newT={id:uid('t'),name:name,rank:rank,unit:unit,sn:sn,status:status,bloodGroup:bloodGroup,weaponNumber:weaponNumber,deploymentDate:deploymentDate,phoneLocal:phoneLocal,phoneWa:phoneWa,notes:notes,gender:gender,category:category,trade:trade,driverQuals:driverQuals,neverSuggest:neverSuggest,neverDuty:neverDuty,restrictedRange:restrictedRange,isSeniorSergeant:isSeniorSergeant,dutyQuals:dutyQuals,statusSince:new Date().toISOString().slice(0,10),excludedDays:0,targetPct:((trade==='Administration'||trade==='POB Commander')?(D.settings.adminTargetPct!=null?D.settings.adminTargetPct:25):100)};
+    var newT={id:uid('t'),name:name,rank:rank,unit:unit,sn:sn,status:status,bloodGroup:bloodGroup,weaponNumber:weaponNumber,deploymentDate:deploymentDate,phoneLocal:phoneLocal,phoneWa:phoneWa,notes:notes,gender:gender,category:category,trade:trade,driverQuals:driverQuals,neverSuggest:neverSuggest,neverDuty:neverDuty,restrictedRange:restrictedRange,isSeniorSergeant:isSeniorSergeant,dutyQuals:dutyQuals,absences:_troopAbsenceEdits.slice(),statusSince:new Date().toISOString().slice(0,10),excludedDays:0,targetPct:((trade==='Administration'||trade==='POB Commander')?(D.settings.adminTargetPct!=null?D.settings.adminTargetPct:25):100)};
     D.troops.push(newT); remoteSaveTroop(newT); renderRoster(); populateAutoSuggestLists();
     showAlert('t-alert',rank+' '+name+' added!','success');
     audit('Troop added: '+rank+' '+name);
@@ -6087,6 +6223,7 @@ function saveTroop(){
     document.getElementById('t-qual-apc').checked=false; document.getElementById('t-qual-heavy').checked=false; document.getElementById('t-qual-light').checked=false;
     document.getElementById('t-never-suggest').checked=false; document.getElementById('t-never-duty').checked=false; document.getElementById('t-restricted-range').checked=false;
     document.getElementById('t-senior-sgt').checked=false; renderTroopDutyQualBoxes([]);
+    _troopAbsenceEdits=[]; renderTroopAbsenceList();
   }
 }
 // Opens the Add Troop modal fresh (roster now shows immediately on the page,
@@ -6124,6 +6261,8 @@ function editTroop(id){ var t=D.troops.find(function(x){return x.id===id;}); if(
   document.getElementById('t-restricted-range').checked=!!t.restrictedRange;
   document.getElementById('t-senior-sgt').checked=!!t.isSeniorSergeant;
   renderTroopDutyQualBoxes(t.dutyQuals||[]);
+  _troopAbsenceEdits=(t.absences||[]).slice();
+  renderTroopAbsenceList();
   document.getElementById('t-edit-id').value=id; document.getElementById('t-form-title').textContent='Edit Troop'; document.getElementById('t-submit-btn').textContent='Save Changes'; document.getElementById('troop-form-modal').classList.add('open'); }
 function cancelEdit(){ document.getElementById('t-edit-id').value=''; populateTradeDropdown(); ['t-name','t-unit','t-sn','t-weapon','t-phone-local','t-phone-wa','t-notes'].forEach(function(id){document.getElementById(id).value='';}); document.getElementById('t-status').value='available'; document.getElementById('t-blood').value=''; document.getElementById('t-deploy-date').value=todayDMY();
   document.getElementById('t-gender').value=''; document.getElementById('t-category').value=''; document.getElementById('t-category').dataset.auto='';
@@ -6131,6 +6270,7 @@ function cancelEdit(){ document.getElementById('t-edit-id').value=''; populateTr
   document.getElementById('t-qual-apc').checked=false; document.getElementById('t-qual-heavy').checked=false; document.getElementById('t-qual-light').checked=false;
   document.getElementById('t-never-suggest').checked=false; document.getElementById('t-never-duty').checked=false; document.getElementById('t-restricted-range').checked=false;
   document.getElementById('t-senior-sgt').checked=false; renderTroopDutyQualBoxes([]);
+  _troopAbsenceEdits=[]; renderTroopAbsenceList();
   document.getElementById('t-form-title').textContent='Add Troop'; document.getElementById('t-submit-btn').textContent='Add Troop'; document.getElementById('t-alert').innerHTML=''; document.getElementById('troop-form-modal').classList.remove('open'); }
 function renderTroopDutyQualBoxes(checkedList){
   var el=document.getElementById('t-duty-quals-boxes');
@@ -6138,6 +6278,50 @@ function renderTroopDutyQualBoxes(checkedList){
   var quals=D.config.dutyQuals||[];
   if(quals.length===0){ el.innerHTML='<span style="color:var(--text-muted);font-size:12px;">No qualifications defined yet — add some in Settings.</span>'; return; }
   el.innerHTML=quals.map(function(q){ return '<label class="cb-wrap"><input type="checkbox" value="'+escHtml(q)+'"'+(checkedList.indexOf(q)>=0?' checked':'')+'><span class="cb-box"></span>'+escHtml(q)+'</label>'; }).join('');
+}
+// ── LEAVE / SICK / ABSENCE RECORD (item 6) ─────────────────────────────
+// Lets an admin log a period of time off directly on the profile — past
+// or present — instead of only relying on toggling Status (which only
+// starts counting from today forward). Every recorded day here is
+// subtracted from the troop's participation window in
+// effectiveDeploymentDate(), so old, previously-untracked leave/sick time
+// stops unfairly dragging their percentage down.
+var _troopAbsenceEdits=[];
+function inclusiveDayCount(startIso,endIso){
+  var s=new Date(startIso+'T12:00:00'), e=new Date(endIso+'T12:00:00');
+  return Math.max(1,Math.round((e-s)/86400000)+1);
+}
+function renderTroopAbsenceList(){
+  var el=document.getElementById('t-absence-list');
+  if(!el) return;
+  if(_troopAbsenceEdits.length===0){ el.innerHTML='<span style="color:var(--text-muted);font-size:12px;">No leave/sick/absence recorded yet.</span>'; return; }
+  var sorted=_troopAbsenceEdits.slice().sort(function(a,b){return b.start.localeCompare(a.start);});
+  el.innerHTML=sorted.map(function(a){
+    var idx=_troopAbsenceEdits.indexOf(a);
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12.5px;">'+
+      '<div><strong>'+escHtml(a.type)+'</strong> · '+fmtDate(a.start)+' – '+fmtDate(a.end)+' <span style="color:var(--text-muted);">('+a.days+'d)</span></div>'+
+      '<button class="tag-del" onclick="removeTroopAbsence('+idx+')">×</button></div>';
+  }).join('');
+}
+function addTroopAbsence(){
+  var type=document.getElementById('t-absence-type').value;
+  var start=parseDate(document.getElementById('t-absence-start').value);
+  var end=parseDate(document.getElementById('t-absence-end').value);
+  if(!start||!end){ showAlert('t-alert','Enter a valid From and To date (DD/MM/YYYY) for the absence.','danger'); return; }
+  if(end<start){ showAlert('t-alert','The "To" date must be on or after the "From" date.','danger'); return; }
+  _troopAbsenceEdits.push({id:uid('abs'),type:type,start:start,end:end,days:inclusiveDayCount(start,end)});
+  document.getElementById('t-absence-start').value=''; document.getElementById('t-absence-end').value='';
+  renderTroopAbsenceList();
+}
+function removeTroopAbsence(idx){
+  _troopAbsenceEdits.splice(idx,1);
+  renderTroopAbsenceList();
+}
+// Total days to exclude from the participation window: the automatic
+// Status-based tracking (excludedDays) plus every manually-logged record.
+function troopExcludedDaysTotal(t){
+  var manual=((t&&t.absences)||[]).reduce(function(sum,a){return sum+(parseInt(a.days)||0);},0);
+  return ((t&&t.excludedDays)||0)+manual;
 }
 function archiveTroop(id){
   var t=D.troops.find(function(x){return x.id===id;}); if(!t) return;

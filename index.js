@@ -185,8 +185,13 @@ async function migrateSchema() {
     await pool.query('ALTER TABLE troops ADD COLUMN IF NOT EXISTS never_duty BOOLEAN DEFAULT FALSE');
     await pool.query('ALTER TABLE troops ADD COLUMN IF NOT EXISTS status_since DATE');
     await pool.query('ALTER TABLE troops ADD COLUMN IF NOT EXISTS excluded_days INTEGER DEFAULT 0');
+    // Manually-logged Leave/Sick/Other absence periods (item 6) — stored as
+    // a JSON array of {id,type,start,end,days} so old, previously-untracked
+    // time off can be recorded retroactively and excluded from the
+    // participation-% window, not just tracked going forward via status.
+    await pool.query("ALTER TABLE troops ADD COLUMN IF NOT EXISTS absences JSONB DEFAULT '[]'");
     await pool.query('ALTER TABLE patrols ADD COLUMN IF NOT EXISTS ptl_seq INTEGER');
-    console.log('Schema check OK: blood_group, deployment_date, weapon_number, gender, category, trade, driver_quals, target_pct, never_suggest, restricted_range, duty_quals, is_senior_sergeant, never_duty, status_since, excluded_days, ptl_seq present.');
+    console.log('Schema check OK: blood_group, deployment_date, weapon_number, gender, category, trade, driver_quals, target_pct, never_suggest, restricted_range, duty_quals, is_senior_sergeant, never_duty, status_since, excluded_days, absences, ptl_seq present.');
   } catch (e) {
     console.error('Schema migration failed:', e.message);
   }
@@ -194,7 +199,7 @@ async function migrateSchema() {
 
 // ── VERSION (bump this string on every backend deploy) ─────────────────
 // Left open — reveals nothing about your data.
-const API_VERSION = '2026.07.17.1';
+const API_VERSION = '2026.07.17.2';
 app.get('/version', (_, res) => res.json({ version: API_VERSION }));
 
 // ── HEALTH ────────────────────────────────────────────────────────────
@@ -227,16 +232,26 @@ app.get('/archived', async (req, res) => {
 // ── UPSERT TROOP ──────────────────────────────────────────────────────
 app.post('/troops', async (req, res) => {
   try {
-    const { id, name, rank, unit, sn, status, notes, phoneLocal, phoneWa, bloodGroup, deploymentDate, weaponNumber, gender, category, trade, driverQuals, targetPct, neverSuggest, restrictedRange, dutyQuals, isSeniorSergeant, neverDuty, statusSince, excludedDays } = req.body;
+    const { id, name, rank, unit, sn, status, notes, phoneLocal, phoneWa, bloodGroup, deploymentDate, weaponNumber, gender, category, trade, driverQuals, targetPct, neverSuggest, restrictedRange, dutyQuals, isSeniorSergeant, neverDuty, statusSince, excludedDays, absences } = req.body;
     if (!isValidId(id)) return res.status(400).json({ error: 'Invalid troop id.' });
     const dutyQualsArr = Array.isArray(dutyQuals) ? dutyQuals.filter(q => typeof q === 'string').map(q => clip(q, 50)).slice(0, 20) : [];
+    // Leave/Sick/Other absence records (item 6) — cap count and validate
+    // shape so malformed or oversized input can't be written.
+    const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+    const absencesArr = Array.isArray(absences) ? absences.filter(a => a && typeof a === 'object' && ISO_DATE.test(a.start) && ISO_DATE.test(a.end)).slice(0, 200).map(a => ({
+      id: clip(a.id || '', 60),
+      type: ['Leave', 'Sick', 'Other'].includes(a.type) ? a.type : 'Other',
+      start: a.start,
+      end: a.end,
+      days: Number.isFinite(parseInt(a.days)) ? Math.max(1, parseInt(a.days)) : 1
+    })) : [];
     await pool.query(
-      `INSERT INTO troops (id, name, rank, unit, sn, status, notes, phone_local, phone_wa, blood_group, deployment_date, weapon_number, gender, category, trade, driver_quals, target_pct, never_suggest, restricted_range, duty_quals, is_senior_sergeant, never_duty, status_since, excluded_days)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+      `INSERT INTO troops (id, name, rank, unit, sn, status, notes, phone_local, phone_wa, blood_group, deployment_date, weapon_number, gender, category, trade, driver_quals, target_pct, never_suggest, restricted_range, duty_quals, is_senior_sergeant, never_duty, status_since, excluded_days, absences)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
        ON CONFLICT (id) DO UPDATE
          SET name=$2, rank=$3, unit=$4, sn=$5, status=$6, notes=$7, phone_local=$8, phone_wa=$9, blood_group=$10, deployment_date=$11, weapon_number=$12,
              gender=$13, category=$14, trade=$15, driver_quals=$16, target_pct=$17, never_suggest=$18, restricted_range=$19,
-             duty_quals=$20, is_senior_sergeant=$21, never_duty=$22, status_since=$23, excluded_days=$24`,
+             duty_quals=$20, is_senior_sergeant=$21, never_duty=$22, status_since=$23, excluded_days=$24, absences=$25`,
       [id, clip(name,200), clip(rank||'',100), clip(unit||'',100), clip(sn||'',50), clip(status||'available',30),
        clip(notes||'',5000), clip(phoneLocal||'',30), clip(phoneWa||'',30), bloodGroup?clip(bloodGroup,10):null,
        deploymentDate || null, weaponNumber?clip(weaponNumber,100):null,
@@ -244,7 +259,7 @@ app.post('/troops', async (req, res) => {
        driverQuals?clip(driverQuals,50):null, (Number.isFinite(parseInt(targetPct))?Math.max(0,Math.min(100,parseInt(targetPct))):100),
        !!neverSuggest, !!restrictedRange,
        dutyQualsArr, !!isSeniorSergeant, !!neverDuty, statusSince || null,
-       (Number.isFinite(parseInt(excludedDays))?parseInt(excludedDays):0)]
+       (Number.isFinite(parseInt(excludedDays))?parseInt(excludedDays):0), JSON.stringify(absencesArr)]
     );
     res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
