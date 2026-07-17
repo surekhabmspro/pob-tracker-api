@@ -2052,8 +2052,8 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
       <div id="t-absence-list" style="margin-bottom:8px;"></div>
       <div class="fr" style="align-items:flex-end;">
         <div class="fg" style="margin-bottom:0;"><label class="field-label">Type</label><select id="t-absence-type"><option value="Leave">Leave</option><option value="Sick">Sick</option><option value="Other">Other</option></select></div>
-        <div class="fg" style="margin-bottom:0;"><label class="field-label">From</label><input type="text" id="t-absence-start" placeholder="DD/MM/YYYY" maxlength="10" oninput="fmtDateInp(this)" autocomplete="off"></div>
-        <div class="fg" style="margin-bottom:0;"><label class="field-label">To</label><input type="text" id="t-absence-end" placeholder="DD/MM/YYYY" maxlength="10" oninput="fmtDateInp(this)" autocomplete="off"></div>
+        <div class="fg cal-field" style="margin-bottom:0;"><label class="field-label">From</label><input type="text" id="t-absence-start" placeholder="DD/MM/YYYY" maxlength="10" oninput="fmtDateInp(this)" autocomplete="off" readonly onclick="toggleCal('cal-t-absence-start',this)" style="padding-right:36px;"><span class="cal-icon" onclick="toggleCal('cal-t-absence-start',document.getElementById('t-absence-start'))">📅</span><div class="cal-wrap" id="cal-t-absence-start"></div></div>
+        <div class="fg cal-field" style="margin-bottom:0;"><label class="field-label">To</label><input type="text" id="t-absence-end" placeholder="DD/MM/YYYY" maxlength="10" oninput="fmtDateInp(this)" autocomplete="off" readonly onclick="toggleCal('cal-t-absence-end',this)" style="padding-right:36px;"><span class="cal-icon" onclick="toggleCal('cal-t-absence-end',document.getElementById('t-absence-end'))">📅</span><div class="cal-wrap" id="cal-t-absence-end"></div></div>
       </div>
       <button type="button" class="btn btn-ghost btn-sm btn-full" style="margin-top:6px;" onclick="addTroopAbsence()">➕ Add Record</button>
       <div style="font-size:10.5px;color:var(--text-muted);margin-top:6px;">Covers time off before this was tracked automatically — every day logged here (plus any Leave/Sick stretch already tracked via Status) is pushed out of the troop's participation window so it can't unfairly lower their %.</div>
@@ -3876,7 +3876,7 @@ function dsFillPass(date,slotList,used,warnings,allowSgtFallback){
       }
     }
     if(qual){
-      var postSlotsFilled=slots.filter(function(s){return s.postId===slot.postId&&s.chosenId;});
+      var postSlotsFilled=slotList.filter(function(s){return s.postId===slot.postId&&s.chosenId;});
       var qualAlready=postSlotsFilled.some(function(s){var t=troopById(s.chosenId);return t&&isDutyQualified(t,qual);});
       if(!qualAlready){
         var qPool=pool.filter(function(t){return isDutyQualified(t,qual);});
@@ -3889,7 +3889,7 @@ function dsFillPass(date,slotList,used,warnings,allowSgtFallback){
       // the rank requirement on one shift (e.g. Morning) would wrongly
       // exempt a completely different shift (e.g. Afternoon) of the same
       // post from ever needing its own qualifying rank.
-      var rankSlotsFilled=slots.filter(function(s){return s.postId===slot.postId&&s.label===slot.label&&s.chosenId;});
+      var rankSlotsFilled=slotList.filter(function(s){return s.postId===slot.postId&&s.label===slot.label&&s.chosenId;});
       var rankAlready=rankSlotsFilled.some(function(s){var t=troopById(s.chosenId);return t&&troopMeetsMinRank(t,post.requiredRank);});
       if(!rankAlready){
         var rPool=pool.filter(function(t){return troopMeetsMinRank(t,post.requiredRank);});
