@@ -1537,13 +1537,33 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
   </div>
   <div class="card">
     <div class="card-title">Sentry Shifts</div>
-    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">This is the real shift schedule — Suggest Duty Roster generates one round of Sentry posts for every shift listed here that falls in the Day or Night window. Add as many as you actually run (e.g. 3-4 shifts each for day and night); also used as quick-fill buttons when editing a single entry.</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Suggest Duty Roster generates one round of Sentry posts for every shift listed below. Pick how many shifts you run each day/night and the standard timings are generated automatically — no need to type times by hand.</div>
+    <div class="fr">
+      <div class="fg">
+        <label class="field-label">Day Shifts</label>
+        <select id="cfg-day-shift-count" onchange="applyShiftPreset('day')">
+          <option value="3">3 shifts (0600–1000–1400–1800)</option>
+          <option value="4">4 shifts (0600–0900–1200–1500–1800)</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="field-label">Night Shifts</label>
+        <select id="cfg-night-shift-count" onchange="applyShiftPreset('night')">
+          <option value="3">3 shifts (1800–2200–0200–0600)</option>
+          <option value="4">4 shifts (1800–2100–0000–0300–0600)</option>
+        </select>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--text-muted);margin:2px 0 10px;">4 day shifts needs enough troops to cover an extra rotation — only pick it if strength allows.</div>
     <div id="duty-shift-rows"></div>
-    <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
-      <input type="text" id="new-shift-name" placeholder="Name" style="flex:1;min-width:100px;">
-      <input type="time" id="new-shift-start" style="flex:1;min-width:90px;">
-      <input type="time" id="new-shift-end" style="flex:1;min-width:90px;">
-      <button class="btn btn-ghost btn-sm" onclick="addDutyShift()">Add</button>
+    <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;">
+      <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:8px;">Manual override — add or fine-tune an individual shift by hand. Editing a generated shift below turns it into a manual one.</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <input type="text" id="new-shift-name" placeholder="Name" style="flex:1;min-width:100px;">
+        <input type="time" id="new-shift-start" style="flex:1;min-width:90px;">
+        <input type="time" id="new-shift-end" style="flex:1;min-width:90px;">
+        <button class="btn btn-ghost btn-sm" onclick="addDutyShift()">Add</button>
+      </div>
     </div>
     <div id="duty-shift-alert" style="margin-top:6px;"></div>
   </div>
@@ -2237,7 +2257,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
         <div class="modal-title" id="profile-title" style="margin-bottom:0;">Troop Profile</div>
         <div style="display:flex;gap:6px;flex-shrink:0;align-items:center;">
           <button class="rb-btn rb-danger-soft" onclick="showCompatibleDonors()" title="Compatible Blood Donors">🩸 Donors</button>
-          <button class="rb-btn rb-primary" onclick="viewFullRecord()" title="Full Record (Print/PDF)">📄 Record</button>
+          <button class="rb-btn rb-primary" onclick="viewFullRecord()" title="Combined Operational Record — Patrol + Duty (Print/PDF)">📄 Combined Record</button>
           <button class="mini-close-btn" onclick="closeModal('profile-modal')" title="Close">×</button>
         </div>
       </div>
@@ -2276,7 +2296,14 @@ var DEFAULT_ROUTES = ['Main Gate - Market - Base','River Crossing - Perimeter','
 var RANKS = DEFAULT_RANKS.slice();
 var DEFAULT_TYPES = ['Escort','Link-up','FET','Airport Security','FACA Ration Delivery','Security Meeting','Joint Patrol with FACA','SDP','MDP','LDP','Water Distribution','QRF','Recce'];
 var DEFAULT_SECTORS = ['Kongbo Linkup','Bangui-Kette Ferry Point','Boulangba','Langandji','Mobaye Center','Prefect Office','Mobaye Airport','Outer Perimeter','Others'];
-var DEFAULT_DUTY_SHIFTS = [{name:'Morning',start:'06:00',end:'12:00'},{name:'Afternoon',start:'12:00',end:'18:00'},{name:'Night',start:'18:00',end:'06:00'}];
+var DEFAULT_DUTY_SHIFTS = [
+  {name:'Day Shift 1',start:'06:00',end:'10:00',period:'day',auto:true},
+  {name:'Day Shift 2',start:'10:00',end:'14:00',period:'day',auto:true},
+  {name:'Day Shift 3',start:'14:00',end:'18:00',period:'day',auto:true},
+  {name:'Night Shift 1',start:'18:00',end:'22:00',period:'night',auto:true},
+  {name:'Night Shift 2',start:'22:00',end:'02:00',period:'night',auto:true},
+  {name:'Night Shift 3',start:'02:00',end:'06:00',period:'night',auto:true}
+];
 var DEFAULT_DUTY_POSTS = [
   {id:'post_gate',name:'Main Gate',active:true,dayStrength:1,nightStrength:2,genderPref:'none',qualRequired:'',requiredRank:'Sergeant',continuous:false},
   {id:'post_perimeter',name:'Perimeter',active:true,dayStrength:1,nightStrength:2,genderPref:'none',qualRequired:'',requiredRank:'',continuous:false},
@@ -2291,11 +2318,25 @@ var DEFAULT_DUTY_TYPES = [
   {id:'type_line',name:'Line Duty',defaultDuration:1,dayDuration:null,nightDuration:null,defaultStart:'',requiresPost:false,qualRequired:'',eligibility:'all'}
 ];
 var DEFAULT_DAY_NIGHT = {start:'06:00',end:'18:00'};
+// Standard Sentry shift timings (item 5) — admin only picks 3 or 4 shifts
+// per day/night; these exact tables are what gets generated. Manual
+// per-shift editing remains available underneath as an override.
+var SHIFT_PRESETS = {
+  day:{
+    3:[{name:'Day Shift 1',start:'06:00',end:'10:00'},{name:'Day Shift 2',start:'10:00',end:'14:00'},{name:'Day Shift 3',start:'14:00',end:'18:00'}],
+    4:[{name:'Day Shift 1',start:'06:00',end:'09:00'},{name:'Day Shift 2',start:'09:00',end:'12:00'},{name:'Day Shift 3',start:'12:00',end:'15:00'},{name:'Day Shift 4',start:'15:00',end:'18:00'}]
+  },
+  night:{
+    3:[{name:'Night Shift 1',start:'18:00',end:'22:00'},{name:'Night Shift 2',start:'22:00',end:'02:00'},{name:'Night Shift 3',start:'02:00',end:'06:00'}],
+    4:[{name:'Night Shift 1',start:'18:00',end:'21:00'},{name:'Night Shift 2',start:'21:00',end:'00:00'},{name:'Night Shift 3',start:'00:00',end:'03:00'},{name:'Night Shift 4',start:'03:00',end:'06:00'}]
+  }
+};
+var DEFAULT_SHIFT_PRESET = {day:3,night:3};
 
 var D = {
   troops:[], patrols:[], archived:[], counter:1, audit:[],
   settings:{pob:'POB Mobaye',mission:'',commander:'',classification:'CONFIDENTIAL',lastBackupDate:null},
-  config:{types:DEFAULT_TYPES.slice(),sectors:DEFAULT_SECTORS.slice(),routes:DEFAULT_ROUTES.slice(),ranks:DEFAULT_RANKS.slice(),dutyShifts:DEFAULT_DUTY_SHIFTS.slice(),dutyPosts:DEFAULT_DUTY_POSTS.map(function(p){return Object.assign({},p);}),dutyQuals:DEFAULT_DUTY_QUALS.slice(),dutyTypes:DEFAULT_DUTY_TYPES.map(function(t){return Object.assign({},t);}),dayNight:Object.assign({},DEFAULT_DAY_NIGHT),customRoles:[]},
+  config:{types:DEFAULT_TYPES.slice(),sectors:DEFAULT_SECTORS.slice(),routes:DEFAULT_ROUTES.slice(),ranks:DEFAULT_RANKS.slice(),dutyShifts:DEFAULT_DUTY_SHIFTS.map(function(s){return Object.assign({},s);}),dutyPosts:DEFAULT_DUTY_POSTS.map(function(p){return Object.assign({},p);}),dutyQuals:DEFAULT_DUTY_QUALS.slice(),dutyTypes:DEFAULT_DUTY_TYPES.map(function(t){return Object.assign({},t);}),dayNight:Object.assign({},DEFAULT_DAY_NIGHT),customRoles:[],shiftPreset:Object.assign({},DEFAULT_SHIFT_PRESET)},
   security:{pinHash:'',securityQ:'',securityAHash:''},
   drafts:[], duties:[], dutyCounter:1, dutyContingency:[], dutyDrafts:[]
 };
@@ -2315,7 +2356,10 @@ function legacyShiftDurationHours(startStr,endStr){
 }
 function migrateDutySystem(){
   if(!D.config) D.config={};
-  if(!D.config.dutyShifts||!D.config.dutyShifts.length) D.config.dutyShifts=DEFAULT_DUTY_SHIFTS.slice();
+  if(!D.config.dutyShifts||!D.config.dutyShifts.length) D.config.dutyShifts=DEFAULT_DUTY_SHIFTS.map(function(s){return Object.assign({},s);});
+  if(!D.config.shiftPreset) D.config.shiftPreset={};
+  if(D.config.shiftPreset.day!==3&&D.config.shiftPreset.day!==4) D.config.shiftPreset.day=DEFAULT_SHIFT_PRESET.day;
+  if(D.config.shiftPreset.night!==3&&D.config.shiftPreset.night!==4) D.config.shiftPreset.night=DEFAULT_SHIFT_PRESET.night;
   if(!D.config.dutyPosts) D.config.dutyPosts=[];
   D.config.dutyPosts=D.config.dutyPosts.map(function(p){
     if(typeof p==='string') return {id:uid('post'),name:p,active:true,dayStrength:1,nightStrength:1,genderPref:'none',qualRequired:'',continuous:false};
@@ -4730,29 +4774,50 @@ function dutiesActiveNow(){
     return false;
   });
 }
-// Everyone who's genuinely free right now (Priority 1 — Free Troops must
-// exclude every reserved troop): available, and not reserved by any
-// active/upcoming duty, any uncompleted patrol draft (regardless of that
-// draft's date), or any uncompleted duty draft. Uses the same master
-// isTroopReserved() check as patrol/duty suggestions, so this list can
-// never disagree with what those suggestions consider "free".
-function freeTroopsNow(){
-  return sortTroops(D.troops.filter(function(t){ return isAvailable(t)&&!isTroopReserved(t.id); }));
+// Latest saved patrol draft — automatically treated as "the current
+// patrol" for Free Troops purposes (item 2). No manual "which patrol is
+// current" selection: whichever draft was most recently created wins,
+// and a fresh draft or a newly-created one instantly replaces it.
+function currentPatrolDraft(){
+  if(!D.drafts||!D.drafts.length) return null;
+  return D.drafts.reduce(function(latest,d){ return (!latest||(d.createdAt||'')>(latest.createdAt||''))?d:latest; },null);
 }
-// Full breakdown for the Free Now card (item 2): every available troop,
-// tagged with whether they're currently tied up on duty (now, upcoming,
-// or an unlogged duty draft), out on an uncompleted patrol draft, both,
-// or free of both — instead of only showing the fully-free subset.
+function currentPatrolTroopIds(){
+  var d=currentPatrolDraft();
+  var ids={};
+  if(d) (d.troops||[]).forEach(function(tid){ ids[tid]=true; });
+  return ids;
+}
+// Free Troops, redesigned (item 2): a troop counts as free only when NOT
+// on the current ongoing patrol (the single latest saved patrol draft)
+// and NOT on an active duty shift right now. Deliberately narrower than
+// the master isTroopReserved() booking-conflict check used elsewhere —
+// older/other saved drafts, upcoming (not-yet-started) duties, and
+// unlogged duty drafts no longer hold someone out of this specific list;
+// this card reflects who's free *at this moment*, while new bookings
+// elsewhere in the app still respect every reservation via
+// isTroopReserved(). An active Contingency exclusion (e.g. quarantine,
+// movement restriction) still counts as not-free here too — showing a
+// restricted troop as available would be misleading. Automatically
+// updates whenever the patrol draft, a duty shift, or duty allocation
+// changes, since every input is read live.
+function freeTroopsNow(){
+  var patrolNow=currentPatrolTroopIds();
+  var dutyNow={}; dutiesActiveNow().forEach(function(d){ (d.troops||[]).forEach(function(tid){ dutyNow[tid]=true; }); });
+  var cgNow=contingencyExcludedTroopIds();
+  return sortTroops(D.troops.filter(function(t){ return isAvailable(t)&&!patrolNow[t.id]&&!dutyNow[t.id]&&!cgNow[t.id]; }));
+}
+// Full breakdown for the Free Now card: every available troop, tagged
+// with whether they're on the current patrol, on an active duty shift
+// right now, under a Contingency exclusion, or free of all three.
 function freeTroopsNowDetailed(){
-  var busyDuty={}; dutiesActiveNow().forEach(function(d){ (d.troops||[]).forEach(function(tid){ busyDuty[tid]=true; }); });
-  var loggedDutyRes=loggedDutyReservedTroopIds();
-  var dutyDraftRes=dutyDraftReservedTroopIds();
-  var patrolDraftRes=draftReservedTroopIds();
-  var contingencyRes=contingencyExcludedTroopIds();
+  var patrolNow=currentPatrolTroopIds();
+  var dutyNow={}; dutiesActiveNow().forEach(function(d){ (d.troops||[]).forEach(function(tid){ dutyNow[tid]=true; }); });
+  var cgNow=contingencyExcludedTroopIds();
   return sortTroops(D.troops.filter(isAvailable)).map(function(t){
-    var onDuty=!!busyDuty[t.id]||!!loggedDutyRes[t.id]||!!dutyDraftRes[t.id];
-    var onPatrol=!!patrolDraftRes[t.id];
-    var onContingency=!!contingencyRes[t.id];
+    var onPatrol=!!patrolNow[t.id];
+    var onDuty=!!dutyNow[t.id];
+    var onContingency=!!cgNow[t.id];
     return {t:t,onDuty:onDuty,onPatrol:onPatrol,onContingency:onContingency};
   }).sort(function(a,b){
     var fa=(a.onDuty||a.onPatrol||a.onContingency)?1:0, fb=(b.onDuty||b.onPatrol||b.onContingency)?1:0;
@@ -5664,26 +5729,71 @@ function removeDutyType(i){
   remoteSaveConfig();
   audit('Duty type removed: '+t.name);
 }
+// Which half of the day a shift belongs to — uses its stored tag if
+// present (set when generated from a preset or edited by hand), falling
+// back to the Day/Night boundary for older shifts that predate tagging.
+function shiftPeriodOf(sh){ return sh.period||(isDayTime(sh.start)?'day':'night'); }
 function renderDutyShiftRows(){
   var el=document.getElementById('duty-shift-rows');
   if(!el) return;
+  var daySel=document.getElementById('cfg-day-shift-count'), nightSel=document.getElementById('cfg-night-shift-count');
+  if(daySel) daySel.value=String((D.config.shiftPreset&&D.config.shiftPreset.day)||3);
+  if(nightSel) nightSel.value=String((D.config.shiftPreset&&D.config.shiftPreset.night)||3);
   var shifts=D.config.dutyShifts||[];
   if(shifts.length===0){ el.innerHTML='<div style="color:var(--text-muted);font-size:12.5px;">No shifts defined yet.</div>'; return; }
-  el.innerHTML=shifts.map(function(sh,i){
+  var indexed=shifts.map(function(sh,i){return {sh:sh,i:i};});
+  var dayRows=indexed.filter(function(x){return shiftPeriodOf(x.sh)==='day';});
+  var nightRows=indexed.filter(function(x){return shiftPeriodOf(x.sh)==='night';});
+  function rowHtml(x){
+    var sh=x.sh,i=x.i;
+    var tag=sh.auto?'<span class="badge b-tan" style="font-size:8.5px;">standard</span>':'<span class="badge" style="font-size:8.5px;">manual</span>';
     return '<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--border);">'+
       '<input type="text" value="'+escHtml(sh.name)+'" style="flex:1.2;min-width:70px;font-size:13px;" onchange="updateDutyShift('+i+',\'name\',this.value)">'+
       '<input type="time" value="'+(sh.start||'')+'" style="flex:1;min-width:85px;font-size:13px;" onchange="updateDutyShift('+i+',\'start\',this.value)">'+
       '<input type="time" value="'+(sh.end||'')+'" style="flex:1;min-width:85px;font-size:13px;" onchange="updateDutyShift('+i+',\'end\',this.value)">'+
+      tag+
       '<button class="tag-del" onclick="removeDutyShift('+i+')">×</button></div>';
-  }).join('');
+  }
+  el.innerHTML=
+    '<div style="font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;margin-top:4px;">☀ Day</div>'+
+    (dayRows.length?dayRows.map(rowHtml).join(''):'<div style="color:var(--text-muted);font-size:12px;padding:4px 0;">No day shifts.</div>')+
+    '<div style="font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;margin-top:10px;">🌙 Night</div>'+
+    (nightRows.length?nightRows.map(rowHtml).join(''):'<div style="color:var(--text-muted);font-size:12px;padding:4px 0;">No night shifts.</div>');
+}
+// Regenerates every shift in the chosen period (day or night) from the
+// standard timing table (item 5) — replaces whatever was there before,
+// auto-generated or manually entered, since the preset IS the schedule
+// for that period. Warns first if it would overwrite manual edits.
+function applyShiftPreset(period){
+  var sel=document.getElementById('cfg-'+period+'-shift-count');
+  var count=parseInt(sel.value)===4?4:3;
+  var existing=D.config.dutyShifts||[];
+  var removing=existing.filter(function(sh){ return shiftPeriodOf(sh)===period; });
+  var hasManual=removing.some(function(sh){ return sh.auto===false; });
+  if(hasManual&&!confirm('This replaces '+removing.length+' existing '+period+' shift(s) — including manually edited ones — with the standard '+count+'-shift schedule. Continue?')) {
+    renderDutyShiftRows();
+    return;
+  }
+  var kept=existing.filter(function(sh){ return shiftPeriodOf(sh)!==period; });
+  var generated=SHIFT_PRESETS[period][count].map(function(s){ return {name:s.name,start:s.start,end:s.end,period:period,auto:true}; });
+  D.config.dutyShifts=kept.concat(generated);
+  if(!D.config.shiftPreset) D.config.shiftPreset={};
+  D.config.shiftPreset[period]=count;
+  renderDutyShiftRows();
+  remoteSaveConfig();
+  audit('Sentry '+period+' shifts set to standard '+count+'-shift schedule ('+generated.map(function(s){return s.start+'–'+s.end;}).join(', ')+')');
 }
 // Edits a shift's name/start/end in place (item 2) — previously the only
 // option was deleting and re-adding a whole new shift for any change.
+// Editing a generated shift turns it into a manual override so a later
+// preset regeneration on that period doesn't silently overwrite it
+// without warning.
 function updateDutyShift(i,field,val){
   var sh=D.config.dutyShifts[i]; if(!sh) return;
   var old=sh.name;
   if(field==='name'&&!val.trim()) { renderDutyShiftRows(); return; }
   sh[field]=field==='name'?val.trim():val;
+  sh.auto=false;
   remoteSaveConfig();
   audit('Duty shift updated: '+old+' — '+field+'='+val);
   renderDutyShiftRows();
@@ -5693,7 +5803,7 @@ function addDutyShift(){
   var start=document.getElementById('new-shift-start').value;
   var end=document.getElementById('new-shift-end').value;
   if(!name||!start||!end){ showAlert('duty-shift-alert','Enter a name, start time, and end time.','danger'); return; }
-  D.config.dutyShifts.push({name:name,start:start,end:end});
+  D.config.dutyShifts.push({name:name,start:start,end:end,period:isDayTime(start)?'day':'night',auto:false});
   document.getElementById('new-shift-name').value=''; document.getElementById('new-shift-start').value=''; document.getElementById('new-shift-end').value='';
   renderDutyShiftRows();
   remoteSaveConfig();
@@ -6698,6 +6808,14 @@ function showProfile(id, fromArch){
   var moPats=tp.filter(function(p){var d=new Date(p.date+'T12:00:00');return d.getMonth()===mo&&d.getFullYear()===yr;});
   var moH=moPats.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0);
   var earliest=tp.length?tp[tp.length-1].date:null;
+  // Duty History (item 6) — separate from Patrol History, own stats and
+  // its own section below it, each duty shown compact with an expandable
+  // detail (date, type, day/night, timing, duration, post are all
+  // available at a glance; assignment count is the section header count).
+  var td=D.duties.filter(function(d){return !d.cancelled&&(d.troops||[]).indexOf(id)>=0;}).sort(function(a,b){return b.date.localeCompare(a.date);});
+  var totalDutyH=td.reduce(function(s,d){return s+(parseFloat(d.durationHours)||0);},0);
+  var dutyPosts=[];td.forEach(function(d){if(d.postName&&dutyPosts.indexOf(d.postName)<0)dutyPosts.push(d.postName);});
+  var dutyTypes={};td.forEach(function(d){dutyTypes[d.type]=(dutyTypes[d.type]||0)+1;});
   document.getElementById('profile-title').innerHTML='<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>';
   document.getElementById('profile-modal').dataset.troopId=id;
   var html=
@@ -6732,19 +6850,58 @@ function showProfile(id, fromArch){
     '</div>'+
     (sectors.length>0?'<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Sectors: <strong style="color:var(--text);">'+sectors.join(', ')+'</strong></div>':'')+
     (Object.keys(types).length>0?'<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Types: '+Object.entries(types).sort(function(a,b){return b[1]-a[1];}).map(function(kv){return '<span class="badge b-gray" style="margin-right:3px;margin-bottom:3px;">'+kv[0]+': '+kv[1]+'</span>';}).join('')+'</div>':'')+
-    '<div class="section-hdr">Patrol History ('+tp.length+')</div>'+
+    '<div class="section-hdr" style="display:flex;justify-content:space-between;align-items:center;">'+
+    '<span>Patrol History ('+tp.length+')</span>'+
+    (tp.length?'<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:4px 8px;" onclick="printProfileSection(\''+id+'\',\'patrol\')">🖨 Print</button>':'')+
+    '</div>'+
     (tp.length===0?'<div class="empty">No patrols yet.</div>':
-      tp.map(function(p){
-        return '<div class="ph-row">'+
+      tp.map(function(p,i){
+        var rid='pf-ph-'+i;
+        return '<div class="ph-row" style="cursor:pointer;" onclick="toggleEl(\''+rid+'\')">'+
           '<div class="ph-top">'+
           '<div>'+
           '<span class="ph-id">'+(p.ptlId||'')+'</span> '+
           '<span class="ph-date">'+fmtDate(p.date)+'</span> '+
           '<span class="'+typeBadge(p.type)+'" style="font-size:9px;">'+p.type+'</span>'+
-          (p.area?'<div class="ph-area">'+p.area+'</div>':'')+
-          (p.remarks?'<div class="ph-remarks">'+escHtml(p.remarks)+'</div>':'')+
           '</div>'+
           '<span class="ph-dur">'+(p.duration?p.duration+'h':'—')+'</span>'+
+          '</div>'+
+          '<div id="'+rid+'" style="display:none;margin-top:4px;font-size:11.5px;color:var(--text-muted);border-top:1px solid var(--border);padding-top:4px;">'+
+          (p.area?'Sector: <strong style="color:var(--text);">'+escHtml(p.area)+'</strong><br>':'')+
+          'Route: '+(p.route?escHtml(p.route):'—')+'<br>'+
+          'Commander: '+(p.commander?(troopById(p.commander)?upLabel(troopById(p.commander).rank,troopById(p.commander).name):'—'):'—')+
+          (p.remarks?'<br>Remarks: '+escHtml(p.remarks):'')+
+          '</div></div>';
+      }).join(''))+
+    '<div class="section-hdr" style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;">'+
+    '<span>Duty History ('+td.length+')</span>'+
+    (td.length?'<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:4px 8px;" onclick="printProfileSection(\''+id+'\',\'duty\')">🖨 Print</button>':'')+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">'+
+    '<div class="stat"><div class="stat-num">'+td.length+'</div><div class="stat-label">Duties</div></div>'+
+    '<div class="stat"><div class="stat-num">'+totalDutyH.toFixed(0)+'</div><div class="stat-label">Hours</div></div>'+
+    '</div>'+
+    (dutyPosts.length>0?'<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Posts: <strong style="color:var(--text);">'+dutyPosts.join(', ')+'</strong></div>':'')+
+    (Object.keys(dutyTypes).length>0?'<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Types: '+Object.entries(dutyTypes).sort(function(a,b){return b[1]-a[1];}).map(function(kv){return '<span class="badge b-gray" style="margin-right:3px;margin-bottom:3px;">'+kv[0]+': '+kv[1]+'</span>';}).join('')+'</div>':'')+
+    (td.length===0?'<div class="empty">No duties yet.</div>':
+      td.map(function(d,i){
+        var rid='pf-dh-'+i;
+        var endT=shiftEndTime(d.startTime,d.durationHours);
+        return '<div class="ph-row" style="cursor:pointer;" onclick="toggleEl(\''+rid+'\')">'+
+          '<div class="ph-top">'+
+          '<div>'+
+          '<span class="ph-id">'+(d.dutyId||'')+'</span> '+
+          '<span class="ph-date">'+fmtDate(d.date)+'</span> '+
+          '<span class="badge b-tan" style="font-size:9px;">'+escHtml(d.type)+'</span> '+
+          '<span class="badge" style="font-size:9px;">'+(isDayTime(d.startTime)?'☀ Day':'🌙 Night')+'</span>'+
+          (d.postName?'<div class="ph-area">'+escHtml(d.postName)+'</div>':'')+
+          '</div>'+
+          '<span class="ph-dur">'+(d.durationHours?d.durationHours+'h':'—')+'</span>'+
+          '</div>'+
+          '<div id="'+rid+'" style="display:none;margin-top:4px;font-size:11.5px;color:var(--text-muted);border-top:1px solid var(--border);padding-top:4px;">'+
+          'Start: <strong style="color:var(--text);">'+(d.startTime||'—')+'</strong> · End: <strong style="color:var(--text);">'+endT+'</strong><br>'+
+          'Sentry Post: '+(d.postName?escHtml(d.postName):'—')+
+          (d.remarks?'<br>Remarks: '+escHtml(d.remarks):'')+
           '</div></div>';
       }).join(''));
   document.getElementById('profile-body').innerHTML=html;
@@ -6796,18 +6953,64 @@ function viewFullRecord(){
   var s=D.settings; var todayStr=new Date().toISOString().slice(0,10);
   var byMonth={};tp.forEach(function(p){var key=p.date.slice(0,7);if(!byMonth[key])byMonth[key]=[];byMonth[key].push(p);});
   var monthKeys=Object.keys(byMonth).sort();
-  var win=window.open('','_blank','width=960,height=750');
   var rowsHtml='';
   if(tp.length===0){ rowsHtml='<tr><td colspan="6" style="text-align:center;color:#888;padding:20px;">No patrol records.</td></tr>'; }
   else { monthKeys.forEach(function(mk){var mo=byMonth[mk];var moDate=new Date(mk+'-01T12:00:00');var moLabel=moDate.toLocaleString('default',{month:'long',year:'numeric'});var moH=mo.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0); rowsHtml+='<tr style="background:#e8f0e8;"><td colspan="6" style="font-family:\'Courier New\',monospace;font-size:11px;font-weight:700;color:#2d5a3d;letter-spacing:1px;text-transform:uppercase;padding:7px 10px;">'+moLabel+' · '+mo.length+' patrols · '+moH.toFixed(1)+'h</td></tr>'; mo.forEach(function(p){ rowsHtml+='<tr><td style="font-family:\'Courier New\',monospace;font-size:11px;color:#2d5a3d;white-space:nowrap;">'+(p.ptlId||'—')+'</td><td style="font-size:11px;white-space:nowrap;">'+fmtDate(p.date)+'</td><td><span style="display:inline-block;padding:2px 7px;border-radius:2px;font-size:10px;font-weight:700;background:#eef4ee;border:1px solid #9aaa9a;color:#333;">'+p.type+'</span></td><td style="font-size:12px;color:#555;">'+(p.area||'—')+'</td><td style="font-family:\'Courier New\',monospace;font-size:11px;">'+(p.duration?p.duration+'h':'—')+'</td><td style="font-size:11px;color:#777;">'+escHtml(p.remarks||'—')+'</td></tr>'; }); }); }
-  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Full Record — '+upLabel(t.rank,t.name)+'</title><style>body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:14px;}.hdr{text-align:center;border-bottom:2px solid #2d5a3d;padding-bottom:14px;margin-bottom:20px;}.hdr h2{margin:0 0 4px;font-size:20px;color:#1a3a2a;}.hdr p{margin:2px 0;font-size:11px;color:#555;}.info-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;}.info-box{background:#f5f5f5;border:1px solid #ccc;border-radius:4px;padding:10px;text-align:center;}.info-num{font-size:22px;font-weight:700;color:#2d5a3d;font-family:\'Courier New\',monospace;}.info-lbl{font-size:10px;color:#666;letter-spacing:1px;text-transform:uppercase;margin-top:3px;}.sub-hdr{font-family:\'Courier New\',monospace;font-size:10px;color:#2d5a3d;letter-spacing:2px;text-transform:uppercase;margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid #ccc;}table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;}th{background:#2d5a3d;color:#fff;font-family:\'Courier New\',monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:8px 10px;text-align:left;}td{padding:7px 10px;border-bottom:1px solid #e0e8e0;word-wrap:break-word;vertical-align:top;}tr:hover td{background:#f8fff8;}.footer{margin-top:20px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}@media print{@page{margin:1cm;}.no-print{display:none!important;}}</style></head><body>'+
-  '<div class="hdr"><div style="font-size:10px;color:#999;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;">'+(s.classification||'')+(s.classification?' — ':'')+''+(s.pob||'POB Mobaye')+'</div><h2>COMPLETE SERVICE RECORD</h2><p style="font-size:14px;font-weight:700;color:#1a3a2a;">'+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>'+(t.sn?' · SN: '+t.sn:'')+'</p><p>Unit: '+(t.unit||'—')+'</p><p>Period: <strong>'+(earliest?fmtDateLong(earliest):'N/A')+' — '+fmtDateLong(todayStr)+'</strong></p><p style="color:#888;">Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p></div>'+
-  '<div class="info-grid"><div class="info-box"><div class="info-num">'+tp.length+'</div><div class="info-lbl">Total Patrols</div></div><div class="info-box"><div class="info-num">'+totalH.toFixed(1)+'</div><div class="info-lbl">Total Hours</div></div><div class="info-box"><div class="info-num">'+sectors.length+'</div><div class="info-lbl">Sectors</div></div><div class="info-box"><div class="info-num">'+monthKeys.length+'</div><div class="info-lbl">Active Months</div></div></div>'+
+  // Duty side of the combined record (item 6 — "Combined operational
+  // history print/PDF"), grouped by month the same way patrols are.
+  var td=D.duties.filter(function(d){return !d.cancelled&&(d.troops||[]).indexOf(id)>=0;}).sort(function(a,b){return a.date.localeCompare(b.date);});
+  var totalDutyH=td.reduce(function(s,d){return s+(parseFloat(d.durationHours)||0);},0);
+  var dutyByMonth={};td.forEach(function(d){var key=d.date.slice(0,7);if(!dutyByMonth[key])dutyByMonth[key]=[];dutyByMonth[key].push(d);});
+  var dutyMonthKeys=Object.keys(dutyByMonth).sort();
+  var dutyRowsHtml='';
+  if(td.length===0){ dutyRowsHtml='<tr><td colspan="6" style="text-align:center;color:#888;padding:20px;">No duty records.</td></tr>'; }
+  else { dutyMonthKeys.forEach(function(mk){var mo=dutyByMonth[mk];var moDate=new Date(mk+'-01T12:00:00');var moLabel=moDate.toLocaleString('default',{month:'long',year:'numeric'});var moH=mo.reduce(function(s,d){return s+(parseFloat(d.durationHours)||0);},0); dutyRowsHtml+='<tr style="background:#f0e8e8;"><td colspan="6" style="font-family:\'Courier New\',monospace;font-size:11px;font-weight:700;color:#5a0f1a;letter-spacing:1px;text-transform:uppercase;padding:7px 10px;">'+moLabel+' · '+mo.length+' duties · '+moH.toFixed(1)+'h</td></tr>'; mo.forEach(function(d){ var endT=shiftEndTime(d.startTime,d.durationHours); dutyRowsHtml+='<tr><td style="font-family:\'Courier New\',monospace;font-size:11px;color:#5a0f1a;white-space:nowrap;">'+(d.dutyId||'—')+'</td><td style="font-size:11px;white-space:nowrap;">'+fmtDate(d.date)+'</td><td><span style="display:inline-block;padding:2px 7px;border-radius:2px;font-size:10px;font-weight:700;background:#f4eeee;border:1px solid #aa9a9a;color:#333;">'+d.type+' · '+(isDayTime(d.startTime)?'Day':'Night')+'</span></td><td style="font-size:12px;color:#555;">'+(d.postName||'—')+'</td><td style="font-family:\'Courier New\',monospace;font-size:11px;">'+(d.startTime||'')+'–'+endT+' ('+(d.durationHours||'—')+'h)</td><td style="font-size:11px;color:#777;">'+escHtml(d.remarks||'—')+'</td></tr>'; }); }); }
+  var win=window.open('','_blank','width=960,height=750');
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Combined Operational Record — '+upLabel(t.rank,t.name)+'</title><style>body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:14px;}.hdr{text-align:center;border-bottom:2px solid #2d5a3d;padding-bottom:14px;margin-bottom:20px;}.hdr h2{margin:0 0 4px;font-size:20px;color:#1a3a2a;}.hdr p{margin:2px 0;font-size:11px;color:#555;}.info-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;}.info-box{background:#f5f5f5;border:1px solid #ccc;border-radius:4px;padding:10px;text-align:center;}.info-num{font-size:22px;font-weight:700;color:#2d5a3d;font-family:\'Courier New\',monospace;}.info-lbl{font-size:10px;color:#666;letter-spacing:1px;text-transform:uppercase;margin-top:3px;}.sub-hdr{font-family:\'Courier New\',monospace;font-size:10px;color:#2d5a3d;letter-spacing:2px;text-transform:uppercase;margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid #ccc;}.sub-hdr.duty{color:#5a0f1a;}table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;}th{background:#2d5a3d;color:#fff;font-family:\'Courier New\',monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:8px 10px;text-align:left;}th.duty{background:#8b1a2b;}td{padding:7px 10px;border-bottom:1px solid #e0e8e0;word-wrap:break-word;vertical-align:top;}tr:hover td{background:#f8fff8;}.footer{margin-top:20px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}@media print{@page{margin:1cm;}.no-print{display:none!important;}}</style></head><body>'+
+  '<div class="hdr"><div style="font-size:10px;color:#999;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;">'+(s.classification||'')+(s.classification?' — ':'')+''+(s.pob||'POB Mobaye')+'</div><h2>COMBINED OPERATIONAL RECORD</h2><p style="font-size:14px;font-weight:700;color:#1a3a2a;">'+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>'+(t.sn?' · SN: '+t.sn:'')+'</p><p>Unit: '+(t.unit||'—')+'</p><p>Period: <strong>'+(earliest?fmtDateLong(earliest):'N/A')+' — '+fmtDateLong(todayStr)+'</strong></p><p style="color:#888;">Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p></div>'+
+  '<div class="info-grid"><div class="info-box"><div class="info-num">'+tp.length+'</div><div class="info-lbl">Total Patrols</div></div><div class="info-box"><div class="info-num">'+totalH.toFixed(1)+'</div><div class="info-lbl">Patrol Hours</div></div><div class="info-box"><div class="info-num">'+td.length+'</div><div class="info-lbl">Total Duties</div></div><div class="info-box"><div class="info-num">'+totalDutyH.toFixed(1)+'</div><div class="info-lbl">Duty Hours</div></div></div>'+
   (sectors.length>0?'<div class="sub-hdr">Sectors Covered</div><p style="font-size:13px;color:#444;margin-bottom:14px;">'+sectors.join(', ')+'</p>':'')+
   (Object.keys(types).length>0?'<div class="sub-hdr">Patrol Types</div><p style="font-size:13px;color:#444;margin-bottom:14px;">'+Object.entries(types).sort(function(a,b){return b[1]-a[1];}).map(function(kv){return kv[0]+': <strong>'+kv[1]+'</strong>';}).join(' · ')+'</p>':'')+
   '<div class="sub-hdr">Full Patrol History ('+tp.length+')</div><table><colgroup><col style="width:13%"><col style="width:12%"><col style="width:14%"><col style="width:19%"><col style="width:11%"><col style="width:31%"></colgroup><thead><tr><th>Patrol ID</th><th>Date</th><th>Type</th><th>Sector</th><th>Duration</th><th>Remarks</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'+
+  '<div class="sub-hdr duty" style="margin-top:24px;">Full Duty History ('+td.length+')</div><table><colgroup><col style="width:13%"><col style="width:12%"><col style="width:18%"><col style="width:15%"><col style="width:20%"><col style="width:22%"></colgroup><thead><tr><th class="duty">Duty ID</th><th class="duty">Date</th><th class="duty">Type / Shift</th><th class="duty">Post</th><th class="duty">Timing</th><th class="duty">Remarks</th></tr></thead><tbody>'+dutyRowsHtml+'</tbody></table>'+
   '<div class="footer">'+(s.pob||'POB Mobaye')+' · '+upLabel(t.rank,t.name)+' · Record as of '+fmtDateLong(todayStr)+'</div>'+
   '<div class="no-print" style="margin-top:20px;text-align:center;"><button onclick="window.print()" style="padding:10px 24px;background:#2d5a3d;color:#fff;border:none;border-radius:4px;font-size:13px;cursor:pointer;font-weight:700;">🖨 Print / Save as PDF</button></div>'+
+  '</body></html>'); win.document.close(); win.focus();
+}
+// Separate, single-category print for either history section (item 6 —
+// "Separate print/PDF" alongside the combined one above). Reuses the
+// same table styling as the combined record so both look consistent.
+function printProfileSection(id,kind){
+  var t=D.troops.find(function(x){return x.id===id;})||D.archived.find(function(x){return x.id===id;});
+  if(!t) return;
+  var s=D.settings; var todayStr=new Date().toISOString().slice(0,10);
+  var win=window.open('','_blank','width=900,height=700');
+  var title,rowsHtml,headHtml,accent;
+  if(kind==='duty'){
+    accent='#8b1a2b';
+    var td=D.duties.filter(function(d){return !d.cancelled&&(d.troops||[]).indexOf(id)>=0;}).sort(function(a,b){return a.date.localeCompare(b.date);});
+    var totalDutyH=td.reduce(function(s2,d){return s2+(parseFloat(d.durationHours)||0);},0);
+    title='DUTY HISTORY';
+    headHtml='<th>Duty ID</th><th>Date</th><th>Type / Shift</th><th>Post</th><th>Timing</th><th>Remarks</th>';
+    rowsHtml=td.length===0?'<tr><td colspan="6" style="text-align:center;color:#888;padding:20px;">No duty records.</td></tr>':
+      td.map(function(d){ var endT=shiftEndTime(d.startTime,d.durationHours); return '<tr><td style="font-family:\'Courier New\',monospace;font-size:11px;white-space:nowrap;">'+(d.dutyId||'—')+'</td><td style="font-size:11px;white-space:nowrap;">'+fmtDate(d.date)+'</td><td style="font-size:12px;">'+d.type+' · '+(isDayTime(d.startTime)?'Day':'Night')+'</td><td style="font-size:12px;color:#555;">'+(d.postName||'—')+'</td><td style="font-family:\'Courier New\',monospace;font-size:11px;">'+(d.startTime||'')+'–'+endT+' ('+(d.durationHours||'—')+'h)</td><td style="font-size:11px;color:#777;">'+escHtml(d.remarks||'—')+'</td></tr>'; }).join('');
+    var summary='<div class="info-box"><div class="info-num">'+td.length+'</div><div class="info-lbl">Total Duties</div></div><div class="info-box"><div class="info-num">'+totalDutyH.toFixed(1)+'</div><div class="info-lbl">Total Hours</div></div>';
+  } else {
+    accent='#2d5a3d';
+    var tp=D.patrols.filter(function(p){return (p.troops||[]).indexOf(id)>=0;}).sort(function(a,b){return a.date.localeCompare(b.date);});
+    var totalH=tp.reduce(function(s2,p){return s2+(parseFloat(p.duration)||0);},0);
+    title='PATROL HISTORY';
+    headHtml='<th>Patrol ID</th><th>Date</th><th>Type</th><th>Sector</th><th>Duration</th><th>Remarks</th>';
+    rowsHtml=tp.length===0?'<tr><td colspan="6" style="text-align:center;color:#888;padding:20px;">No patrol records.</td></tr>':
+      tp.map(function(p){ return '<tr><td style="font-family:\'Courier New\',monospace;font-size:11px;white-space:nowrap;">'+(p.ptlId||'—')+'</td><td style="font-size:11px;white-space:nowrap;">'+fmtDate(p.date)+'</td><td style="font-size:12px;">'+p.type+'</td><td style="font-size:12px;color:#555;">'+(p.area||'—')+'</td><td style="font-family:\'Courier New\',monospace;font-size:11px;">'+(p.duration?p.duration+'h':'—')+'</td><td style="font-size:11px;color:#777;">'+escHtml(p.remarks||'—')+'</td></tr>'; }).join('');
+    var summary='<div class="info-box"><div class="info-num">'+tp.length+'</div><div class="info-lbl">Total Patrols</div></div><div class="info-box"><div class="info-num">'+totalH.toFixed(1)+'</div><div class="info-lbl">Total Hours</div></div>';
+  }
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+title+' — '+upLabel(t.rank,t.name)+'</title><style>body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:14px;}.hdr{text-align:center;border-bottom:2px solid '+accent+';padding-bottom:14px;margin-bottom:20px;}.hdr h2{margin:0 0 4px;font-size:20px;color:'+accent+';}.hdr p{margin:2px 0;font-size:11px;color:#555;}.info-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:18px;max-width:400px;}.info-box{background:#f5f5f5;border:1px solid #ccc;border-radius:4px;padding:10px;text-align:center;}.info-num{font-size:22px;font-weight:700;color:'+accent+';font-family:\'Courier New\',monospace;}.info-lbl{font-size:10px;color:#666;letter-spacing:1px;text-transform:uppercase;margin-top:3px;}table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;}th{background:'+accent+';color:#fff;font-family:\'Courier New\',monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:8px 10px;text-align:left;}td{padding:7px 10px;border-bottom:1px solid #e0e8e0;word-wrap:break-word;vertical-align:top;}tr:hover td{background:#f8fff8;}.footer{margin-top:20px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}@media print{@page{margin:1cm;}.no-print{display:none!important;}}</style></head><body>'+
+  '<div class="hdr"><div style="font-size:10px;color:#999;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;">'+(s.classification||'')+(s.classification?' — ':'')+''+(s.pob||'POB Mobaye')+'</div><h2>'+title+'</h2><p style="font-size:14px;font-weight:700;color:'+accent+';">'+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>'+(t.sn?' · SN: '+t.sn:'')+'</p><p>Unit: '+(t.unit||'—')+'</p><p style="color:#888;">Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p></div>'+
+  '<div class="info-grid">'+summary+'</div>'+
+  '<table><thead><tr>'+headHtml+'</tr></thead><tbody>'+rowsHtml+'</tbody></table>'+
+  '<div class="footer">'+(s.pob||'POB Mobaye')+' · '+upLabel(t.rank,t.name)+' · Record as of '+fmtDateLong(todayStr)+'</div>'+
+  '<div class="no-print" style="margin-top:20px;text-align:center;"><button onclick="window.print()" style="padding:10px 24px;background:'+accent+';color:#fff;border:none;border-radius:4px;font-size:13px;cursor:pointer;font-weight:700;">🖨 Print / Save as PDF</button></div>'+
   '</body></html>'); win.document.close(); win.focus();
 }
 
