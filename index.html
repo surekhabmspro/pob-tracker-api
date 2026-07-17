@@ -2039,7 +2039,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     </div>
     <div class="fg" style="display:flex;flex-direction:column;gap:8px;">
       <label class="cb-wrap" style="font-size:13px;"><input type="checkbox" id="t-never-suggest"><span class="cb-box"></span>Never suggest for patrol (e.g. Medical Officer / Doctor)</label>
-      <label class="cb-wrap" style="font-size:13px;"><input type="checkbox" id="t-never-duty"><span class="cb-box"></span>Never assign to duty roster</label>
+      <label class="cb-wrap" style="font-size:13px;"><input type="checkbox" id="t-never-duty"><span class="cb-box"></span>Never suggest for Sentry duty</label>
       <label class="cb-wrap" style="font-size:13px;"><input type="checkbox" id="t-restricted-range"><span class="cb-box"></span>Restricted range — not suitable for distant patrols (e.g. Armoury Keeper, Storeman)</label>
       <label class="cb-wrap" style="font-size:13px;"><input type="checkbox" id="t-senior-sgt"><span class="cb-box"></span>Eligible for Roaming duty</label>
     </div>
@@ -3311,7 +3311,7 @@ function dutyEligibilityIssues(t,type,post){
   if(post&&(post.name==='Medical'||post.name==='Signal')&&!troopMeetsPostRequirement(t,post)) issues.push('Role is not '+post.name+' — this post is role-locked');
   if(t.trade==='Signal'&&!(post&&post.name==='Signal')) issues.push('Signal trade — reserved exclusively for Signal duty');
   if(t.gender==='Female'&&!(post&&post.genderPref==='female')) issues.push('Female personnel are only assigned to Female Preferred posts');
-  if(t.neverDuty) issues.push('marked Never Assign to Duty');
+  if(t.neverDuty&&type&&type.name==='Sentry') issues.push('marked Never Suggest for Sentry Duty');
   if(isAdminTrade(t)&&!dutyIncludeAdmin) issues.push('Administration/HQ staff — excluded by default');
   var date=parseDate(document.getElementById('duty-date').value);
   if(date&&isContingencyExcluded(t.id,date)) issues.push('excluded — Contingency Mode active for this date');
@@ -3420,7 +3420,8 @@ function dutySuggestTroop(){
   var needsQual=qual&&!dutyQualSatisfied(type,post); // still needs its one qualified troop
   function eligiblePool(genderFilter,qualFilter){
     return D.troops.filter(function(t){
-      if(!isAvailable(t)||t.neverDuty) return false;
+      if(!isAvailable(t)) return false;
+      if(t.neverDuty&&type&&type.name==='Sentry') return false;
       if(dutySelectedTroops.indexOf(t.id)>=0) return false;
       if(dutyEligibilityIssues(t,type,post).length>0) return false;
       if(qualFilter&&!isDutyQualified(t,qual)) return false;
@@ -3506,7 +3507,8 @@ function openReplaceFlow(outTroopId){
   if(!name) return;
   var q=name.toLowerCase();
   var matches=D.troops.filter(function(t){
-    if(!isAvailable(t)||t.neverDuty) return false;
+    if(!isAvailable(t)) return false;
+    if(t.neverDuty&&ed0.type==='Sentry') return false;
     if(dutySelectedTroops.indexOf(t.id)>=0) return false;
     if((t.rank+' '+t.name).toLowerCase().indexOf(q)<0) return false;
     if(date&&(D.drafts||[]).some(function(d){return d.plannedDate===date&&(d.troops||[]).indexOf(t.id)>=0;})) return false;
@@ -3818,7 +3820,10 @@ function dsFillPass(date,slotList,used,warnings,allowSgtFallback){
     var roleLocked=post&&(post.name==='Medical'||post.name==='Signal');
     function basePool(allowNCE,allowAdmin){
       return D.troops.filter(function(t){
-        if(!isAvailable(t)||t.neverDuty) return false;
+        if(!isAvailable(t)) return false;
+        // "Never suggest for Sentry duty" only excludes from Sentry —
+        // the troop can still be suggested for Roaming or Line Duty.
+        if(t.neverDuty&&slot.category==='Sentry') return false;
         if(used.indexOf(t.id)>=0) return false;
         if(!allowAdmin&&isAdminTrade(t)) return false;
         // Signal personnel are reserved exclusively for the Signal post —
@@ -3862,7 +3867,7 @@ function dsFillPass(date,slotList,used,warnings,allowSgtFallback){
       var sgtFallback=D.troops.filter(function(t){
         if((t.rank||'').trim().toLowerCase()!=='sergeant') return false;
         if(t.trade==='Signal') return false;
-        if(!isAvailable(t)||t.neverDuty) return false;
+        if(!isAvailable(t)) return false;
         if(used.indexOf(t.id)>=0) return false;
         if(isContingencyExcluded(t.id,date)) return false;
         var c=dutyConflict(t.id,date,slot.startTime,slot.durationHours,null);
@@ -4032,7 +4037,7 @@ function dutyEligibilityIssuesRaw(t,type,post,slot){
   if(slot&&slot.category!=='Roaming'&&isRoamingOnlyRank(t)) issues.push('Officers/JCOs are only assigned Roaming duty');
   if(slot&&slot.category==='Sentry'&&isNCE(t)) issues.push('NCE not assigned Sentry duty');
   if(post&&(post.name==='Medical'||post.name==='Signal')&&!troopMeetsPostRequirement(t,post)) issues.push('Role is not '+post.name);
-  if(t.neverDuty) issues.push('marked Never Assign to Duty');
+  if(t.neverDuty&&slot&&slot.category==='Sentry') issues.push('marked Never Suggest for Sentry Duty');
   if(isAdminTrade(t)) issues.push('Administration/HQ staff');
   if(_dsDate&&isContingencyExcluded(t.id,_dsDate)) issues.push('Contingency Mode active for this date');
   return issues;
@@ -4165,7 +4170,8 @@ function editDutyDraft(id){
   _dsSlots.forEach(function(s){
     var post=s.postId?dutyPostById(s.postId):null;
     var pool=D.troops.filter(function(t){
-      if(!isAvailable(t)||t.neverDuty) return false;
+      if(!isAvailable(t)) return false;
+      if(t.neverDuty&&s.category==='Sentry') return false;
       if(t.id===s.chosenId) return true;
       if(s.category==='Roaming'){
         if(s.roamingRole==='officer'&&!isRoamingOfficerRank(t)) return false;
@@ -7065,6 +7071,20 @@ function positionCalDesktop(wrap,inputEl){
   wrap.style.top=top+'px';
 }
 function closeAllCalendars(){ document.querySelectorAll('.cal-wrap.open').forEach(function(w){w.classList.remove('open');}); document.getElementById('cal-backdrop').classList.remove('open'); }
+// Close an open calendar when clicking anywhere outside it — not just on
+// picking a date. The backdrop element already handles this on mobile, but
+// it's force-hidden on desktop (see .cal-backdrop rule above) since a full
+// dimming overlay looks wrong there, so this listener is what makes
+// click-outside-to-close work on desktop. Clicks on the icon/input that
+// open a calendar are ignored here since toggleCal() already handles those.
+document.addEventListener('click',function(e){
+  var openWrap=document.querySelector('.cal-wrap.open');
+  if(!openWrap) return;
+  if(openWrap.contains(e.target)) return;
+  var oc=e.target.getAttribute&&e.target.getAttribute('onclick');
+  if(oc&&oc.indexOf('toggleCal(')>=0) return;
+  closeAllCalendars();
+});
 
 function renderCal(calId){
   var s=_calState[calId]; if(!s) return;
