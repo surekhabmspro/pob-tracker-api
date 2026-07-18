@@ -2852,11 +2852,15 @@ function dutyDraftReservedTroopIds(excludeDutyDraftId){
 // ("active duty assignments" / "upcoming assigned duty shift").
 function loggedDutyReservedTroopIds(excludeDutyId){
   var ids={};
-  var today=new Date().toISOString().slice(0,10);
-  dutiesActiveNow().forEach(function(d){ if(d.id!==excludeDutyId) (d.troops||[]).forEach(function(tid){ ids[tid]=true; }); });
   D.duties.forEach(function(d){
     if(d.cancelled||d.id===excludeDutyId) return;
-    if(d.date>=today) (d.troops||[]).forEach(function(tid){ ids[tid]=true; });
+    var st=dutyLiveStatus(d);
+    // Reserved while the shift is happening right now, or hasn't started
+    // yet — released automatically the instant it's 'completed', per
+    // "Personnel should only become available after their assigned duty
+    // period has completely ended" (not merely once the calendar date
+    // changes).
+    if(st==='active'||st==='upcoming') (d.troops||[]).forEach(function(tid){ ids[tid]=true; });
   });
   return ids;
 }
@@ -4823,8 +4827,7 @@ function renderDutyDashboard(){
   var moDuties=D.duties.filter(function(d){if(d.cancelled) return false; var dd=new Date(d.date+'T12:00:00');return dd.getMonth()===moNum&&dd.getFullYear()===yrNum;});
   var activePosts=(D.config.dutyPosts||[]).filter(function(p){return p.active;});
   var activeContingency=(D.dutyContingency||[]).filter(function(g){return g.active!==false&&(!g.endDate||g.endDate>=today);});
-  var activeNowIds=dutiesActiveNow().map(function(d){return d.id;});
-  var upcoming=D.duties.filter(function(d){return !d.cancelled&&d.date>=today&&activeNowIds.indexOf(d.id)<0;});
+  var upcoming=upcomingDuties();
   var activeNowDuties=dutiesActiveNow();
   var onDutyTroopIds={}; activeNowDuties.forEach(function(d){ (d.troops||[]).forEach(function(tid){ onDutyTroopIds[tid]=true; }); });
   var onDutyCount=Object.keys(onDutyTroopIds).length;
@@ -4842,7 +4845,7 @@ function renderDutyDashboard(){
     alerts+='<div class="alert al-warn" style="margin-bottom:14px;">🚧 '+activeContingency.length+' active contingency exclusion(s): '+escHtml(names)+'</div>';
   }
   document.getElementById('duty-dash-alerts').innerHTML=alerts;
-  var upcomingList=upcoming.slice().sort(function(a,b){return a.date.localeCompare(b.date);}).slice(0,5);
+  var upcomingList=upcoming.slice(0,5);
   var el=document.getElementById('duty-dash-upcoming');
   if(upcomingList.length===0){ el.innerHTML='<div class="empty">No upcoming duties scheduled.</div>'; return; }
   el.innerHTML=upcomingList.map(function(d,i){ return dutyMiniCardHTML(d,'up'+i); }).join('');
@@ -4920,13 +4923,14 @@ function renderDutyList(){
   el.innerHTML=dutyGroupByShift(list).map(function(grp,i){ return dutyShiftCardHTML(grp,'dr'+i,{history:false}); }).join('');
 }
 // Status is derived, not stored as a rigid label: cancelled always wins,
-// otherwise it's Completed once the date has passed and Scheduled while
-// it's still upcoming (today counts as Scheduled/active, matching how
-// "On Duty Now" already treats it).
+// otherwise it's Completed once the shift's real end instant has passed
+// and Scheduled while it's still active or upcoming — driven by the same
+// central dutyLiveStatus() engine as "On Duty Now"/"Upcoming Duties", so
+// history/report badges can never disagree with the dashboard.
 function dutyStatusOf(d){
-  if(d.cancelled) return 'cancelled';
-  var today=new Date().toISOString().slice(0,10);
-  return d.date<today?'completed':'scheduled';
+  var st=dutyLiveStatus(d);
+  if(st==='cancelled') return 'cancelled';
+  return st==='completed'?'completed':'scheduled';
 }
 function dutyStatusBadge(status){
   var map={scheduled:['b-green','Scheduled'],completed:['b-tan','Completed'],cancelled:['b-red','Cancelled']};
@@ -5283,26 +5287,13 @@ function renderFairnessListModal(){
       '</div>';
   }).join('');
 }
-// Any duty entries whose window covers this exact moment — handles
-// overnight durations that cross midnight.
+// Any duty entries whose window covers this exact moment. Reads off the
+// central dutyLiveStatus() engine — d.date is already the real stamped
+// calendar date the shift starts on (dutyRecordCalendarDate), so this
+// correctly handles overnight/cross-midnight shifts without any separate
+// "yesterday" scan.
 function dutiesActiveNow(){
-  var now=new Date();
-  var mins=now.getHours()*60+now.getMinutes();
-  var today=now.toISOString().slice(0,10);
-  var y=new Date(now); y.setDate(y.getDate()-1);
-  var yesterday=y.toISOString().slice(0,10);
-  return D.duties.filter(function(d){
-    if(d.cancelled) return false;
-    if(d.date===today){
-      var r=shiftMinRange(d.startTime,d.durationHours);
-      if(mins>=r[0]&&mins<Math.min(r[1],1440)) return true;
-    }
-    if(d.date===yesterday){
-      var r2=shiftMinRange(d.startTime,d.durationHours);
-      if(r2[1]>1440&&(mins+1440)>=r2[0]&&(mins+1440)<r2[1]) return true;
-    }
-    return false;
-  });
+  return D.duties.filter(function(d){ return dutyLiveStatus(d)==='active'; });
 }
 // Free Troops: a troop counts as free only when NOT held by ANY active
 // reservation — this now matches the master isTroopReserved() booking-
@@ -5696,6 +5687,39 @@ function shiftEndTime(startStr,durHours){
   var h=Math.floor(e/60),m=e%60;
   return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
 }
+// ── CENTRAL DUTY STATUS/AVAILABILITY ENGINE ─────────────────────────────
+// Single source of truth for "is this duty active/upcoming/completed right
+// now?" — used by the dashboard (On Duty Now / Upcoming Duties), duty
+// history/reports, printing, and every reservation/availability check
+// (duty suggestions, patrol suggestions). d.date is already the correct
+// real calendar date the shift STARTS on (dutyRecordCalendarDate stamps
+// cross-midnight night shifts onto the next day at logging time), so the
+// actual start/end instants are simply d.date + d.startTime, plus the
+// duration — no separate "yesterday" special-casing is needed here.
+function dutyStartMoment(d){
+  return new Date((d.date||'')+'T'+(d.startTime||'00:00')+':00');
+}
+function dutyEndMoment(d){
+  var durMin=Math.round((parseFloat(d.durationHours)||0)*60);
+  return new Date(dutyStartMoment(d).getTime()+durMin*60000);
+}
+// Returns 'cancelled' | 'active' | 'upcoming' | 'completed' based on the
+// actual current moment vs. the shift's real start/end instants — this is
+// the one calculation every screen must read from, per "Apply One Common
+// Logic Everywhere".
+function dutyLiveStatus(d,now){
+  if(d.cancelled) return 'cancelled';
+  now=now||new Date();
+  var start=dutyStartMoment(d), end=dutyEndMoment(d);
+  if(now<start) return 'upcoming';
+  if(now>=end) return 'completed';
+  return 'active';
+}
+// Every non-cancelled duty that hasn't started yet — the correct
+// "Upcoming Duties" set (excludes anything already active OR already
+// completed earlier the same day, which the old date-only check let
+// through).
+function upcomingDuties(){ return D.duties.filter(function(d){ return dutyLiveStatus(d)==='upcoming'; }).sort(function(a,b){ return dutyStartMoment(a)-dutyStartMoment(b); }); }
 function shiftsOverlap(aStart,aDur,bStart,bDur){
   var ra=shiftMinRange(aStart,aDur), rb=shiftMinRange(bStart,bDur);
   return ra[0]<rb[1] && rb[0]<ra[1];
@@ -6999,9 +7023,7 @@ function showDashDetail(kind){
     title='Active Posts ('+aposts.length+')';
     body=aposts.length?aposts.map(function(p){return dashDetailRow(p.name+(p.continuous?' (Continuous)':''),p.continuous?(p.dayStrength+' troop, 24h'):(p.dayStrength+' day / '+p.nightStrength+' night')+(p.qualRequired?' · needs '+p.qualRequired:''));}).join(''):'';
   } else if(kind==='duty-upcoming'){
-    var dtoday=new Date().toISOString().slice(0,10);
-    var activeNowIds2=dutiesActiveNow().map(function(d){return d.id;});
-    var up=D.duties.filter(function(d){return !d.cancelled&&d.date>=dtoday&&activeNowIds2.indexOf(d.id)<0;}).sort(function(a,b){return a.date.localeCompare(b.date);});
+    var up=upcomingDuties();
     title='Upcoming Duties ('+up.length+')';
     body=up.length?up.map(function(d,i){return dutyMiniCardHTML(d,'upD'+i);}).join(''):'<div class="empty">No upcoming duties scheduled.</div>';
   } else if(kind==='duty-active-now'){
