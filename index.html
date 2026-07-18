@@ -678,6 +678,14 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
    scrolling long patrol histories, on both mobile and desktop. */
 .profile-sticky-header{position:sticky;top:-20px;margin:-20px -20px 14px;padding:16px 20px 12px;
   background:var(--surface);z-index:10;border-bottom:1px solid var(--border);border-radius:16px 16px 0 0;}
+/* Generic sticky header for EVERY modal's title/Close row — same math as
+   .profile-sticky-header (cancels .modal's own 20px padding so the bar
+   bleeds edge-to-edge, then re-adds its own padding). Applied alongside
+   .card-title/.modal-title everywhere so the Close button always stays
+   pinned to the top of the modal and never scrolls out of view with the
+   content beneath it. */
+.modal-hdr-sticky{position:sticky;top:-20px;margin:-20px -20px 14px;padding:16px 20px 12px;
+  background:var(--surface);z-index:10;border-radius:16px 16px 0 0;}
 .mini-close-btn{width:30px;height:30px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);
   color:var(--text-muted);font-size:18px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
   transition:all 0.15s;flex-shrink:0;}
@@ -1264,7 +1272,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 <!-- Suggest Duty Roster — one unified flow: config → adjustable results → Save as Draft / Log Now -->
 <div class="modal-ov" id="duty-suggest-modal">
   <div class="modal" style="max-width:640px;">
-    <div class="card-title" style="border-bottom:none;margin-bottom:10px;">
+    <div class="card-title modal-hdr-sticky">
       <span id="ds-modal-title">🎯 Suggest Duty Roster</span>
       <button class="btn btn-ghost btn-sm" onclick="closeDutySuggestModal()">Close</button>
     </div>
@@ -1295,7 +1303,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 <!-- Saved Duty Drafts — planned rosters, finalize/log when ready -->
 <div class="modal-ov" id="duty-drafts-modal">
   <div class="modal" style="max-width:640px;">
-    <div class="card-title" style="border-bottom:none;margin-bottom:10px;">
+    <div class="card-title modal-hdr-sticky">
       <span>📋 Duty Drafts</span>
       <button class="btn btn-ghost btn-sm" onclick="closeDutyDraftsModal()">Close</button>
     </div>
@@ -1524,6 +1532,11 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     </div>
   </div>
   <div class="card">
+    <div class="card-title">Administration/HQ on Sentry</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Administration/HQ staff are always a last resort for Sentry — pulled in only once the regular troop pool is exhausted. By day that stays absolute. By night, cap how many Administration/HQ troops can appear on a single night's Sentry roster, so a manpower shortage doesn't fill the whole roster with them.</div>
+    <div class="fg" style="max-width:200px;"><label class="field-label">Max Admin/HQ on Night Sentry</label><input type="number" id="cfg-admin-night-cap" min="0" max="20" onchange="saveAdminNightCap()"></div>
+  </div>
+  <div class="card">
     <div class="card-title">Sentry Posts</div>
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Tap a post to edit it. Add as many as you need.</div>
     <div id="sentry-post-rows"></div>
@@ -1656,7 +1669,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 <div class="modal-ov" id="handover-modal">
   <div class="modal" style="max-width:820px;">
     <div class="modal-handle"></div>
-    <div class="card-title" style="border-bottom:none;margin-bottom:10px;">
+    <div class="card-title modal-hdr-sticky">
       <span>Command Handover</span>
       <div style="display:flex;gap:6px;">
         <button class="btn btn-info btn-sm btn-print" onclick="printHandover()">🖨 Print</button>
@@ -1671,7 +1684,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 <div class="modal-ov" id="audit-modal">
   <div class="modal" style="max-width:700px;">
     <div class="modal-handle"></div>
-    <div class="card-title" style="border-bottom:none;margin-bottom:10px;">
+    <div class="card-title modal-hdr-sticky">
       <span>Audit Log</span>
       <div style="display:flex;gap:6px;">
         <button class="btn btn-ghost btn-sm" onclick="clearAudit()">Clear</button>
@@ -1686,7 +1699,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 <div class="modal-ov" id="backup-modal">
   <div class="modal" style="max-width:820px;">
     <div class="modal-handle"></div>
-    <div class="card-title" style="border-bottom:none;margin-bottom:10px;">
+    <div class="card-title modal-hdr-sticky">
       <span>Backup &amp; Restore</span>
       <button class="btn btn-ghost btn-sm" onclick="closeBackupModal()">Close</button>
     </div>
@@ -1720,7 +1733,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
      hands the chosen troop IDs to the normal Log Patrol flow for review. -->
 <div class="modal-ov" id="suggest-team-modal">
   <div class="modal" style="max-width:640px;">
-    <div class="card-title" style="border-bottom:none;margin-bottom:10px;">
+    <div class="card-title modal-hdr-sticky">
       <span>🎯 Suggest Patrol Team</span>
       <button class="btn btn-ghost btn-sm" onclick="closeSuggestTeamModal()">Close</button>
     </div>
@@ -1829,7 +1842,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
      is logged. Sits between Suggest Team and Log Patrol in the workflow. -->
 <div class="modal-ov" id="drafts-modal">
   <div class="modal" style="max-width:640px;">
-    <div class="card-title" style="border-bottom:none;margin-bottom:10px;">
+    <div class="card-title modal-hdr-sticky">
       <span>📋 Saved Drafts</span>
       <button class="btn btn-ghost btn-sm" onclick="closeDraftsModal()">Close</button>
     </div>
@@ -1840,7 +1853,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 <!-- Draft Editor — add/remove troops on a saved draft before it's used. -->
 <div class="modal-ov" id="draft-edit-modal">
   <div class="modal" style="max-width:640px;">
-    <div class="card-title" style="border-bottom:none;margin-bottom:10px;">
+    <div class="card-title modal-hdr-sticky">
       <span>✏️ Edit Draft</span>
       <button class="btn btn-ghost btn-sm" onclick="cancelDraftEdit()">Close</button>
     </div>
@@ -1867,7 +1880,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 <!-- Duty Roster — Assign/Edit Duty modal -->
 <div class="modal-ov" id="duty-modal">
   <div class="modal" style="max-width:640px;">
-    <div class="card-title" style="border-bottom:none;margin-bottom:10px;">
+    <div class="card-title modal-hdr-sticky">
       <span id="duty-modal-title">🛡 Assign Duty</span>
       <button class="btn btn-ghost btn-sm" onclick="closeDutyModal()">Close</button>
     </div>
@@ -1912,7 +1925,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 <!-- Fairness List — ranked reference so unplanned/manual assignments can still follow fairness order -->
 <div class="modal-ov" id="fairness-list-modal">
   <div class="modal" style="max-width:560px;">
-    <div class="card-title" style="border-bottom:none;margin-bottom:6px;">
+    <div class="card-title modal-hdr-sticky">
       <span>📊 Fairness List</span>
       <button class="btn btn-ghost btn-sm" onclick="closeFairnessListModal()">Close</button>
     </div>
@@ -1923,7 +1936,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 
 <div class="modal-ov" id="contingency-modal">
   <div class="modal" style="max-width:640px;">
-    <div class="card-title" style="border-bottom:none;margin-bottom:10px;">
+    <div class="card-title modal-hdr-sticky">
       <span>🚧 Contingency Exclusions</span>
       <button class="btn btn-ghost btn-sm" onclick="closeContingencyModal()">Close</button>
     </div>
@@ -1959,9 +1972,12 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 <div class="modal-ov" id="log-patrol-modal">
   <div class="modal" style="max-width:900px;">
     <div class="modal-handle"></div>
-    <div class="card-title" style="border-bottom:none;margin-bottom:10px;">
+    <div class="card-title modal-hdr-sticky">
       <span id="log-patrol-modal-title">Log New Patrol</span>
-      <span class="id-badge" id="ptl-preview">Next: --</span>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <span class="id-badge" id="ptl-preview">Next: --</span>
+        <button class="btn btn-ghost btn-sm" onclick="closeLogPatrolModal()">Close</button>
+      </div>
     </div>
     <div id="log-alert"></div>
     <div class="form-2col">
@@ -2018,7 +2034,6 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     <div style="display:flex;gap:8px;margin-top:4px;">
       <button class="btn btn-primary btn-full" id="p-submit-btn" onclick="logPatrol()">⚡ Log Patrol</button>
       <button class="btn btn-ghost" id="p-cancel-edit-btn" onclick="cancelEditPatrol()" style="display:none;">Cancel</button>
-      <button class="btn btn-ghost" onclick="closeLogPatrolModal()">Close</button>
     </div>
   </div>
 </div>
@@ -2029,7 +2044,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 <div class="modal-ov" id="troop-form-modal">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="card-title" id="t-form-title" style="border-bottom:none;margin-bottom:10px;">
+    <div class="card-title modal-hdr-sticky" id="t-form-title">
       <span id="t-form-title-text">Add Troop</span>
       <button class="btn btn-ghost btn-sm" onclick="cancelEdit()">Close</button>
     </div>
@@ -2283,18 +2298,23 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 <div class="modal-ov" id="troops-modal">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title" id="troops-modal-title">Troops</div>
+    <div class="card-title modal-hdr-sticky">
+      <span id="troops-modal-title">Troops</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('troops-modal')">Close</button>
+    </div>
     <div id="troops-modal-body"></div>
-    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('troops-modal')">Close</button></div>
   </div>
 </div>
 
 <div class="modal-ov" id="dash-detail-modal">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title" id="dash-detail-title">Details</div>
+    <div class="card-title modal-hdr-sticky">
+      <span id="dash-detail-title">Details</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('dash-detail-modal')">Close</button>
+    </div>
     <div id="dash-detail-body" style="max-height:60vh;overflow-y:auto;"></div>
-    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('dash-detail-modal')">Close</button><button class="btn btn-primary" id="dash-detail-cta" style="display:none;">Action</button></div>
+    <div class="modal-actions"><button class="btn btn-primary" id="dash-detail-cta" style="display:none;">Action</button></div>
   </div>
 </div>
 
@@ -2318,9 +2338,11 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 <div class="modal-ov" id="donors-modal">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title" id="donors-title">Compatible Blood Donors</div>
+    <div class="card-title modal-hdr-sticky">
+      <span id="donors-title">Compatible Blood Donors</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('donors-modal')">Close</button>
+    </div>
     <div id="donors-body" style="max-height:60vh;overflow-y:auto;"></div>
-    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('donors-modal')">Close</button></div>
   </div>
 </div>
 
@@ -2381,11 +2403,12 @@ var SHIFT_PRESETS = {
   }
 };
 var DEFAULT_SHIFT_PRESET = {day:3,night:3};
+var DEFAULT_ADMIN_NIGHT_SENTRY_CAP = 2;
 
 var D = {
   troops:[], patrols:[], archived:[], counter:1, audit:[],
   settings:{pob:'POB Mobaye',mission:'',commander:'',classification:'CONFIDENTIAL',lastBackupDate:null},
-  config:{types:DEFAULT_TYPES.slice(),sectors:DEFAULT_SECTORS.slice(),routes:DEFAULT_ROUTES.slice(),ranks:DEFAULT_RANKS.slice(),dutyShifts:DEFAULT_DUTY_SHIFTS.map(function(s){return Object.assign({},s);}),dutyPosts:DEFAULT_DUTY_POSTS.map(function(p){return Object.assign({},p);}),dutyQuals:DEFAULT_DUTY_QUALS.slice(),dutyTypes:DEFAULT_DUTY_TYPES.map(function(t){return Object.assign({},t);}),dayNight:Object.assign({},DEFAULT_DAY_NIGHT),customRoles:[],shiftPreset:Object.assign({},DEFAULT_SHIFT_PRESET)},
+  config:{types:DEFAULT_TYPES.slice(),sectors:DEFAULT_SECTORS.slice(),routes:DEFAULT_ROUTES.slice(),ranks:DEFAULT_RANKS.slice(),dutyShifts:DEFAULT_DUTY_SHIFTS.map(function(s){return Object.assign({},s);}),dutyPosts:DEFAULT_DUTY_POSTS.map(function(p){return Object.assign({},p);}),dutyQuals:DEFAULT_DUTY_QUALS.slice(),dutyTypes:DEFAULT_DUTY_TYPES.map(function(t){return Object.assign({},t);}),dayNight:Object.assign({},DEFAULT_DAY_NIGHT),customRoles:[],shiftPreset:Object.assign({},DEFAULT_SHIFT_PRESET),adminNightSentryCap:DEFAULT_ADMIN_NIGHT_SENTRY_CAP},
   security:{pinHash:'',securityQ:'',securityAHash:''},
   drafts:[], duties:[], dutyCounter:1, dutyContingency:[], dutyDrafts:[]
 };
@@ -2409,6 +2432,7 @@ function migrateDutySystem(){
   if(!D.config.shiftPreset) D.config.shiftPreset={};
   if(D.config.shiftPreset.day!==3&&D.config.shiftPreset.day!==4) D.config.shiftPreset.day=DEFAULT_SHIFT_PRESET.day;
   if(D.config.shiftPreset.night!==3&&D.config.shiftPreset.night!==4) D.config.shiftPreset.night=DEFAULT_SHIFT_PRESET.night;
+  if(D.config.adminNightSentryCap==null||isNaN(D.config.adminNightSentryCap)) D.config.adminNightSentryCap=DEFAULT_ADMIN_NIGHT_SENTRY_CAP;
   if(!D.config.dutyPosts) D.config.dutyPosts=[];
   D.config.dutyPosts=D.config.dutyPosts.map(function(p){
     if(typeof p==='string') return {id:uid('post'),name:p,active:true,dayStrength:1,nightStrength:1,genderPref:'none',qualRequired:'',continuous:false};
@@ -4127,11 +4151,31 @@ function dsFillPass(date,slotList,used,warnings,allowSgtFallback){
       });
     }
     var pool=basePool(false,false);
-    var ncefallback=false, adminfallback=false, sergeantSeniorityFallback=false;
+    var ncefallback=false, adminfallback=false, sergeantSeniorityFallback=false, adminCapBlocked=false;
     if(pool.length===0&&(slot.category==='Line Duty'||slot.category==='Sentry')){ pool=basePool(true,false); ncefallback=pool.length>0; }
     // Administration/HQ staff are normally never put on duty — only pulled
-    // in as a last resort when the troop pool is genuinely exhausted.
-    if(pool.length===0&&!roleLocked){ pool=basePool((slot.category==='Line Duty'||slot.category==='Sentry'),true); adminfallback=pool.length>0; }
+    // in as a last resort when the troop pool is genuinely exhausted. By
+    // day that stays an absolute last resort with no ceiling (manpower
+    // shortages are rare and every post still needs covering). By night,
+    // a configurable cap (Duty Settings → Administration/HQ on Sentry)
+    // limits how many Administration/HQ troops can be pulled into a
+    // single night's Sentry roster — once that many are already used
+    // tonight, further Sentry slots are left unassigned rather than
+    // stacking the roster with Administration/HQ staff.
+    if(pool.length===0&&!roleLocked){
+      var isNightSentry=slot.category==='Sentry'&&!isDayTime(slot.startTime);
+      var adminCapOk=true;
+      if(isNightSentry){
+        var adminCap=(D.config.adminNightSentryCap!=null)?D.config.adminNightSentryCap:DEFAULT_ADMIN_NIGHT_SENTRY_CAP;
+        var usedAdminCount=used.filter(function(id){ var tt=troopById(id); return tt&&isAdminTrade(tt); }).length;
+        adminCapOk=usedAdminCount<adminCap;
+      }
+      if(adminCapOk){
+        pool=basePool((slot.category==='Line Duty'||slot.category==='Sentry'),true); adminfallback=pool.length>0;
+      } else {
+        adminCapBlocked=true;
+      }
+    }
     // Roaming last resort: if no one flagged "Eligible for Roaming duty"
     // (and no Officer/JCO) is available, fall back to any available
     // Sergeant — Signal Sergeants still excluded — picked purely by
@@ -4208,11 +4252,14 @@ function dsFillPass(date,slotList,used,warnings,allowSgtFallback){
     }
     else {
       slot.chosenId=null; slot.poolPos=-1;
+      if(adminCapBlocked){
+        warnings.push(slot.label+': troop pool exhausted and Administration/HQ Night Sentry cap already reached — left unassigned.');
+      }
       // A Roaming slot left empty in the eligible-only pass (1) still has
       // a chance at the any-Sergeant fallback in pass 3 — don't warn yet
       // or it'll wrongly claim "no one available" for a slot that gets
       // filled a moment later.
-      if(!(slot.category==='Roaming'&&!allowSgtFallback)){
+      else if(!(slot.category==='Roaming'&&!allowSgtFallback)){
         warnings.push(slot.label+(roleLocked?(': no troop with Role='+post.name+' available.'):': no eligible troop available.'));
       }
     }
@@ -5438,6 +5485,17 @@ function dutyParticipationPct(t){
 // "due"; recent-post repetition is penalized separately in dsFillSlots
 // so the roster rotates rather than reusing the same pairing.
 function dutyFairnessScore(t){
+  if(isAdminTrade(t)){
+    // Administration/HQ almost never carry duty, so their share of the
+    // WHOLE unit's duty hours barely moves after one night on Sentry —
+    // the normal participation-% formula can leave the very same person
+    // still looking "most due" the very next night. Rotation among
+    // Administration/HQ staff instead runs purely on recency (days since
+    // their own last duty), irrespective of the unit-wide participation
+    // weighting everyone else is ranked on — whoever's gone longest is
+    // next, full stop.
+    return -daysSinceCapped(lastDuty(t.id),t)*10;
+  }
   return dutyParticipationPct(t)*10-daysSinceCapped(lastDuty(t.id),t);
 }
 function dutyTypeByName(name){ return (D.config.dutyTypes||[]).find(function(x){return x.name===name;})||null; }
@@ -5463,19 +5521,113 @@ function lastPostAssignment(tid,postId){
   ds.sort(function(a,b){return b.date.localeCompare(a.date);});
   return ds.length?ds[0].date:null;
 }
+// Same idea as lastPostAssignment but keyed on the shift's own start time
+// instead of the post — this is what drives TIMING rotation (1st shift
+// tonight → 2nd/3rd shift next time), independent of which post it's at.
+// Applies to Sentry AND Roaming alike, since Roaming slots carry a
+// startTime too even though they have no postId.
+function lastShiftTimeAssignment(tid,startTime){
+  if(!startTime) return null;
+  var ds=D.duties.filter(function(d){return !d.cancelled&&d.startTime===startTime&&(d.troops||[]).indexOf(tid)>=0;});
+  ds.sort(function(a,b){return b.date.localeCompare(a.date);});
+  return ds.length?ds[0].date:null;
+}
+// The ordered list of shift start times for a Sentry period (day/night),
+// exactly matching how dsBuildSlots lays them out — so "1st/2nd/3rd
+// shift" here means the same thing it means on the actual roster.
+function dutyShiftOrderTimes(period){
+  var allShifts=(D.config.dutyShifts||[]).filter(function(sh){return sh&&sh.start&&sh.end;});
+  var periodShifts=allShifts.filter(function(sh){return period==='day'?isDayTime(sh.start):!isDayTime(sh.start);});
+  if(periodShifts.length===0){
+    periodShifts=[{start:period==='day'?D.config.dayNight.start:D.config.dayNight.end}];
+  }
+  return periodShifts.map(function(sh){return sh.start;});
+}
+// Same, but for Roaming's own slot times (independent of the Sentry
+// shift config) — matches the slotTimes sequence dsBuildSlots generates.
+function roamingShiftOrderTimes(){
+  var roamType=dutyTypeByName('Roaming');
+  if(!roamType) return [];
+  var rCount=Math.max(1,roamType.roamingShiftCount||8);
+  var rDur=roamType.defaultDuration||1;
+  var rStart=roamType.defaultStart||'20:00';
+  var times=[rStart];
+  for(var i=1;i<rCount;i++) times.push(shiftEndTime(times[i-1],rDur));
+  return times;
+}
+function shiftOrderForSlot(slot){
+  if(!slot) return [];
+  if(slot.category==='Roaming') return roamingShiftOrderTimes();
+  if(slot.category==='Sentry') return dutyShiftOrderTimes(isDayTime(slot.startTime)?'day':'night');
+  return [];
+}
+// A troop's shift-index on their own most recent Sentry (or Roaming) duty
+// — whichever slot in the ordered sequence that was — so we can tell
+// whether tonight's slot is the NEXT one in line for them (serial
+// rotation: 1st → 2nd → 3rd, never jumping ahead) rather than just "any
+// different shift".
+function lastDutyShiftIndex(tid,category,order){
+  if(!order||!order.length) return -1;
+  var ds=D.duties.filter(function(d){return !d.cancelled&&d.type===category&&(d.troops||[]).indexOf(tid)>=0;});
+  ds.sort(function(a,b){return b.date.localeCompare(a.date);});
+  if(!ds.length) return -1;
+  return order.indexOf(ds[0].startTime);
+}
 // Fairness alone can otherwise re-pick the same troop for the same post
-// day after day (they're equally "due" as everyone else once workload
-// evens out). This adds a soft penalty for repeating the exact same post
-// recently, so the roster visibly rotates rather than settling into a
-// fixed pairing — never a hard block, just a nudge.
+// AND the same shift timing day after day (they're equally "due" as
+// everyone else once workload evens out). This adds soft penalties so
+// the roster visibly rotates both WHICH post and WHICH shift timing a
+// troop gets — never a hard block, just a nudge — covering both Sentry
+// and Roaming (timing rotation applies to both; post rotation only
+// applies to Sentry, since Roaming has no fixed post).
+//
+// Timing rotation is SERIAL, not just "different from last time": a
+// troop's most recent shift-slot index (1st/2nd/3rd/...) sets an
+// expected NEXT index one step ahead in the same sequence — landing them
+// on exactly that next slot is strongly preferred, repeating their last
+// slot is discouraged, and jumping past it (1st straight to 3rd/4th) is
+// mildly discouraged too, so the roster advances shift-by-shift rather
+// than bouncing around — "as much as possible", still just a nudge.
+//
+// Female troops are the one exception to POST rotation: once a female
+// troop is holding a post, this gives a small preference to keep her at
+// that SAME post next time instead of pushing her to rotate elsewhere —
+// continuity of post assignment for female troops, "as much as
+// possible", while shift TIMING still rotates normally for everyone.
 function dsScoreWithRotation(t,slot){
   var score=dutyFairnessScore(t);
+  var isFemale=t&&t.gender==='Female';
   if(slot&&slot.postId){
-    var last=lastPostAssignment(t.id,slot.postId);
-    if(last){
-      var d=daysSince(last);
-      if(d<=1) score+=50;
-      else if(d<=3) score+=15;
+    var lastPost=lastPostAssignment(t.id,slot.postId);
+    if(lastPost){
+      if(isFemale){
+        score-=20; // nudge toward keeping her at the same post, not away from it
+      } else {
+        var dp=daysSince(lastPost);
+        if(dp<=1) score+=50;
+        else if(dp<=3) score+=15;
+      }
+    }
+  }
+  if(slot&&slot.startTime){
+    var lastShift=lastShiftTimeAssignment(t.id,slot.startTime);
+    if(lastShift){
+      var ds=daysSince(lastShift);
+      if(ds<=1) score+=50;
+      else if(ds<=3) score+=15;
+    }
+  }
+  if(slot&&(slot.category==='Sentry'||slot.category==='Roaming')){
+    var order=shiftOrderForSlot(slot);
+    if(order.length>1){
+      var lastIdx=lastDutyShiftIndex(t.id,slot.category,order);
+      var thisIdx=order.indexOf(slot.startTime);
+      if(lastIdx>=0&&thisIdx>=0){
+        var expectedIdx=(lastIdx+1)%order.length;
+        if(thisIdx===expectedIdx) score-=30; // exactly next-in-sequence — strongly preferred
+        else if(thisIdx===lastIdx) score+=40; // same slot again — discouraged (on top of the timing penalty above)
+        else score+=12; // out-of-sequence jump — mildly discouraged in favour of the serial candidate
+      }
     }
   }
   return score;
@@ -5768,12 +5920,20 @@ function showTabFromMore(id){ closeMoreMenu(); showTab(id); }
 // =====================================================================
 // SETTINGS
 // =====================================================================
-function renderSettings(){ var s=D.settings,c=D.config; document.getElementById('cfg-pob').value=s.pob||''; document.getElementById('cfg-mission').value=s.mission||''; document.getElementById('cfg-cmd').value=s.commander||''; document.getElementById('cfg-class').value=s.classification||''; document.getElementById('cfg-pp-green').value=(s.ppGreen!=null?s.ppGreen:''); document.getElementById('cfg-pp-yellow').value=(s.ppYellow!=null?s.ppYellow:''); renderTagList('type-tags',c.types,'types'); renderTagList('sector-tags',c.sectors,'sectors'); renderTagList('route-tags',c.routes,'routes'); renderTagList('duty-qual-tags',c.dutyQuals,'dutyQuals'); renderTagList('custom-role-tags',c.customRoles,'customRoles'); document.getElementById('cfg-day-start').value=c.dayNight.start; document.getElementById('cfg-day-end').value=c.dayNight.end; populateDutyQualSelects(); renderSentryPostRows(); renderDutyTypeRows(); renderDutyShiftRows(); renderRankTags(); renderPinStatus(); renderPptList(); }
+function renderSettings(){ var s=D.settings,c=D.config; document.getElementById('cfg-pob').value=s.pob||''; document.getElementById('cfg-mission').value=s.mission||''; document.getElementById('cfg-cmd').value=s.commander||''; document.getElementById('cfg-class').value=s.classification||''; document.getElementById('cfg-pp-green').value=(s.ppGreen!=null?s.ppGreen:''); document.getElementById('cfg-pp-yellow').value=(s.ppYellow!=null?s.ppYellow:''); renderTagList('type-tags',c.types,'types'); renderTagList('sector-tags',c.sectors,'sectors'); renderTagList('route-tags',c.routes,'routes'); renderTagList('duty-qual-tags',c.dutyQuals,'dutyQuals'); renderTagList('custom-role-tags',c.customRoles,'customRoles'); document.getElementById('cfg-day-start').value=c.dayNight.start; document.getElementById('cfg-day-end').value=c.dayNight.end; document.getElementById('cfg-admin-night-cap').value=(c.adminNightSentryCap!=null?c.adminNightSentryCap:DEFAULT_ADMIN_NIGHT_SENTRY_CAP); populateDutyQualSelects(); renderSentryPostRows(); renderDutyTypeRows(); renderDutyShiftRows(); renderRankTags(); renderPinStatus(); renderPptList(); }
 function saveDayNight(){
   D.config.dayNight={start:document.getElementById('cfg-day-start').value||'06:00',end:document.getElementById('cfg-day-end').value||'18:00'};
   remoteSaveConfig();
   audit('Day/Night boundary updated: '+D.config.dayNight.start+'–'+D.config.dayNight.end);
   dutyRefreshConflicts();
+}
+function saveAdminNightCap(){
+  var v=parseInt(document.getElementById('cfg-admin-night-cap').value);
+  if(isNaN(v)||v<0) v=DEFAULT_ADMIN_NIGHT_SENTRY_CAP;
+  D.config.adminNightSentryCap=v;
+  document.getElementById('cfg-admin-night-cap').value=v;
+  remoteSaveConfig();
+  audit('Max Administration/HQ on Night Sentry updated: '+v);
 }
 function populateDutyQualSelects(){
   var opts='<option value="">None</option>'+(D.config.dutyQuals||[]).map(function(q){return '<option value="'+escHtml(q)+'">'+escHtml(q)+'</option>';}).join('');
