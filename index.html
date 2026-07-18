@@ -2834,14 +2834,39 @@ function draftReservedTroopIds(excludeDraftId){
 }
 // Same idea, for the Duty side: a troop already sitting in a saved
 // (unlogged) duty draft is reserved for that duty commitment until it's
-// logged or the draft is deleted. Nothing is cached here — this always
-// reads live off D.dutyDrafts, so the moment a draft is logged or
-// deleted the reservation disappears on its own (Automatic Release).
-function dutyDraftReservedTroopIds(excludeDutyDraftId){
+// logged or the draft is deleted — but only for the actual window of the
+// shift(s) they're in, not forever. Pass targetDate when checking
+// availability for a specific future date (e.g. planning ahead); omit it
+// to mean "right now" (Free Troops, default Suggest with no date chosen).
+//   • No targetDate ("right now"): reserved only while the shift hasn't
+//     finished yet (now < real end) — once a shift's own end time passes,
+//     its troops are free again even mid-roster, e.g. Shift 1 people are
+//     free for a later suggestion tonight the moment Shift 1 ends.
+//   • targetDate given: a shift only "belongs" to that calendar date if
+//     it's still running at/after the day starts (D.config.dayNight.start,
+//     e.g. 06:00) on that date — an early-morning tail (e.g. a night shift
+//     ending 06:00) is that night's business, not the next day's, so it
+//     never blocks a patrol/duty request planned for that next date.
+function dutyDraftReservedTroopIds(excludeDutyDraftId,targetDate){
   var ids={};
+  var now=new Date();
+  var dn=D.config.dayNight||DEFAULT_DAY_NIGHT;
   (D.dutyDrafts||[]).forEach(function(d){
     if(excludeDutyDraftId&&d.id===excludeDutyDraftId) return;
-    (d.records||[]).forEach(function(r){ (r.troops||[]).forEach(function(tid){ ids[tid]=true; }); });
+    (d.records||[]).forEach(function(r){
+      var realDate=dutyRecordCalendarDate(d.plannedDate,r.startTime,d.period);
+      var start=dutyStartMoment({date:realDate,startTime:r.startTime});
+      var end=dutyEndMoment({date:realDate,startTime:r.startTime,durationHours:r.durationHours});
+      var reserved;
+      if(!targetDate){
+        reserved=now<end;
+      } else {
+        var boundary=new Date(targetDate+'T'+(dn.start||'06:00')+':00');
+        var dayEnd=new Date(targetDate+'T00:00:00'); dayEnd.setDate(dayEnd.getDate()+1);
+        reserved=end>boundary&&start<dayEnd;
+      }
+      if(reserved) (r.troops||[]).forEach(function(tid){ ids[tid]=true; });
+    });
   });
   return ids;
 }
@@ -2849,18 +2874,29 @@ function dutyDraftReservedTroopIds(excludeDutyDraftId){
 // that hasn't finished yet — either on duty literally right now, or
 // assigned to a non-cancelled duty dated today or later. Considered
 // reserved the same way a draft is, per Reservation Priority Logic
-// ("active duty assignments" / "upcoming assigned duty shift").
-function loggedDutyReservedTroopIds(excludeDutyId){
+// ("active duty assignments" / "upcoming assigned duty shift"). Same
+// targetDate convention as dutyDraftReservedTroopIds above.
+function loggedDutyReservedTroopIds(excludeDutyId,targetDate){
   var ids={};
+  var now=new Date();
+  var dn=D.config.dayNight||DEFAULT_DAY_NIGHT;
   D.duties.forEach(function(d){
     if(d.cancelled||d.id===excludeDutyId) return;
-    var st=dutyLiveStatus(d);
-    // Reserved while the shift is happening right now, or hasn't started
-    // yet — released automatically the instant it's 'completed', per
-    // "Personnel should only become available after their assigned duty
-    // period has completely ended" (not merely once the calendar date
-    // changes).
-    if(st==='active'||st==='upcoming') (d.troops||[]).forEach(function(tid){ ids[tid]=true; });
+    var start=dutyStartMoment(d), end=dutyEndMoment(d);
+    var reserved;
+    if(!targetDate){
+      // Reserved while the shift is happening right now, or hasn't started
+      // yet — released automatically the instant it's 'completed', per
+      // "Personnel should only become available after their assigned duty
+      // period has completely ended" (not merely once the calendar date
+      // changes).
+      reserved=now<end;
+    } else {
+      var boundary=new Date(targetDate+'T'+(dn.start||'06:00')+':00');
+      var dayEnd=new Date(targetDate+'T00:00:00'); dayEnd.setDate(dayEnd.getDate()+1);
+      reserved=end>boundary&&start<dayEnd;
+    }
+    if(reserved) (d.troops||[]).forEach(function(tid){ ids[tid]=true; });
   });
   return ids;
 }
@@ -2905,9 +2941,9 @@ function contingencyExcludedTroopIds(date,shift){
 // step is ever needed.
 function isTroopReserved(tid,opts){
   opts=opts||{};
-  if(loggedDutyReservedTroopIds(opts.excludeDutyId||null)[tid]) return true;
+  if(loggedDutyReservedTroopIds(opts.excludeDutyId||null,opts.date||null)[tid]) return true;
   if(draftReservedTroopIds(opts.excludePatrolDraftId||null)[tid]) return true;
-  if(dutyDraftReservedTroopIds(opts.excludeDutyDraftId||null)[tid]) return true;
+  if(dutyDraftReservedTroopIds(opts.excludeDutyDraftId||null,opts.date||null)[tid]) return true;
   if(contingencyExcludedTroopIds(opts.date||null)[tid]) return true;
   return false;
 }
