@@ -2154,7 +2154,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     </div>
     <div class="fg" style="display:flex;flex-direction:column;gap:8px;">
       <label class="cb-wrap" style="font-size:13px;"><input type="checkbox" id="t-never-suggest"><span class="cb-box"></span>Never suggest for patrol (e.g. Medical Officer / Doctor)</label>
-      <label class="cb-wrap" style="font-size:13px;"><input type="checkbox" id="t-never-duty"><span class="cb-box"></span>Never assign to any duty (Sentry, Roaming, Line Duty — hard block)</label>
+      <label class="cb-wrap" style="font-size:13px;"><input type="checkbox" id="t-never-duty"><span class="cb-box"></span>Never assign to Sentry duty</label>
       <label class="cb-wrap" style="font-size:13px;"><input type="checkbox" id="t-restricted-range"><span class="cb-box"></span>Restricted range — not suitable for distant patrols (e.g. Armoury Keeper, Storeman)</label>
       <label class="cb-wrap" style="font-size:13px;"><input type="checkbox" id="t-senior-sgt"><span class="cb-box"></span>Eligible for Roaming duty</label>
     </div>
@@ -3650,7 +3650,7 @@ function dutyEligibilityIssues(t,type,post){
   if(post&&(post.name==='Medical'||post.name==='Signal')&&!troopMeetsPostRequirement(t,post)) issues.push('Role is not '+post.name+' — this post is role-locked');
   if(t.trade==='Signal'&&!(post&&post.name==='Signal')) issues.push('Signal trade — reserved exclusively for Signal duty');
   if(t.gender==='Female'&&!(post&&post.genderPref==='female')) issues.push('Female personnel are only assigned to Female Preferred posts');
-  if(t.neverDuty) issues.push('marked Never Assign to Duty');
+  if(t.neverDuty&&type&&type.name==='Sentry') issues.push('marked Never Assign to Sentry Duty');
   if(isAdminTrade(t)&&!dutyIncludeAdmin) issues.push('Administration/HQ staff — excluded by default');
   var date=parseDate(document.getElementById('duty-date').value);
   var startVal=document.getElementById('duty-start').value;
@@ -3791,7 +3791,7 @@ function dutySuggestTroop(){
   function eligiblePool(genderFilter,qualFilter){
     return D.troops.filter(function(t){
       if(!isAvailable(t)) return false;
-      if(t.neverDuty) return false;
+      if(t.neverDuty&&type&&type.name==='Sentry') return false;
       if(dutySelectedTroops.indexOf(t.id)>=0) return false;
       if(dutyEligibilityIssues(t,type,post).length>0) return false;
       if(qualFilter&&!isDutyQualified(t,qual)) return false;
@@ -3880,7 +3880,7 @@ function openReplaceFlow(outTroopId){
   var q=name.toLowerCase();
   var matches=D.troops.filter(function(t){
     if(!isAvailable(t)) return false;
-    if(t.neverDuty) return false;
+    if(t.neverDuty&&ed0.type==='Sentry') return false;
     if(dutySelectedTroops.indexOf(t.id)>=0) return false;
     if((t.rank+' '+t.name).toLowerCase().indexOf(q)<0) return false;
     if(date&&(D.drafts||[]).some(function(d){return d.plannedDate===date&&(d.troops||[]).indexOf(t.id)>=0;})) return false;
@@ -4215,7 +4215,7 @@ function dsAssignDriverQuota(date,slots,used,warnings){
     return D.troops.filter(function(t){
       if(t.trade!=='Driver') return false;
       if(!isAvailable(t)) return false;
-      if(t.neverDuty) return false;
+      if(t.neverDuty&&slot.category==='Sentry') return false;
       if(used.indexOf(t.id)>=0) return false;
       if(isContingencyExcluded(t.id,date,isDayTime(slot.startTime)?'day':'night')) return false;
       if(slot.category==='Roaming'){
@@ -4292,9 +4292,9 @@ function dsFillPass(date,slotList,used,warnings,allowSgtFallback){
     function basePool(allowNCE,allowAdmin){
       return D.troops.filter(function(t){
         if(!isAvailable(t)) return false;
-        // "Never assign to any duty" is a hard block across every duty
-        // category (Sentry, Roaming, Line Duty) — no exceptions, including NCE.
-        if(t.neverDuty) return false;
+        // "Never assign to Sentry duty" only excludes from Sentry —
+        // the troop can still be suggested for Roaming or Line Duty.
+        if(t.neverDuty&&slot.category==='Sentry') return false;
         if(used.indexOf(t.id)>=0) return false;
         if(!allowAdmin&&isAdminTrade(t)) return false;
         // Drivers are only ever assigned via the driver quota pre-fill
@@ -4621,7 +4621,7 @@ function dutyEligibilityIssuesRaw(t,type,post,slot){
   if(slot&&slot.category!=='Roaming'&&isRoamingOnlyRank(t)) issues.push('Officers/JCOs are only assigned Roaming duty');
   if(slot&&slot.category==='Sentry'&&isNCE(t)) issues.push('NCE not assigned Sentry duty');
   if(post&&(post.name==='Medical'||post.name==='Signal')&&!troopMeetsPostRequirement(t,post)) issues.push('Role is not '+post.name);
-  if(t.neverDuty) issues.push('marked Never Assign to Duty');
+  if(t.neverDuty&&slot&&slot.category==='Sentry') issues.push('marked Never Assign to Sentry Duty');
   if(isAdminTrade(t)) issues.push('Administration/HQ staff');
   if(_dsDate&&isContingencyExcluded(t.id,_dsDate,slot?(isDayTime(slot.startTime)?'day':'night'):null)) issues.push('Contingency Mode active for this date/shift');
   return issues;
@@ -4755,7 +4755,7 @@ function editDutyDraft(id){
     var post=s.postId?dutyPostById(s.postId):null;
     var pool=D.troops.filter(function(t){
       if(!isAvailable(t)) return false;
-      if(t.neverDuty) return false;
+      if(t.neverDuty&&s.category==='Sentry') return false;
       if(t.id===s.chosenId) return true;
       if(s.category==='Roaming'){
         if(s.roamingRole==='officer'&&!isRoamingOfficerRank(t)) return false;
