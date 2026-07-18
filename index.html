@@ -2968,12 +2968,27 @@ function isTroopReserved(tid,opts){
 // planned for that date. Only applied when a patrol date has actually been
 // picked, so planning ahead (item 6) checks real availability instead of
 // always assuming "now".
+//
+// FUTURE-DATE PLANNING EXCEPTION (matches isTroopReserved above): a
+// post-midnight tail shift from TONIGHT's roster (e.g. a 02:00 post) gets
+// calendar-stamped with tomorrow's date by dutyRecordCalendarDate even
+// though it's really part of tonight's duty — so without this exception,
+// asking for a suggestion on that very next date would still wrongly
+// hard-block those troops (while dates further out were never affected,
+// since nothing is dated that far ahead yet). For a genuine future date,
+// only an already-logged patrol or an existing patrol draft for that date
+// still counts as a conflict — logged duty and duty drafts dated for that
+// future date are skipped here, same as isTroopReserved.
 function stmDateConflict(tid,date){
   if(!date) return false;
-  if(D.duties.some(function(d){return !d.cancelled&&d.date===date&&(d.troops||[]).indexOf(tid)>=0;})) return true;
+  var todayISO=new Date().toISOString().slice(0,10);
+  var isFutureDate=date>todayISO;
+  if(!isFutureDate){
+    if(D.duties.some(function(d){return !d.cancelled&&d.date===date&&(d.troops||[]).indexOf(tid)>=0;})) return true;
+    if((D.dutyDrafts||[]).some(function(d){return d.plannedDate===date&&(d.records||[]).some(function(r){return (r.troops||[]).indexOf(tid)>=0;});})) return true;
+  }
   if(D.patrols.some(function(p){return p.date===date&&(p.troops||[]).indexOf(tid)>=0;})) return true;
   if((D.drafts||[]).some(function(d){return d.plannedDate===date&&(d.troops||[]).indexOf(tid)>=0;})) return true;
-  if((D.dutyDrafts||[]).some(function(d){return d.plannedDate===date&&(d.records||[]).some(function(r){return (r.troops||[]).indexOf(tid)>=0;});})) return true;
   return false;
 }
 // Patrol suggestion eligibility (Priority 1): on top of Available status,
