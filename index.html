@@ -389,7 +389,7 @@ body.light-mode{background:
   .ph-row{padding:11px 0;}
   .ph-id{font-size:12px;}
   .ph-date{font-size:14px;}
-  .ph-area,.ph-remarks{font-size:12.5px;}
+  .ph-area{font-size:12.5px;}
   .ph-dur{font-size:13px;}
 }
 
@@ -401,12 +401,7 @@ body.light-mode{background:
   .section{max-width:1400px;}
 }
 
-/* ── Desktop: recent-list looks like a clean data table ── */
 @media (min-width:900px){
-  .recent-item{padding:8px 4px;font-size:14px;gap:14px;}
-  .recent-list{border:1px solid var(--border);border-radius:10px;overflow:hidden;padding:0 12px;}
-  .recent-item:last-child{border-bottom:none;}
-
   /* Patrol log: 2-col grid, matching the Troops roster pattern */
   #patrol-cards{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
   .patrol-card{margin-bottom:0;}
@@ -487,8 +482,7 @@ body.light-mode .sidebar-item.active{background:#f5e8cc;color:var(--tan);}
 .ph-top{display:flex;justify-content:space-between;align-items:flex-start;gap:4px;}
 .ph-id{font-family:'Courier New',monospace;color:var(--tan);font-size:10px;}
 .ph-date{font-size:12px;}
-.ph-area,.ph-remarks{font-size:11px;color:var(--text-muted);}
-.ph-remarks{font-style:italic;}
+.ph-area{font-size:11px;color:var(--text-muted);}
 .ph-dur{font-family:'Courier New',monospace;color:var(--text-muted);font-size:11px;flex-shrink:0;}
 
 /* ── STAT GRID ── */
@@ -554,6 +548,7 @@ select option{background:var(--surface2);color:var(--text);}
 .btn-info{background:linear-gradient(155deg,var(--blue),#3a5fc0);color:#ffffff;box-shadow:0 3px 10px rgba(91,141,239,0.35),inset 0 1px 0 rgba(255,255,255,0.15);}
 .btn-success{background:linear-gradient(155deg,var(--green-mid),#0a6b48);color:#ffffff;box-shadow:0 3px 10px rgba(15,157,110,0.35),inset 0 1px 0 rgba(255,255,255,0.15);}
 .btn-ghost{background:var(--surface2);border:1.5px solid var(--border);color:var(--text);}
+.btn-ghost.active{background:rgba(230,179,74,0.14);border-color:var(--tan);color:var(--tan);}
 .btn-ghost:active{border-color:var(--tan);color:var(--text);}
 .btn-sm{padding:8px 13px;font-size:13.5px;min-height:36px;}
 .btn-full{width:100%;}
@@ -616,11 +611,6 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 .al-info{background:rgba(91,141,239,0.14);border-color:var(--blue);color:#a9c4f5;}
 .al-warn{background:rgba(200,122,42,0.15);border-color:var(--orange);color:#ffb466;}
 
-/* ── RECENT LIST ── */
-.recent-list{list-style:none;}
-.recent-item{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid rgba(100,130,100,0.2);gap:8px;}
-.recent-item:last-child{border-bottom:none;}
-
 /* ── PATROL CARDS (replaces table on mobile) ── */
 .patrol-card{background:linear-gradient(155deg,var(--surface2),var(--surface));border:var(--card-border);border-left:4px solid var(--border);
   border-radius:12px;padding:12px 12px 12px 14px;margin-bottom:8px;box-shadow:var(--card-bevel),var(--shadow-sm);overflow:hidden;}
@@ -637,7 +627,6 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 [data-accent="b-gray"],[data-accent="b-archived"]{border-left-color:var(--text-muted)!important;}
 .patrol-card-header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:8px;}
 .patrol-card-id{font-family:'Courier New',monospace;font-size:13.5px;color:var(--tan);font-weight:700;}
-.patrol-card-meta{font-size:13.5px;color:var(--text-muted);margin-top:3px;line-height:1.4;}
 .patrol-card-actions{display:flex;gap:6px;align-items:center;flex-shrink:0;}
 /* Icon chips for sector/duration/troop-count meta row — replaces run-on inline text */
 .tc-body-grid{display:flex;flex-direction:column;gap:4px;margin-bottom:6px;}
@@ -661,7 +650,6 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
 #archived-list .troop-card{margin-bottom:0;}
 @media (max-width:600px){#archived-list{grid-template-columns:1fr;}}
 .troop-card-name{font-size:19px;font-weight:800;margin-bottom:2px;letter-spacing:0.2px;}
-.troop-card-sub{font-size:14.5px;color:var(--text-muted);margin-bottom:8px;font-weight:600;}
 /* Subtle, colored-but-quiet action buttons for the roster — data stays the
    visual focus, actions are available but don't compete for attention. */
 .rb-btn{padding:5px 11px;font-size:12px;font-weight:600;border-radius:7px;border:1px solid;
@@ -950,11 +938,6 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
   display:flex;justify-content:space-between;align-items:center;
 }
 .hist-month-body{padding:12px 14px;}
-.hist-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;font-size:13px;padding:6px 0;}
-.hist-row+.hist-row{border-top:1px solid rgba(100,130,100,0.15);}
-.hist-label{color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:1px;font-family:'Courier New',monospace;}
-.hist-name{color:var(--tan);text-transform:uppercase;letter-spacing:0.3px;font-weight:700;}
-.hist-nodata{color:var(--text-muted);font-size:13px;text-align:center;padding:10px 0;}
 
 /* ── SCROLL HELPER ── */
 ::-webkit-scrollbar{width:3px;height:3px;}
@@ -2968,12 +2951,27 @@ function isTroopReserved(tid,opts){
 // planned for that date. Only applied when a patrol date has actually been
 // picked, so planning ahead (item 6) checks real availability instead of
 // always assuming "now".
+//
+// FUTURE-DATE PLANNING EXCEPTION (matches isTroopReserved above): a
+// post-midnight tail shift from TONIGHT's roster (e.g. a 02:00 post) gets
+// calendar-stamped with tomorrow's date by dutyRecordCalendarDate even
+// though it's really part of tonight's duty — so without this exception,
+// asking for a suggestion on that very next date would still wrongly
+// hard-block those troops (while dates further out were never affected,
+// since nothing is dated that far ahead yet). For a genuine future date,
+// only an already-logged patrol or an existing patrol draft for that date
+// still counts as a conflict — logged duty and duty drafts dated for that
+// future date are skipped here, same as isTroopReserved.
 function stmDateConflict(tid,date){
   if(!date) return false;
-  if(D.duties.some(function(d){return !d.cancelled&&d.date===date&&(d.troops||[]).indexOf(tid)>=0;})) return true;
+  var todayISO=new Date().toISOString().slice(0,10);
+  var isFutureDate=date>todayISO;
+  if(!isFutureDate){
+    if(D.duties.some(function(d){return !d.cancelled&&d.date===date&&(d.troops||[]).indexOf(tid)>=0;})) return true;
+    if((D.dutyDrafts||[]).some(function(d){return d.plannedDate===date&&(d.records||[]).some(function(r){return (r.troops||[]).indexOf(tid)>=0;});})) return true;
+  }
   if(D.patrols.some(function(p){return p.date===date&&(p.troops||[]).indexOf(tid)>=0;})) return true;
   if((D.drafts||[]).some(function(d){return d.plannedDate===date&&(d.troops||[]).indexOf(tid)>=0;})) return true;
-  if((D.dutyDrafts||[]).some(function(d){return d.plannedDate===date&&(d.records||[]).some(function(r){return (r.troops||[]).indexOf(tid)>=0;});})) return true;
   return false;
 }
 // Patrol suggestion eligibility (Priority 1): on top of Available status,
@@ -3154,13 +3152,26 @@ function generateSuggestion(){
   var FEMALE_CAP=3; // total female-quota ceiling for the whole patrol
   var femaleCount=0;
 
-  // Pure category rotation — no gender check at all. A category's own
-  // rotation queue decides its seat; a female JCO/Signaller/Medic/Driver
-  // is never skipped for being female, and simultaneously fulfills both
-  // her specialty seat AND one female-quota slot.
+  // Category rotation, now cap-aware: a female JCO/Signaller/Medic/Driver
+  // is never skipped for being female UNLESS the FEMALE_CAP has already
+  // been reached AND a non-female alternative exists in this same pool —
+  // in that case the next-best non-female is picked instead, so fairness
+  // rotation still runs untouched right up to the cap. If no non-female
+  // alternative exists (e.g. the only qualified Signaller left is female),
+  // the role is still filled rather than left vacant; the FEMALE_CAP
+  // warning below catches that residual case for manual review.
   function take(pool,role,forceId){
     var candidates=pool.filter(function(id){ return !used[id]; });
-    var chosen=forceId&&!used[forceId]?forceId:(candidates[0]||null);
+    var chosen;
+    if(forceId&&!used[forceId]){
+      chosen=forceId;
+    } else {
+      chosen=candidates[0]||null;
+      if(chosen&&isFemale(chosen)&&femaleCount>=FEMALE_CAP){
+        var altIdx=candidates.findIndex(function(id){return !isFemale(id);});
+        if(altIdx>=0) chosen=candidates[altIdx];
+      }
+    }
     if(chosen){ used[chosen]=true; if(isFemale(chosen)) femaleCount++; }
     slots.push({role:role,chosenId:chosen,pool:pool,poolPos:pool.indexOf(chosen)});
     return chosen;
@@ -3255,11 +3266,17 @@ function generateSuggestion(){
   var avgM=avgDuty(genMaleTroops);
 
   var specialistFemaleCount=femaleCount; // tally from Stage 1 only, so far
-  var generalFemaleMin=0, generalFemaleMax=0;
-  if(specialistFemaleCount===0){ generalFemaleMin=0; generalFemaleMax=2; }
-  else if(specialistFemaleCount===1){ generalFemaleMin=1; generalFemaleMax=2; }
-  else if(specialistFemaleCount===2){ generalFemaleMin=0; generalFemaleMax=1; }
-  else { generalFemaleMin=0; generalFemaleMax=0; }
+  // generalFemaleMax caps how many MORE females Stage 2 may add on top of
+  // Stage 1's specialists (see FEMALE_CAP below). The mirrored "minimum"
+  // case — specialistFemaleCount===1, so exactly one general-role female
+  // is required as a companion — is a hard rule enforced directly by the
+  // dedicated block right below, not by a generalFemaleMin threshold: a
+  // separate min variable would just duplicate that same hard requirement.
+  var generalFemaleMax=0;
+  if(specialistFemaleCount===0){ generalFemaleMax=2; }
+  else if(specialistFemaleCount===1){ generalFemaleMax=2; }
+  else if(specialistFemaleCount===2){ generalFemaleMax=1; }
+  else { generalFemaleMax=0; }
 
   var requestedOthers=othersCount;
   var othersChosen=[];
@@ -3319,6 +3336,7 @@ function generateSuggestion(){
 
   othersChosen.forEach(function(id){ if(isFemale(id)) femaleCount++; slots.push({role:'Other Rank',chosenId:id,pool:generalPoolRankedFull,poolPos:generalPoolRankedFull.indexOf(id)}); });
   if(othersChosen.length<requestedOthers) warnings.push('Only '+othersChosen.length+' of '+requestedOthers+' "Others" seats could be filled — not enough available troops left.');
+  if(femaleCount>FEMALE_CAP) warnings.push('This patrol has '+femaleCount+' female troops, above the cap of '+FEMALE_CAP+'. This means a category rotation (Officer/JCO/Medical/Signal/Driver) had NO non-female alternative available for a role — the cap was intentionally not enforced there so the role wasn\'t left unfilled. Review before deploying.');
 
   _stmSlots=slots;
   renderStmResults(warnings);
@@ -4114,7 +4132,7 @@ function dsBackToConfig(){ document.getElementById('ds-config').style.display=''
 // Day duty is Sentry posts only. Night duty is Sentry + Roaming + Line
 // Duty (evening/night activities). Continuous posts (Signal/Medical) span
 // both, so they're generated together with the Day pass.
-function dsBuildSlots(date,period){
+function dsBuildSlots(period){
   var slots=[];
   var posts=(D.config.dutyPosts||[]).filter(function(p){return p.active;});
   var dayStart=D.config.dayNight.start, nightStart=D.config.dayNight.end;
@@ -4545,7 +4563,7 @@ function generateDutySuggestion(){
   var date=parseDate(document.getElementById('ds-date').value);
   var period=document.getElementById('ds-period').value;
   if(!date){ showAlert('ds-config-alert','Enter a valid date (DD/MM/YYYY).','danger'); return; }
-  var slots=dsBuildSlots(date,period);
+  var slots=dsBuildSlots(period);
   if(slots.length===0){ showAlert('ds-config-alert','Nothing to suggest — check Duty Settings has active posts'+(period==='night'?', Roaming, and Line Duty types.':'.') ,'danger'); return; }
   var warnings=dsFillSlots(date,slots);
   _dsDate=date; _dsPeriod=period; _dsSlots=slots; _dsWarnings=warnings;
@@ -4659,10 +4677,9 @@ function dsManualSearch(i,val){
   var matches=sortTroops(D.troops.filter(isAvailable)).filter(function(t){return !usedElsewhere[t.id]&&(t.rank+' '+t.name+' '+t.unit).toLowerCase().indexOf(q)>=0;});
   if(matches.length===0){ box.style.display='none'; return; }
   box.style.display='block';
-  var type=dutyTypeByName(slot.category==='Sentry'?'Sentry':slot.category);
   var post=slot.postId?dutyPostById(slot.postId):null;
   box.innerHTML=matches.slice(0,8).map(function(t){
-    var issues=dutyEligibilityIssuesRaw(t,type,post,slot);
+    var issues=dutyEligibilityIssuesRaw(t,post,slot);
     var flag=issues.length?' <span style="color:var(--orange);font-size:10px;">⚠ '+escHtml(issues[0])+'</span>':'';
     return '<div class="suggest-item" onclick="dsManualPick('+i+',\''+t.id+'\')"><strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong> <span style="color:var(--text-muted);font-size:11px;">('+t.unit+')</span>'+flag+'</div>';
   }).join('');
@@ -4678,7 +4695,7 @@ function dsManualPick(i,troopId){
 // Same rule-set as dutyEligibilityIssues, but usable outside the Assign Duty
 // modal's own DOM (the Suggest Duty Roster screen has its own date/type/post
 // context per slot rather than shared duty-date/duty-type-sel fields).
-function dutyEligibilityIssuesRaw(t,type,post,slot){
+function dutyEligibilityIssuesRaw(t,post,slot){
   var issues=[];
   if(slot&&slot.category==='Roaming'&&!isRoamingEligible(t)) issues.push('not eligible for Roaming duty');
   if(slot&&slot.category!=='Roaming'&&isRoamingOnlyRank(t)) issues.push('Officers/JCOs are only assigned Roaming duty');
@@ -4698,7 +4715,7 @@ function dsReplaceSlot(i){
   }
   showAlert('ds-warnings','No more alternatives available for this slot.','warn');
 }
-function dsSlotsToDutyRecords(date){
+function dsSlotsToDutyRecords(){
   return _dsSlots.filter(function(s){return s.chosenId;}).reduce(function(acc,s){
     // Merge same post+time into one duty record with multiple troops
     var key=s.category+'|'+(s.postId||'')+'|'+s.startTime+'|'+s.durationHours;
@@ -4712,9 +4729,9 @@ function saveDutySuggestAsDraft(){
   if(_dsSlots.every(function(s){return !s.chosenId;})){ showAlert('ds-warnings','Nothing to save — no troops suggested.','danger'); return; }
   if(_editingDutyDraftId){
     var d=D.dutyDrafts.find(function(x){return x.id===_editingDutyDraftId;});
-    if(d){ d.plannedDate=_dsDate; d.period=_dsPeriod; d.records=dsSlotsToDutyRecords(_dsDate); d.editedAt=new Date().toISOString(); d.roamingRotationPreview=_dsRoamingRotationPreview; }
+    if(d){ d.plannedDate=_dsDate; d.period=_dsPeriod; d.records=dsSlotsToDutyRecords(); d.editedAt=new Date().toISOString(); d.roamingRotationPreview=_dsRoamingRotationPreview; }
   } else {
-    D.dutyDrafts.push({id:uid('dutydraft'),createdAt:new Date().toISOString(),plannedDate:_dsDate,period:_dsPeriod,records:dsSlotsToDutyRecords(_dsDate),roamingRotationPreview:_dsRoamingRotationPreview});
+    D.dutyDrafts.push({id:uid('dutydraft'),createdAt:new Date().toISOString(),plannedDate:_dsDate,period:_dsPeriod,records:dsSlotsToDutyRecords(),roamingRotationPreview:_dsRoamingRotationPreview});
   }
   remoteSaveConfig();
   audit('Duty roster draft saved: '+_dsPeriod+' · '+_dsDate);
@@ -4723,7 +4740,7 @@ function saveDutySuggestAsDraft(){
   openDutyDraftsModal();
 }
 function logDutySuggestNow(){
-  var records=dsSlotsToDutyRecords(_dsDate);
+  var records=dsSlotsToDutyRecords();
   if(records.length===0){ showAlert('ds-warnings','Nothing to log — no troops suggested.','danger'); return; }
   records.forEach(function(r){
     var nowIso2=new Date().toISOString(); var nd={id:uid('duty'),dutySeq:nextDutySeq(),date:dutyRecordCalendarDate(_dsDate,r.startTime,_dsPeriod),type:r.category,postId:r.postId,postName:r.postName,startTime:r.startTime,durationHours:r.durationHours,troops:r.troops,remarks:'',adminOverride:false,replacements:[],createdAt:nowIso2,modifiedAt:nowIso2,cancelled:false,shiftIdx:(r.shiftIdx!=null?r.shiftIdx:null),shiftIdxCount:(r.shiftIdxCount!=null?r.shiftIdxCount:null)};
@@ -4815,7 +4832,6 @@ function editDutyDraft(id){
   },[]);
   // Rebuild each slot's candidate pool fresh so Replace still works sensibly
   _dsSlots.forEach(function(s){
-    var post=s.postId?dutyPostById(s.postId):null;
     var pool=D.troops.filter(function(t){
       if(!isAvailable(t)) return false;
       if(t.neverDuty&&s.category==='Sentry') return false;
@@ -5225,7 +5241,6 @@ function printDutyRoster(){
   var rowsHtml=list.length===0?'<tr><td colspan="7" style="text-align:center;color:#888;padding:20px;">No duty entries match the current filters.</td></tr>':
     dutyGroupByShift(list).map(function(grp){
       var posts=[],seenP={}; grp.duties.forEach(function(d){ if(d.postName&&!seenP[d.postName]){seenP[d.postName]=1;posts.push(d.postName);} });
-      var names=sortTroops(Object.values(grp.duties.reduce(function(acc,d){(d.troops||[]).forEach(function(tid){acc[tid]=troopById(tid);});return acc;},{})).filter(Boolean)).map(function(t){return upLabel(t.rank,t.name);}).join(', ');
       return '<tr style="background:#f4eeee;"><td colspan="7" style="font-family:\'Courier New\',monospace;font-size:11px;font-weight:700;color:#5a0f1a;letter-spacing:1px;text-transform:uppercase;">'+fmtDate(grp.date)+' · '+(grp.shift==='day'?'Day Shift':'Night Shift')+'</td></tr>'+
         grp.duties.map(function(d){ return '<tr><td>'+(d.dutyId||'—')+'</td><td></td><td>'+escHtml(d.type)+'</td><td>'+escHtml(d.postName||'—')+'</td><td>'+(d.startTime||'')+'–'+shiftEndTime(d.startTime,d.durationHours)+'</td><td>'+(d.durationHours||'—')+'h</td><td style="font-size:11px;">'+(sortTroops((d.troops||[]).map(troopById).filter(Boolean)).map(function(t){return upLabel(t.rank,t.name);}).join(', ')||'—')+'</td></tr>'; }).join('');
     }).join('');
@@ -5818,20 +5833,6 @@ function lastDuty(tid){ var ds=D.duties.filter(function(d){return !d.cancelled&&
 // Combined workload — patrol hours + duty hours together, so someone
 // carrying a heavy patrol load isn't also loaded up on guard duty, and
 // vice versa. Lower = more "due" for the next assignment.
-// Percentage-of-unit-total participation — the same measure Patrol
-// Participation Status already uses (troop's hours as a share of the
-// whole unit's hours, over that troop's own deployed window), just
-// computed separately for patrol and duty so the two can be combined.
-function patrolParticipationPct(t){
-  var todayISO=new Date().toISOString().slice(0,10);
-  var dep=effectiveDeploymentDate(t);
-  if(!dep) return 0;
-  var unitPats=D.patrols.filter(function(p){return p.date>=dep&&p.date<=todayISO;});
-  var unitHours=unitPats.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0);
-  if(unitHours<=0) return 0;
-  var troopHours=unitPats.filter(function(p){return (p.troops||[]).indexOf(t.id)>=0;}).reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0);
-  return troopHours/unitHours*100;
-}
 function dutyParticipationPct(t){
   var todayISO=new Date().toISOString().slice(0,10);
   var dep=effectiveDeploymentDate(t);
@@ -6962,12 +6963,10 @@ function renderDash(){
   var mon=new Date(now); mon.setDate(now.getDate()-(day===0?6:day-1)); mon.setHours(0,0,0,0);
   var sun=new Date(mon); sun.setDate(mon.getDate()+6); sun.setHours(23,59,59,999);
   var wkPats=D.patrols.filter(function(p){var pd=new Date(p.date+'T12:00:00');return pd>=mon&&pd<=sun;});
-  var totalH=D.patrols.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0);
   var availTroops=D.troops.filter(isAvailable);
   var inactive7=availTroops.filter(function(t){return daysSince(lastPatrol(t.id))>inactiveThresholdDays(t);});
   var mo=now.getMonth(),yr=now.getFullYear();
   var moPats=D.patrols.filter(function(p){var d=new Date(p.date+'T12:00:00');return d.getMonth()===mo&&d.getFullYear()===yr;});
-  var moNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
   var moAbbr=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
   // ── STAT CARDS ──────────────────────────────────────────────────────
@@ -7604,7 +7603,6 @@ function showProfile(id, fromArch){
   var mo=new Date().getMonth(),yr=new Date().getFullYear();
   var moPats=tp.filter(function(p){var d=new Date(p.date+'T12:00:00');return d.getMonth()===mo&&d.getFullYear()===yr;});
   var moH=moPats.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0);
-  var earliest=tp.length?tp[tp.length-1].date:null;
   // Duty History (item 6) — separate from Patrol History, own stats and
   // its own section below it, each duty shown compact with an expandable
   // detail (date, type, day/night, timing, duration, post are all
@@ -7613,7 +7611,7 @@ function showProfile(id, fromArch){
   var totalDutyH=td.reduce(function(s,d){return s+(parseFloat(d.durationHours)||0);},0);
   var dutyPosts=[];td.forEach(function(d){if(d.postName&&dutyPosts.indexOf(d.postName)<0)dutyPosts.push(d.postName);});
   var dutyTypes={};td.forEach(function(d){dutyTypes[d.type]=(dutyTypes[d.type]||0)+1;});
-  document.getElementById('profile-title').innerHTML='<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>';
+  document.getElementById('profile-title').innerHTML='<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>'+(fromArch?' <span class="badge b-gray" style="font-size:9px;vertical-align:middle;">📦 ARCHIVED</span>':'');
   document.getElementById('profile-modal').dataset.troopId=id;
   var html=
     '<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border);">'+
@@ -7815,8 +7813,13 @@ function printProfileSection(id,kind){
 // INACTIVE
 // =====================================================================
 var _inactiveDays=0,_inactiveRollingMonths=0;
-function setInactiveFilter(days,btn){ _inactiveDays=days; _inactiveRollingMonths=0; document.getElementById('inactive-rolling-sel').value=''; renderInactive(days); }
-function setInactiveRollingFilter(val){ _inactiveRollingMonths=parseInt(val)||0; _inactiveDays=0; renderInactive(0); }
+function setInactiveFilter(days,btn){
+  _inactiveDays=days; _inactiveRollingMonths=0; document.getElementById('inactive-rolling-sel').value='';
+  document.querySelectorAll('#inactive .btn-ghost').forEach(function(b){b.classList.remove('active');});
+  if(btn) btn.classList.add('active');
+  renderInactive(days);
+}
+function setInactiveRollingFilter(val){ _inactiveRollingMonths=parseInt(val)||0; _inactiveDays=0; document.querySelectorAll('#inactive .btn-ghost').forEach(function(b){b.classList.remove('active');}); renderInactive(0); }
 function renderInactive(days){
   if(days===undefined) days=_inactiveDays;
   var rollingMonths=_inactiveRollingMonths;
@@ -8137,7 +8140,7 @@ function renderHandover(){
   var now=new Date(); var last30=new Date(now); last30.setDate(now.getDate()-30); var last30ISO=last30.toISOString().slice(0,10);
   var recentPats=D.patrols.filter(function(p){return p.date>=last30ISO;});
   var totalH=recentPats.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0);
-  var s=D.settings; var smap={};recentPats.forEach(function(p){if(p.area)smap[p.area]=(smap[p.area]||0)+1;});
+  var smap={};recentPats.forEach(function(p){if(p.area)smap[p.area]=(smap[p.area]||0)+1;});
   var sectors=Object.keys(smap).sort(function(a,b){return smap[b]-smap[a];});
   var html=
     '<div class="two-col-blocks">'+
