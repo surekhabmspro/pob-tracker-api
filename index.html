@@ -2939,11 +2939,26 @@ function contingencyExcludedTroopIds(date,shift){
 // deleted, or a contingency group ends/is deactivated, the troop stops
 // showing up as reserved on the very next check — no separate "release"
 // step is ever needed.
+//
+// FUTURE-DATE PLANNING EXCEPTION: when opts.date is a genuine future date
+// (strictly after today), logged duty and duty drafts are deliberately
+// NOT checked — a troop on tonight's night shift (even one still active
+// right now) must be free to suggest for tomorrow's or any later date's
+// patrol/duty. Only an uncompleted patrol draft or an active Contingency
+// exclusion can reserve a troop against a future date; both already
+// release automatically the moment they're logged/completed or
+// cancelled/deactivated, per the comment above. This exception only
+// applies when a real future date is supplied — checks for "right now"
+// (no date, e.g. Free Troops) still use every reservation source as before.
 function isTroopReserved(tid,opts){
   opts=opts||{};
-  if(loggedDutyReservedTroopIds(opts.excludeDutyId||null,opts.date||null)[tid]) return true;
+  var todayISO=new Date().toISOString().slice(0,10);
+  var isFutureDate=opts.date&&opts.date>todayISO;
+  if(!isFutureDate){
+    if(loggedDutyReservedTroopIds(opts.excludeDutyId||null,opts.date||null)[tid]) return true;
+    if(dutyDraftReservedTroopIds(opts.excludeDutyDraftId||null,opts.date||null)[tid]) return true;
+  }
   if(draftReservedTroopIds(opts.excludePatrolDraftId||null)[tid]) return true;
-  if(dutyDraftReservedTroopIds(opts.excludeDutyDraftId||null,opts.date||null)[tid]) return true;
   if(contingencyExcludedTroopIds(opts.date||null)[tid]) return true;
   return false;
 }
