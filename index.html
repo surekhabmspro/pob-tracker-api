@@ -1290,6 +1290,11 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     </div>
     <div id="ds-results" style="display:none;">
       <div id="ds-warnings"></div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="toggleDsRemainingTroops()">👥 Remaining Troops (<span id="ds-remaining-count">0</span>)</button>
+        <button type="button" class="btn btn-ghost btn-sm" style="color:var(--red-light);border-color:var(--red-light);" onclick="dsClearAllSuggestions()">🧹 Clear All</button>
+      </div>
+      <div id="ds-remaining-troops" style="display:none;margin-bottom:10px;padding:8px;background:var(--surface2);border-radius:8px;max-height:260px;overflow-y:auto;"></div>
       <div id="ds-slots"></div>
       <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
         <button class="btn btn-ghost" onclick="dsBackToConfig()">← Adjust</button>
@@ -1833,6 +1838,11 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     <div id="stm-results" style="display:none;">
       <div id="stm-results-summary" style="font-size:11.5px;color:var(--text-muted);margin-bottom:8px;"></div>
       <div id="stm-warnings-sticky"><div id="stm-warnings"></div></div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="toggleStmRemainingTroops()">👥 Remaining Troops (<span id="stm-remaining-count">0</span>)</button>
+        <button type="button" class="btn btn-ghost btn-sm" style="color:var(--red-light);border-color:var(--red-light);" onclick="stmClearAllSuggestions()">🧹 Clear All</button>
+      </div>
+      <div id="stm-remaining-troops" style="display:none;margin-bottom:10px;padding:8px;background:var(--surface2);border-radius:8px;max-height:260px;overflow-y:auto;"></div>
       <div id="stm-slots"></div>
       <div class="fg cal-field" id="stm-draft-date-wrap" style="margin-top:10px;">
         <label class="field-label">Planned Date (for Save Draft — blocks these troops from duty that date)</label>
@@ -2144,7 +2154,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     </div>
     <div class="fg" style="display:flex;flex-direction:column;gap:8px;">
       <label class="cb-wrap" style="font-size:13px;"><input type="checkbox" id="t-never-suggest"><span class="cb-box"></span>Never suggest for patrol (e.g. Medical Officer / Doctor)</label>
-      <label class="cb-wrap" style="font-size:13px;"><input type="checkbox" id="t-never-duty"><span class="cb-box"></span>Never suggest for Sentry duty</label>
+      <label class="cb-wrap" style="font-size:13px;"><input type="checkbox" id="t-never-duty"><span class="cb-box"></span>Never assign to any duty (Sentry, Roaming, Line Duty — hard block)</label>
       <label class="cb-wrap" style="font-size:13px;"><input type="checkbox" id="t-restricted-range"><span class="cb-box"></span>Restricted range — not suitable for distant patrols (e.g. Armoury Keeper, Storeman)</label>
       <label class="cb-wrap" style="font-size:13px;"><input type="checkbox" id="t-senior-sgt"><span class="cb-box"></span>Eligible for Roaming duty</label>
     </div>
@@ -3026,11 +3036,11 @@ function openSuggestTeamModal(){
   document.getElementById('stm-results').style.display='none';
   document.getElementById('suggest-team-modal').classList.add('open');
 }
-function closeSuggestTeamModal(){ document.getElementById('suggest-team-modal').classList.remove('open'); }
+function closeSuggestTeamModal(){ document.getElementById('suggest-team-modal').classList.remove('open'); _stmManualPickSlot=-1; var rp=document.getElementById('stm-remaining-troops'); if(rp) rp.style.display='none'; }
 function stmToggleOfficer(){
   document.getElementById('stm-officer-wrap').style.display=document.getElementById('stm-officer-need').checked?'':'none';
 }
-function backToStmConfig(){ document.getElementById('stm-config').style.display=''; document.getElementById('stm-results').style.display='none'; }
+function backToStmConfig(){ document.getElementById('stm-config').style.display=''; document.getElementById('stm-results').style.display='none'; _stmManualPickSlot=-1; var rp=document.getElementById('stm-remaining-troops'); if(rp) rp.style.display='none'; }
 
 function stmDutyPctMap(refDate){
   // Same formula as the Participation page: a troop's patrol hours since
@@ -3259,6 +3269,7 @@ function generateSuggestion(){
   renderStmResults(warnings);
 }
 
+var _stmManualPickSlot=-1;
 function renderStmResults(warnings){
   document.getElementById('stm-config').style.display='none';
   document.getElementById('stm-results').style.display='';
@@ -3272,16 +3283,26 @@ function renderStmResults(warnings){
   document.getElementById('stm-slots').innerHTML=_stmSlots.map(function(s,i){
     var t=s.chosenId?troopById(s.chosenId):null;
     var restrictedNote=(t&&t.restrictedRange)?' <span style="color:var(--tan);font-size:10.5px;">⚠ Restricted range</span>':'';
+    var manualOpen=(_stmManualPickSlot===i);
     return '<div style="padding:8px 0;border-bottom:1px solid var(--border);">'+
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'+
       '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">'+s.role+'</div>'+
-      '<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:5px 9px;white-space:nowrap;flex-shrink:0;" onclick="replaceStmSlot('+i+')">🔁 Replace</button>'+
-      '</div>'+
+      '<div style="display:flex;gap:6px;flex-shrink:0;">'+
+      '<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:5px 9px;white-space:nowrap;" onclick="replaceStmSlot('+i+')" title="Next fairest alternative">🔁 Replace</button>'+
+      '<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:5px 9px;white-space:nowrap;'+(manualOpen?'border-color:var(--tan);color:var(--tan);':'')+'" onclick="stmToggleManualPick('+i+')" title="Pick a specific troop">🔍</button>'+
+      '</div></div>'+
       '<div style="font-size:13.5px;margin-top:3px;white-space:normal;overflow-wrap:break-word;">'+
       (t?('<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>'+restrictedNote):'<span style="color:var(--red-light);">— none available —</span>')+
       '</div>'+
+      (manualOpen?('<div style="position:relative;margin-top:6px;">'+
+        '<input type="text" placeholder="Type name or rank to pick directly..." autocomplete="off" oninput="stmManualSearch('+i+',this.value)" style="font-size:13px;">'+
+        '<div class="suggest-box" id="stm-manual-suggest-'+i+'" style="display:none;"></div>'+
+        '</div>'):'')+
       '</div>';
   }).join('');
+  stmUpdateRemainingCount();
+  var remPanel=document.getElementById('stm-remaining-troops');
+  if(remPanel&&remPanel.style.display!=='none') renderStmRemainingTroops();
 }
 function replaceStmSlot(i){
   var slot=_stmSlots[i];
@@ -3296,6 +3317,74 @@ function replaceStmSlot(i){
     }
   }
   showAlert('stm-warnings','No more alternatives available for this slot.','warn');
+}
+function stmToggleManualPick(i){ _stmManualPickSlot=(_stmManualPickSlot===i)?-1:i; renderStmResults(stmLoneFemaleWarning()); }
+function stmManualSearch(i,val){
+  var box=document.getElementById('stm-manual-suggest-'+i);
+  if(!box) return;
+  if(!val||val.length===0){ box.style.display='none'; return; }
+  var q=val.toLowerCase();
+  var usedElsewhere={};
+  _stmSlots.forEach(function(s,idx){ if(idx!==i&&s.chosenId) usedElsewhere[s.chosenId]=true; });
+  var matches=sortTroops(D.troops.filter(isAvailable)).filter(function(t){return !usedElsewhere[t.id]&&(t.rank+' '+t.name+' '+t.unit).toLowerCase().indexOf(q)>=0;});
+  if(matches.length===0){ box.style.display='none'; return; }
+  box.style.display='block';
+  box.innerHTML=matches.slice(0,8).map(function(t){
+    var flag=t.restrictedRange?' <span style="color:var(--tan);font-size:10px;">⚠ Restricted range</span>':'';
+    return '<div class="suggest-item" onclick="stmManualPick('+i+',\''+t.id+'\')"><strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong> <span style="color:var(--text-muted);font-size:11px;">('+t.unit+')</span>'+flag+'</div>';
+  }).join('');
+}
+function stmManualPick(i,troopId){
+  var slot=_stmSlots[i];
+  slot.chosenId=troopId;
+  if(slot.pool.indexOf(troopId)<0) slot.pool.push(troopId);
+  slot.poolPos=slot.pool.indexOf(troopId);
+  _stmManualPickSlot=-1;
+  renderStmResults(stmLoneFemaleWarning());
+}
+// ── Remaining Troops (Suggest Patrol Team) — everyone available and NOT
+// currently used by any slot in this suggestion. Tap a slot's 🔍 first to
+// open its picker, then tap a name here to assign them to that slot.
+function stmUpdateRemainingCount(){
+  var usedIds={}; (_stmSlots||[]).forEach(function(s){ if(s.chosenId) usedIds[s.chosenId]=true; });
+  var n=D.troops.filter(function(t){return isAvailable(t)&&!usedIds[t.id];}).length;
+  var el=document.getElementById('stm-remaining-count');
+  if(el) el.textContent=n;
+}
+function toggleStmRemainingTroops(){
+  var el=document.getElementById('stm-remaining-troops');
+  if(!el) return;
+  var open=el.style.display!=='none';
+  el.style.display=open?'none':'block';
+  if(!open) renderStmRemainingTroops();
+}
+function renderStmRemainingTroops(){
+  var el=document.getElementById('stm-remaining-troops');
+  if(!el) return;
+  var usedIds={}; (_stmSlots||[]).forEach(function(s){ if(s.chosenId) usedIds[s.chosenId]=true; });
+  var remaining=sortTroops(D.troops.filter(function(t){return isAvailable(t)&&!usedIds[t.id];}));
+  stmUpdateRemainingCount();
+  if(remaining.length===0){ el.innerHTML='<div class="empty" style="padding:6px 0;">No remaining troops available.</div>'; return; }
+  var hint=(_stmManualPickSlot>=0)
+    ?'<div style="font-size:11px;color:var(--tan);margin-bottom:6px;">Tap a name to assign to the open slot.</div>'
+    :'<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">Tap 🔍 on a slot above first, then tap a name here to assign them.</div>';
+  el.innerHTML=hint+remaining.map(function(t){
+    var flag=t.restrictedRange?' <span style="color:var(--tan);font-size:10px;">⚠ Restricted range</span>':'';
+    return '<div class="suggest-item" style="padding:6px 4px;cursor:pointer;" onclick="stmPickFromRemaining(\''+t.id+'\')"><strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong> <span style="color:var(--text-muted);font-size:11px;">('+t.unit+')</span>'+flag+'</div>';
+  }).join('');
+}
+function stmPickFromRemaining(troopId){
+  if(_stmManualPickSlot<0){ showAlert('stm-warnings','Tap 🔍 on the slot you want to fill first, then pick from Remaining Troops.','warn'); return; }
+  stmManualPick(_stmManualPickSlot,troopId);
+}
+// Clears every currently-suggested troop (slots stay, all become
+// unassigned) so the whole team can be filled by hand from scratch.
+function stmClearAllSuggestions(){
+  if(!_stmSlots||!_stmSlots.length) return;
+  if(!confirm('Clear ALL suggested troops in this team? You will need to pick every slot manually afterward.')) return;
+  _stmSlots.forEach(function(s){ s.chosenId=null; s.poolPos=-1; });
+  _stmManualPickSlot=-1;
+  renderStmResults([]);
 }
 function stmLoneFemaleWarning(){
   var femaleCount=_stmSlots.filter(function(s){ var t=s.chosenId?troopById(s.chosenId):null; return t&&t.gender==='Female'; }).length;
@@ -3561,7 +3650,7 @@ function dutyEligibilityIssues(t,type,post){
   if(post&&(post.name==='Medical'||post.name==='Signal')&&!troopMeetsPostRequirement(t,post)) issues.push('Role is not '+post.name+' — this post is role-locked');
   if(t.trade==='Signal'&&!(post&&post.name==='Signal')) issues.push('Signal trade — reserved exclusively for Signal duty');
   if(t.gender==='Female'&&!(post&&post.genderPref==='female')) issues.push('Female personnel are only assigned to Female Preferred posts');
-  if(t.neverDuty&&type&&type.name==='Sentry') issues.push('marked Never Suggest for Sentry Duty');
+  if(t.neverDuty) issues.push('marked Never Assign to Duty');
   if(isAdminTrade(t)&&!dutyIncludeAdmin) issues.push('Administration/HQ staff — excluded by default');
   var date=parseDate(document.getElementById('duty-date').value);
   var startVal=document.getElementById('duty-start').value;
@@ -3702,7 +3791,7 @@ function dutySuggestTroop(){
   function eligiblePool(genderFilter,qualFilter){
     return D.troops.filter(function(t){
       if(!isAvailable(t)) return false;
-      if(t.neverDuty&&type&&type.name==='Sentry') return false;
+      if(t.neverDuty) return false;
       if(dutySelectedTroops.indexOf(t.id)>=0) return false;
       if(dutyEligibilityIssues(t,type,post).length>0) return false;
       if(qualFilter&&!isDutyQualified(t,qual)) return false;
@@ -3791,7 +3880,7 @@ function openReplaceFlow(outTroopId){
   var q=name.toLowerCase();
   var matches=D.troops.filter(function(t){
     if(!isAvailable(t)) return false;
-    if(t.neverDuty&&ed0.type==='Sentry') return false;
+    if(t.neverDuty) return false;
     if(dutySelectedTroops.indexOf(t.id)>=0) return false;
     if((t.rank+' '+t.name).toLowerCase().indexOf(q)<0) return false;
     if(date&&(D.drafts||[]).some(function(d){return d.plannedDate===date&&(d.troops||[]).indexOf(t.id)>=0;})) return false;
@@ -3965,8 +4054,8 @@ function openDutySuggestModal(){
   document.getElementById('duty-suggest-modal').classList.add('open');
   dsScrollTop();
 }
-function closeDutySuggestModal(){ document.getElementById('duty-suggest-modal').classList.remove('open'); }
-function dsBackToConfig(){ document.getElementById('ds-config').style.display=''; document.getElementById('ds-results').style.display='none'; dsScrollTop(); }
+function closeDutySuggestModal(){ document.getElementById('duty-suggest-modal').classList.remove('open'); _dsManualPickSlot=-1; var rp=document.getElementById('ds-remaining-troops'); if(rp) rp.style.display='none'; }
+function dsBackToConfig(){ document.getElementById('ds-config').style.display=''; document.getElementById('ds-results').style.display='none'; dsScrollTop(); _dsManualPickSlot=-1; var rp=document.getElementById('ds-remaining-troops'); if(rp) rp.style.display='none'; }
 // Day duty is Sentry posts only. Night duty is Sentry + Roaming + Line
 // Duty (evening/night activities). Continuous posts (Signal/Medical) span
 // both, so they're generated together with the Day pass.
@@ -4126,7 +4215,7 @@ function dsAssignDriverQuota(date,slots,used,warnings){
     return D.troops.filter(function(t){
       if(t.trade!=='Driver') return false;
       if(!isAvailable(t)) return false;
-      if(t.neverDuty&&slot.category==='Sentry') return false;
+      if(t.neverDuty) return false;
       if(used.indexOf(t.id)>=0) return false;
       if(isContingencyExcluded(t.id,date,isDayTime(slot.startTime)?'day':'night')) return false;
       if(slot.category==='Roaming'){
@@ -4203,9 +4292,9 @@ function dsFillPass(date,slotList,used,warnings,allowSgtFallback){
     function basePool(allowNCE,allowAdmin){
       return D.troops.filter(function(t){
         if(!isAvailable(t)) return false;
-        // "Never suggest for Sentry duty" only excludes from Sentry —
-        // the troop can still be suggested for Roaming or Line Duty.
-        if(t.neverDuty&&slot.category==='Sentry') return false;
+        // "Never assign to any duty" is a hard block across every duty
+        // category (Sentry, Roaming, Line Duty) — no exceptions, including NCE.
+        if(t.neverDuty) return false;
         if(used.indexOf(t.id)>=0) return false;
         if(!allowAdmin&&isAdminTrade(t)) return false;
         // Drivers are only ever assigned via the driver quota pre-fill
@@ -4238,18 +4327,45 @@ function dsFillPass(date,slotList,used,warnings,allowSgtFallback){
         return true;
       });
     }
-    var pool=basePool(false,false);
+    // Gender and required-rank are HARD requirements — a candidate who'd
+    // fail either can never actually fill this slot, at ANY fallback tier.
+    // They must be checked on EACH tier (general → NCE → Administration/HQ)
+    // before deciding that tier is "empty" and escalating to the next one.
+    // Previously gender/rank were only applied once, to whichever tier's
+    // pool happened to be picked — so the general-troop tier could look
+    // non-empty (blocking escalation) purely because of candidates who'd
+    // get filtered out a moment later by gender or rank, leaving the post
+    // vacant with NCE/Administration never even considered. That's why
+    // raising the Administration/HQ cap could appear to do nothing: this
+    // function never got far enough to check it. General troops are
+    // still always tried first — this only fixes WHEN escalation happens.
+    function applyHardFilters(rawPool){
+      var p=rawPool;
+      if(!(post&&post.genderPref==='female')){
+        p=p.filter(function(t){return t.gender!=='Female';});
+      }
+      if(post&&post.requiredRank){
+        var rankSlotsFilled0=slotList.filter(function(s){return s.postId===slot.postId&&s.label===slot.label&&s.chosenId;});
+        var rankAlready0=rankSlotsFilled0.some(function(s){var t=troopById(s.chosenId);return t&&troopMeetsMinRank(t,post.requiredRank);});
+        if(!rankAlready0){
+          p=p.filter(function(t){return troopMeetsMinRank(t,post.requiredRank);});
+        }
+      }
+      return p;
+    }
+    var pool=applyHardFilters(basePool(false,false));
     var ncefallback=false, adminfallback=false, sergeantSeniorityFallback=false, adminCapBlocked=false;
-    if(pool.length===0&&(slot.category==='Line Duty'||slot.category==='Sentry')){ pool=basePool(true,false); ncefallback=pool.length>0; }
+    if(pool.length===0&&(slot.category==='Line Duty'||slot.category==='Sentry')){ pool=applyHardFilters(basePool(true,false)); ncefallback=pool.length>0; }
     // Administration/HQ staff are normally never put on duty — only pulled
-    // in as a last resort when the troop pool is genuinely exhausted. By
-    // day that stays an absolute last resort with no ceiling (manpower
-    // shortages are rare and every post still needs covering). By night,
-    // a configurable cap (Duty Settings → Administration/HQ on Sentry)
-    // limits how many Administration/HQ troops can be pulled into a
-    // single night's Sentry roster — once that many are already used
-    // tonight, further Sentry slots are left unassigned rather than
-    // stacking the roster with Administration/HQ staff.
+    // in as a last resort when the troop pool is genuinely exhausted (every
+    // eligible general troop used up first, then NCE). By day that stays
+    // an absolute last resort with no ceiling (manpower shortages are rare
+    // and every post still needs covering). By night, a configurable cap
+    // (Duty Settings → Administration/HQ on Sentry) limits how many
+    // Administration/HQ troops can be pulled into a single night's Sentry
+    // roster — once that many are already used tonight, further Sentry
+    // slots are left unassigned rather than stacking the roster with
+    // Administration/HQ staff.
     if(pool.length===0&&!roleLocked){
       var isNightSentry=slot.category==='Sentry'&&!isDayTime(slot.startTime);
       var adminCapOk=true;
@@ -4259,7 +4375,7 @@ function dsFillPass(date,slotList,used,warnings,allowSgtFallback){
         adminCapOk=usedAdminCount<adminCap;
       }
       if(adminCapOk){
-        pool=basePool((slot.category==='Line Duty'||slot.category==='Sentry'),true); adminfallback=pool.length>0;
+        pool=applyHardFilters(basePool((slot.category==='Line Duty'||slot.category==='Sentry'),true)); adminfallback=pool.length>0;
       } else {
         adminCapBlocked=true;
       }
@@ -4296,12 +4412,17 @@ function dsFillPass(date,slotList,used,warnings,allowSgtFallback){
         if(qPool.length) pool=qPool;
       }
     }
+    var rankBlocked=false;
     if(post&&post.requiredRank){
       // Scoped to THIS shift (same post + same shift label) — not the
       // whole post across every shift in the pass. Otherwise fulfilling
       // the rank requirement on one shift (e.g. Morning) would wrongly
       // exempt a completely different shift (e.g. Afternoon) of the same
       // post from ever needing its own qualifying rank.
+      // (This re-applies the same rank filter already used per-tier above,
+      // as a safety net for pools — like the Roaming any-Sergeant fallback
+      // below — that bypass applyHardFilters; it's a no-op on a pool
+      // that's already rank-filtered.)
       var rankSlotsFilled=slotList.filter(function(s){return s.postId===slot.postId&&s.label===slot.label&&s.chosenId;});
       var rankAlready=rankSlotsFilled.some(function(s){var t=troopById(s.chosenId);return t&&troopMeetsMinRank(t,post.requiredRank);});
       if(!rankAlready){
@@ -4312,7 +4433,7 @@ function dsFillPass(date,slotList,used,warnings,allowSgtFallback){
           // required one — leave this slot unfilled instead so it's
           // visibly flagged rather than quietly wrong.
           pool=[];
-          warnings.push(slot.label+': needs at least one '+post.requiredRank+' or above — none available, left unassigned rather than substituting a lower rank.');
+          rankBlocked=true;
         }
       }
     }
@@ -4343,6 +4464,9 @@ function dsFillPass(date,slotList,used,warnings,allowSgtFallback){
       slot.chosenId=null; slot.poolPos=-1;
       if(adminCapBlocked){
         warnings.push(slot.label+': troop pool exhausted and Administration/HQ Night Sentry cap already reached — left unassigned.');
+      }
+      else if(rankBlocked){
+        warnings.push(slot.label+': needs at least one '+post.requiredRank+' or above — none available, left unassigned rather than substituting a lower rank.');
       }
       // A Roaming slot left empty in the eligible-only pass (1) still has
       // a chance at the any-Sergeant fallback in pass 3 — don't warn yet
@@ -4410,6 +4534,55 @@ function renderDsResults(){
       '<div style="font-size:13px;font-weight:700;color:var(--text);">'+escHtml(g.postLabel)+'</div>'+
       shiftBlocks+'</div>';
   }).join('');
+  dsUpdateRemainingCount();
+  var remPanel=document.getElementById('ds-remaining-troops');
+  if(remPanel&&remPanel.style.display!=='none') renderDsRemainingTroops();
+}
+// ── Remaining Troops (Suggest Duty Roster) — everyone available and NOT
+// currently used by any slot in this suggestion, so a quick browse/tap
+// alternative to typing into a slot's manual-search box (which still
+// works too). Tap a slot's 🔍 to open its picker, then tap a name here.
+function dsUpdateRemainingCount(){
+  var usedIds={}; _dsSlots.forEach(function(s){ if(s.chosenId) usedIds[s.chosenId]=true; });
+  var n=D.troops.filter(function(t){return isAvailable(t)&&!usedIds[t.id];}).length;
+  var el=document.getElementById('ds-remaining-count');
+  if(el) el.textContent=n;
+}
+function toggleDsRemainingTroops(){
+  var el=document.getElementById('ds-remaining-troops');
+  if(!el) return;
+  var open=el.style.display!=='none';
+  el.style.display=open?'none':'block';
+  if(!open) renderDsRemainingTroops();
+}
+function renderDsRemainingTroops(){
+  var el=document.getElementById('ds-remaining-troops');
+  if(!el) return;
+  var usedIds={}; _dsSlots.forEach(function(s){ if(s.chosenId) usedIds[s.chosenId]=true; });
+  var remaining=sortTroops(D.troops.filter(function(t){return isAvailable(t)&&!usedIds[t.id];}));
+  dsUpdateRemainingCount();
+  if(remaining.length===0){ el.innerHTML='<div class="empty" style="padding:6px 0;">No remaining troops available.</div>'; return; }
+  var hint=(_dsManualPickSlot>=0)
+    ?'<div style="font-size:11px;color:var(--tan);margin-bottom:6px;">Tap a name to assign to the open slot.</div>'
+    :'<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">Tap 🔍 on a slot above first, then tap a name here to assign them.</div>';
+  el.innerHTML=hint+remaining.map(function(t){
+    return '<div class="suggest-item" style="padding:6px 4px;cursor:pointer;" onclick="dsPickFromRemaining(\''+t.id+'\')"><strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong> <span style="color:var(--text-muted);font-size:11px;">('+t.unit+')</span></div>';
+  }).join('');
+}
+function dsPickFromRemaining(troopId){
+  if(_dsManualPickSlot<0){ showAlert('ds-warnings','Tap 🔍 on the slot you want to fill first, then pick from Remaining Troops.','warn'); return; }
+  dsManualPick(_dsManualPickSlot,troopId);
+}
+// Clears every currently-suggested troop in this suggestion (slots stay,
+// but all become "— none available —" / unassigned) so the whole roster
+// can be filled by hand from scratch — for when the suggestion needs more
+// changes than swapping one or two slots is worth.
+function dsClearAllSuggestions(){
+  if(!_dsSlots||!_dsSlots.length) return;
+  if(!confirm('Clear ALL suggested troops in this roster? You will need to pick every slot manually afterward.')) return;
+  _dsSlots.forEach(function(s){ s.chosenId=null; s.poolPos=-1; });
+  _dsManualPickSlot=-1;
+  renderDsResults();
 }
 function dsToggleManualPick(i){ _dsManualPickSlot=(_dsManualPickSlot===i)?-1:i; renderDsResults(); }
 function dsManualSearch(i,val){
@@ -4448,7 +4621,7 @@ function dutyEligibilityIssuesRaw(t,type,post,slot){
   if(slot&&slot.category!=='Roaming'&&isRoamingOnlyRank(t)) issues.push('Officers/JCOs are only assigned Roaming duty');
   if(slot&&slot.category==='Sentry'&&isNCE(t)) issues.push('NCE not assigned Sentry duty');
   if(post&&(post.name==='Medical'||post.name==='Signal')&&!troopMeetsPostRequirement(t,post)) issues.push('Role is not '+post.name);
-  if(t.neverDuty&&slot&&slot.category==='Sentry') issues.push('marked Never Suggest for Sentry Duty');
+  if(t.neverDuty) issues.push('marked Never Assign to Duty');
   if(isAdminTrade(t)) issues.push('Administration/HQ staff');
   if(_dsDate&&isContingencyExcluded(t.id,_dsDate,slot?(isDayTime(slot.startTime)?'day':'night'):null)) issues.push('Contingency Mode active for this date/shift');
   return issues;
@@ -4582,7 +4755,7 @@ function editDutyDraft(id){
     var post=s.postId?dutyPostById(s.postId):null;
     var pool=D.troops.filter(function(t){
       if(!isAvailable(t)) return false;
-      if(t.neverDuty&&s.category==='Sentry') return false;
+      if(t.neverDuty) return false;
       if(t.id===s.chosenId) return true;
       if(s.category==='Roaming'){
         if(s.roamingRole==='officer'&&!isRoamingOfficerRank(t)) return false;
