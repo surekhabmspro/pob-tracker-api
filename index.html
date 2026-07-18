@@ -1537,6 +1537,15 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     <div class="fg" style="max-width:200px;"><label class="field-label">Max Admin/HQ on Night Sentry</label><input type="number" id="cfg-admin-night-cap" min="0" max="20" onchange="saveAdminNightCap()"></div>
   </div>
   <div class="card">
+    <div class="card-title">Drivers on Duty</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Drivers mix into the same Sentry posts and Roaming slots as everyone else — set exactly how many drivers should be on each per day/night. Whichever drivers are picked still rotate serially and by fairness, same as everyone else, so it's never the same drivers every time.</div>
+    <div class="fr">
+      <div class="fg"><label class="field-label">Drivers on Sentry — Day</label><input type="number" id="cfg-driver-sentry-day" min="0" max="30" onchange="saveDriverDutyQuota()"></div>
+      <div class="fg"><label class="field-label">Drivers on Sentry — Night</label><input type="number" id="cfg-driver-sentry-night" min="0" max="30" onchange="saveDriverDutyQuota()"></div>
+    </div>
+    <div class="fg" style="max-width:200px;"><label class="field-label">Drivers on Roaming (Night)</label><input type="number" id="cfg-driver-roaming-night" min="0" max="30" onchange="saveDriverDutyQuota()"></div>
+  </div>
+  <div class="card">
     <div class="card-title">Sentry Posts</div>
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Tap a post to edit it. Add as many as you need.</div>
     <div id="sentry-post-rows"></div>
@@ -2408,7 +2417,7 @@ var DEFAULT_ADMIN_NIGHT_SENTRY_CAP = 2;
 var D = {
   troops:[], patrols:[], archived:[], counter:1, audit:[],
   settings:{pob:'POB Mobaye',mission:'',commander:'',classification:'CONFIDENTIAL',lastBackupDate:null},
-  config:{types:DEFAULT_TYPES.slice(),sectors:DEFAULT_SECTORS.slice(),routes:DEFAULT_ROUTES.slice(),ranks:DEFAULT_RANKS.slice(),dutyShifts:DEFAULT_DUTY_SHIFTS.map(function(s){return Object.assign({},s);}),dutyPosts:DEFAULT_DUTY_POSTS.map(function(p){return Object.assign({},p);}),dutyQuals:DEFAULT_DUTY_QUALS.slice(),dutyTypes:DEFAULT_DUTY_TYPES.map(function(t){return Object.assign({},t);}),dayNight:Object.assign({},DEFAULT_DAY_NIGHT),customRoles:[],shiftPreset:Object.assign({},DEFAULT_SHIFT_PRESET),adminNightSentryCap:DEFAULT_ADMIN_NIGHT_SENTRY_CAP},
+  config:{types:DEFAULT_TYPES.slice(),sectors:DEFAULT_SECTORS.slice(),routes:DEFAULT_ROUTES.slice(),ranks:DEFAULT_RANKS.slice(),dutyShifts:DEFAULT_DUTY_SHIFTS.map(function(s){return Object.assign({},s);}),dutyPosts:DEFAULT_DUTY_POSTS.map(function(p){return Object.assign({},p);}),dutyQuals:DEFAULT_DUTY_QUALS.slice(),dutyTypes:DEFAULT_DUTY_TYPES.map(function(t){return Object.assign({},t);}),dayNight:Object.assign({},DEFAULT_DAY_NIGHT),customRoles:[],shiftPreset:Object.assign({},DEFAULT_SHIFT_PRESET),adminNightSentryCap:DEFAULT_ADMIN_NIGHT_SENTRY_CAP,driverDutyQuota:{sentryDay:0,sentryNight:0,roamingNight:0}},
   security:{pinHash:'',securityQ:'',securityAHash:''},
   drafts:[], duties:[], dutyCounter:1, dutyContingency:[], dutyDrafts:[]
 };
@@ -2433,6 +2442,10 @@ function migrateDutySystem(){
   if(D.config.shiftPreset.day!==3&&D.config.shiftPreset.day!==4) D.config.shiftPreset.day=DEFAULT_SHIFT_PRESET.day;
   if(D.config.shiftPreset.night!==3&&D.config.shiftPreset.night!==4) D.config.shiftPreset.night=DEFAULT_SHIFT_PRESET.night;
   if(D.config.adminNightSentryCap==null||isNaN(D.config.adminNightSentryCap)) D.config.adminNightSentryCap=DEFAULT_ADMIN_NIGHT_SENTRY_CAP;
+  if(!D.config.driverDutyQuota) D.config.driverDutyQuota={sentryDay:0,sentryNight:0,roamingNight:0};
+  D.config.driverDutyQuota.sentryDay=D.config.driverDutyQuota.sentryDay||0;
+  D.config.driverDutyQuota.sentryNight=D.config.driverDutyQuota.sentryNight||0;
+  D.config.driverDutyQuota.roamingNight=D.config.driverDutyQuota.roamingNight||0;
   if(!D.config.dutyPosts) D.config.dutyPosts=[];
   D.config.dutyPosts=D.config.dutyPosts.map(function(p){
     if(typeof p==='string') return {id:uid('post'),name:p,active:true,dayStrength:1,nightStrength:1,genderPref:'none',qualRequired:'',continuous:false};
@@ -3865,12 +3878,15 @@ function saveDuty(){
     var ed=D.duties.find(function(x){return x.id===editingDutyId;});
     if(!ed){ editingDutyId=null; showAlert('duty-alert','Duty entry no longer exists.','danger'); return; }
     ed.date=date; ed.type=type.name; ed.postId=post?post.id:null; ed.postName=post?post.name:''; ed.startTime=start; ed.durationHours=dur; ed.troops=dutySelectedTroops.slice(); ed.remarks=remarks; ed.adminOverride=dutyIncludeAdmin; ed.modifiedAt=new Date().toISOString();
+    var edOrder=shiftOrderForSlot({category:type.name,startTime:start}); var edIdx=edOrder.indexOf(start);
+    ed.shiftIdx=edIdx>=0?edIdx:null; ed.shiftIdxCount=edOrder.length||null;
     ed.dutyId=dutyDisplayId(ed);
     remoteSaveConfig();
     audit('Duty edited: '+ed.dutyId+' | '+ed.type+(post?(' | '+post.name):''));
     showAlert('duty-alert','Duty '+ed.dutyId+' updated.','success');
   } else {
-    var nowIso=new Date().toISOString(); var nd={id:uid('duty'),dutySeq:nextDutySeq(),date:date,type:type.name,postId:post?post.id:null,postName:post?post.name:'',startTime:start,durationHours:dur,troops:dutySelectedTroops.slice(),remarks:remarks,adminOverride:dutyIncludeAdmin,replacements:[],createdAt:nowIso,modifiedAt:nowIso,cancelled:false};
+    var ndOrder=shiftOrderForSlot({category:type.name,startTime:start}); var ndIdx=ndOrder.indexOf(start);
+    var nowIso=new Date().toISOString(); var nd={id:uid('duty'),dutySeq:nextDutySeq(),date:date,type:type.name,postId:post?post.id:null,postName:post?post.name:'',startTime:start,durationHours:dur,troops:dutySelectedTroops.slice(),remarks:remarks,adminOverride:dutyIncludeAdmin,replacements:[],createdAt:nowIso,modifiedAt:nowIso,cancelled:false,shiftIdx:(ndIdx>=0?ndIdx:null),shiftIdxCount:(ndOrder.length||null)};
     nd.dutyId=dutyDisplayId(nd);
     D.duties.push(nd);
     remoteSaveConfig();
@@ -3980,10 +3996,10 @@ function dsBuildSlots(date,period){
     }
     var strength=period==='day'?post.dayStrength:post.nightStrength;
     if(strength<=0) return;
-    periodShifts.forEach(function(sh){
+    periodShifts.forEach(function(sh,shIdx){
       var dur=sh._flatDur!=null?sh._flatDur:legacyShiftDurationHours(sh.start,sh.end);
       for(var i=0;i<strength;i++){
-        slots.push({category:'Sentry',label:post.name+' — '+sh.name,postId:post.id,postName:post.name,startTime:sh.start,durationHours:dur,chosenId:null,pool:[],poolPos:-1});
+        slots.push({category:'Sentry',label:post.name+' — '+sh.name,postId:post.id,postName:post.name,startTime:sh.start,durationHours:dur,chosenId:null,pool:[],poolPos:-1,shiftIdx:shIdx,shiftIdxCount:periodShifts.length});
       }
     });
   });
@@ -4003,7 +4019,7 @@ function dsBuildSlots(date,period){
       for(var k=0;k<rCount;k++){
         var role=(k===officerSlotIdx)?'officer':(k===jcoSlotIdx?'jco':'sergeant');
         var roleName=role==='officer'?'Officer':(role==='jco'?'JCO':'Sergeant');
-        slots.push({category:'Roaming',roamingRole:role,label:'Roaming Duty — '+roleName+' ('+slotTimes[k]+')',postId:null,postName:'',startTime:slotTimes[k],durationHours:rDur,chosenId:null,pool:[],poolPos:-1});
+        slots.push({category:'Roaming',roamingRole:role,label:'Roaming Duty — '+roleName+' ('+slotTimes[k]+')',postId:null,postName:'',startTime:slotTimes[k],durationHours:rDur,chosenId:null,pool:[],poolPos:-1,shiftIdx:k,shiftIdxCount:rCount});
       }
       // Not persisted yet — dsBuildSlots only runs to preview a
       // suggestion. The rotation state is only committed (advanced) once
@@ -4046,6 +4062,7 @@ function dsAssignFemalePreferredGroups(date,slots,used,warnings){
       if(isNCE(t)&&!allowNCE) return false;
       if(isRoamingOnlyRank(t)) return false;
       if(t.trade==='Signal') return false;
+      if(t.trade==='Driver') return false;
       if(isAdminTrade(t)&&!allowAdmin) return false;
       var c=dutyConflict(t.id,date,startTime,dur,null,_editingDutyDraftId);
       if(c.duty||c.patrol||c.draftDuty) return false;
@@ -4083,9 +4100,75 @@ function dsAssignFemalePreferredGroups(date,slots,used,warnings){
 // Fills each slot in turn — a slot's ranked candidate pool excludes
 // whoever was already picked for an earlier slot in this same pass, so
 // nobody gets double-booked across posts on the same date.
+// Drivers mix into the SAME Sentry posts and Roaming slots as everyone
+// else (no dedicated post) — this just guarantees exactly the configured
+// number of drivers end up on each, picked using the identical
+// fairness+serial-rotation scoring (dsScoreWithRotation) everyone else is
+// picked with, so rotation among drivers specifically is preserved.
+// Runs as a pre-fill step (like the female-preferred groups above) so the
+// slots it claims are skipped by the normal fill pass; the normal pass
+// then excludes Driver trade entirely (see basePool below), so drivers
+// never get pulled in beyond the configured count.
+function dsAssignDriverQuota(date,slots,used,warnings){
+  var q=D.config.driverDutyQuota||{sentryDay:0,sentryNight:0,roamingNight:0};
+  function candidateOk(slot){
+    var post=slot.postId?dutyPostById(slot.postId):null;
+    if(post&&(post.name==='Medical'||post.name==='Signal')) return false;
+    if(post&&post.genderPref==='female') return false;
+    // Skip posts that require a minimum rank (e.g. Main Gate) — those are
+    // enforced by a separate "at least one X-or-above" check that a
+    // driver quota pick could accidentally break.
+    if(post&&post.requiredRank) return false;
+    return true;
+  }
+  function eligibleDrivers(slot){
+    var post=slot.postId?dutyPostById(slot.postId):null;
+    return D.troops.filter(function(t){
+      if(t.trade!=='Driver') return false;
+      if(!isAvailable(t)) return false;
+      if(t.neverDuty&&slot.category==='Sentry') return false;
+      if(used.indexOf(t.id)>=0) return false;
+      if(isContingencyExcluded(t.id,date,isDayTime(slot.startTime)?'day':'night')) return false;
+      if(slot.category==='Roaming'){
+        if(slot.roamingRole==='officer'&&!isRoamingOfficerRank(t)) return false;
+        if(slot.roamingRole==='jco'&&!isRoamingJCORank(t)) return false;
+        if(slot.roamingRole==='sergeant'&&!isRoamingEligibleSergeant(t)) return false;
+        if(!slot.roamingRole&&!isRoamingEligible(t)) return false;
+      }
+      if(post&&post.qualRequired&&!isDutyQualified(t,post.qualRequired)) return false;
+      var c=dutyConflict(t.id,date,slot.startTime,slot.durationHours,null,_editingDutyDraftId);
+      if(c.duty||c.patrol||c.draftDuty) return false;
+      return true;
+    });
+  }
+  function fillCategory(candidateSlots,need,label){
+    for(var n=0;n<need;n++){
+      var openSlots=candidateSlots.filter(function(s){return !s.chosenId&&!s._preFilled;});
+      if(!openSlots.length){ warnings.push('Driver quota — '+label+': ran out of open slots to fill.'); break; }
+      var bestDriver=null,bestScore=null,bestSlot=null;
+      openSlots.forEach(function(slot){
+        var eligible=eligibleDrivers(slot);
+        if(!eligible.length) return;
+        eligible.sort(function(a,b){ var s=dsScoreWithRotation(a,slot)-dsScoreWithRotation(b,slot); return s!==0?s:compareSeniority(a,b); });
+        var top=eligible[0], score=dsScoreWithRotation(top,slot);
+        if(bestScore===null||score<bestScore){ bestScore=score; bestDriver=top; bestSlot=slot; }
+      });
+      if(!bestDriver){ warnings.push('Driver quota — '+label+': not enough eligible/available drivers to fill the configured count.'); break; }
+      bestSlot.chosenId=bestDriver.id; bestSlot.pool=[bestDriver.id]; bestSlot.poolPos=0; bestSlot._preFilled=true; bestSlot._driverQuota=true;
+      used.push(bestDriver.id);
+    }
+  }
+  var sentryDaySlots=slots.filter(function(s){return s.category==='Sentry'&&isDayTime(s.startTime)&&candidateOk(s);});
+  var sentryNightSlots=slots.filter(function(s){return s.category==='Sentry'&&!isDayTime(s.startTime)&&candidateOk(s);});
+  var roamingSlots=slots.filter(function(s){return s.category==='Roaming';});
+  fillCategory(sentryDaySlots,q.sentryDay||0,'Sentry (Day)');
+  fillCategory(sentryNightSlots,q.sentryNight||0,'Sentry (Night)');
+  fillCategory(roamingSlots,q.roamingNight||0,'Roaming');
+}
 function dsFillSlots(date,slots){
   var used=[], warnings=[];
   dsAssignFemalePreferredGroups(date,slots,used,warnings);
+  dsAssignDriverQuota(date,slots,used,warnings);
   // Three passes so a shortage of Roaming-eligible Sergeants can never
   // starve Sentry of the Sergeants it needs (item 1 — previously, once
   // eligible Sergeants ran out, Roaming fell back to ANY Sergeant and
@@ -4125,6 +4208,11 @@ function dsFillPass(date,slotList,used,warnings,allowSgtFallback){
         if(t.neverDuty&&slot.category==='Sentry') return false;
         if(used.indexOf(t.id)>=0) return false;
         if(!allowAdmin&&isAdminTrade(t)) return false;
+        // Drivers are only ever assigned via the driver quota pre-fill
+        // above (which mixes them into these same posts/slots up to the
+        // configured count) — never picked here in the general pool, so
+        // the quota is the only thing controlling how many appear.
+        if(t.trade==='Driver') return false;
         // Signal personnel are reserved exclusively for the Signal post —
         // never eligible for Sentry, Roaming, or Line Duty (item 4).
         if(t.trade==='Signal'&&!(post&&post.name==='Signal')) return false;
@@ -4186,6 +4274,7 @@ function dsFillPass(date,slotList,used,warnings,allowSgtFallback){
       var sgtFallback=D.troops.filter(function(t){
         if((t.rank||'').trim().toLowerCase()!=='sergeant') return false;
         if(t.trade==='Signal') return false;
+        if(t.trade==='Driver') return false;
         if(!isAvailable(t)) return false;
         if(used.indexOf(t.id)>=0) return false;
         if(isContingencyExcluded(t.id,date,isDayTime(slot.startTime)?'day':'night')) return false;
@@ -4379,7 +4468,7 @@ function dsSlotsToDutyRecords(date){
     var key=s.category+'|'+(s.postId||'')+'|'+s.startTime+'|'+s.durationHours;
     var existing=acc.find(function(r){return r._key===key;});
     if(existing){ existing.troops.push(s.chosenId); }
-    else { acc.push({_key:key,category:s.category,postId:s.postId,postName:s.postName,startTime:s.startTime,durationHours:s.durationHours,troops:[s.chosenId],roamingRole:s.roamingRole||null}); }
+    else { acc.push({_key:key,category:s.category,postId:s.postId,postName:s.postName,startTime:s.startTime,durationHours:s.durationHours,troops:[s.chosenId],roamingRole:s.roamingRole||null,shiftIdx:(s.shiftIdx!=null?s.shiftIdx:null),shiftIdxCount:(s.shiftIdxCount!=null?s.shiftIdxCount:null)}); }
     return acc;
   },[]);
 }
@@ -4401,7 +4490,7 @@ function logDutySuggestNow(){
   var records=dsSlotsToDutyRecords(_dsDate);
   if(records.length===0){ showAlert('ds-warnings','Nothing to log — no troops suggested.','danger'); return; }
   records.forEach(function(r){
-    var nowIso2=new Date().toISOString(); var nd={id:uid('duty'),dutySeq:nextDutySeq(),date:_dsDate,type:r.category,postId:r.postId,postName:r.postName,startTime:r.startTime,durationHours:r.durationHours,troops:r.troops,remarks:'',adminOverride:false,replacements:[],createdAt:nowIso2,modifiedAt:nowIso2,cancelled:false};
+    var nowIso2=new Date().toISOString(); var nd={id:uid('duty'),dutySeq:nextDutySeq(),date:_dsDate,type:r.category,postId:r.postId,postName:r.postName,startTime:r.startTime,durationHours:r.durationHours,troops:r.troops,remarks:'',adminOverride:false,replacements:[],createdAt:nowIso2,modifiedAt:nowIso2,cancelled:false,shiftIdx:(r.shiftIdx!=null?r.shiftIdx:null),shiftIdxCount:(r.shiftIdxCount!=null?r.shiftIdxCount:null)};
     nd.dutyId=dutyDisplayId(nd);
     D.duties.push(nd);
   });
@@ -4526,7 +4615,7 @@ function logDutyDraftNow(id){
   var d=D.dutyDrafts.find(function(x){return x.id===id;});
   if(!d) return;
   (d.records||[]).forEach(function(r){
-    var nowIso3=new Date().toISOString(); var nd={id:uid('duty'),dutySeq:nextDutySeq(),date:d.plannedDate,type:r.category,postId:r.postId,postName:r.postName,startTime:r.startTime,durationHours:r.durationHours,troops:r.troops.slice(),remarks:'',adminOverride:false,replacements:[],createdAt:nowIso3,modifiedAt:nowIso3,cancelled:false};
+    var nowIso3=new Date().toISOString(); var nd={id:uid('duty'),dutySeq:nextDutySeq(),date:d.plannedDate,type:r.category,postId:r.postId,postName:r.postName,startTime:r.startTime,durationHours:r.durationHours,troops:r.troops.slice(),remarks:'',adminOverride:false,replacements:[],createdAt:nowIso3,modifiedAt:nowIso3,cancelled:false,shiftIdx:(r.shiftIdx!=null?r.shiftIdx:null),shiftIdxCount:(r.shiftIdxCount!=null?r.shiftIdxCount:null)};
     nd.dutyId=dutyDisplayId(nd);
     D.duties.push(nd);
   });
@@ -5566,12 +5655,25 @@ function shiftOrderForSlot(slot){
 // whether tonight's slot is the NEXT one in line for them (serial
 // rotation: 1st → 2nd → 3rd, never jumping ahead) rather than just "any
 // different shift".
+//
+// The index is read from the duty record's own stored shiftIdx (its
+// position in whatever shift order was active THAT day) rather than by
+// re-matching its clock-time against TODAY's order. Clock times shift
+// whenever the number of shifts changes (e.g. 3 shifts → 4 shifts spreads
+// the night differently), so matching by time alone loses the sequence
+// the moment the shift count changes. Matching by stored position keeps
+// "was on 2nd shift" meaningful regardless of how many shifts exist now —
+// it's then wrapped into TODAY's order length by the caller.
+// Falls back to time-matching against the given order for older records
+// logged before shiftIdx was tracked.
 function lastDutyShiftIndex(tid,category,order){
-  if(!order||!order.length) return -1;
   var ds=D.duties.filter(function(d){return !d.cancelled&&d.type===category&&(d.troops||[]).indexOf(tid)>=0;});
   ds.sort(function(a,b){return b.date.localeCompare(a.date);});
   if(!ds.length) return -1;
-  return order.indexOf(ds[0].startTime);
+  var last=ds[0];
+  if(last.shiftIdx!=null&&last.shiftIdxCount) return last.shiftIdx;
+  if(!order||!order.length) return -1;
+  return order.indexOf(last.startTime);
 }
 // Fairness alone can otherwise re-pick the same troop for the same post
 // AND the same shift timing day after day (they're equally "due" as
@@ -5623,9 +5725,16 @@ function dsScoreWithRotation(t,slot){
       var lastIdx=lastDutyShiftIndex(t.id,slot.category,order);
       var thisIdx=order.indexOf(slot.startTime);
       if(lastIdx>=0&&thisIdx>=0){
-        var expectedIdx=(lastIdx+1)%order.length;
+        // Wrap the stored index into TODAY's order length before advancing
+        // it — this is what lets the sequence keep working even when the
+        // shift count changed since the troop's last duty (e.g. last time
+        // there were 3 shifts and they were on the 3rd/last one; tonight
+        // there are 4, so index 3 wraps to 0 and "next" is 1, not a jump
+        // off the end of the array).
+        var wrappedLastIdx=lastIdx%order.length;
+        var expectedIdx=(wrappedLastIdx+1)%order.length;
         if(thisIdx===expectedIdx) score-=30; // exactly next-in-sequence — strongly preferred
-        else if(thisIdx===lastIdx) score+=40; // same slot again — discouraged (on top of the timing penalty above)
+        else if(thisIdx===wrappedLastIdx) score+=40; // same slot again — discouraged (on top of the timing penalty above)
         else score+=12; // out-of-sequence jump — mildly discouraged in favour of the serial candidate
       }
     }
@@ -5920,7 +6029,7 @@ function showTabFromMore(id){ closeMoreMenu(); showTab(id); }
 // =====================================================================
 // SETTINGS
 // =====================================================================
-function renderSettings(){ var s=D.settings,c=D.config; document.getElementById('cfg-pob').value=s.pob||''; document.getElementById('cfg-mission').value=s.mission||''; document.getElementById('cfg-cmd').value=s.commander||''; document.getElementById('cfg-class').value=s.classification||''; document.getElementById('cfg-pp-green').value=(s.ppGreen!=null?s.ppGreen:''); document.getElementById('cfg-pp-yellow').value=(s.ppYellow!=null?s.ppYellow:''); renderTagList('type-tags',c.types,'types'); renderTagList('sector-tags',c.sectors,'sectors'); renderTagList('route-tags',c.routes,'routes'); renderTagList('duty-qual-tags',c.dutyQuals,'dutyQuals'); renderTagList('custom-role-tags',c.customRoles,'customRoles'); document.getElementById('cfg-day-start').value=c.dayNight.start; document.getElementById('cfg-day-end').value=c.dayNight.end; document.getElementById('cfg-admin-night-cap').value=(c.adminNightSentryCap!=null?c.adminNightSentryCap:DEFAULT_ADMIN_NIGHT_SENTRY_CAP); populateDutyQualSelects(); renderSentryPostRows(); renderDutyTypeRows(); renderDutyShiftRows(); renderRankTags(); renderPinStatus(); renderPptList(); }
+function renderSettings(){ var s=D.settings,c=D.config; document.getElementById('cfg-pob').value=s.pob||''; document.getElementById('cfg-mission').value=s.mission||''; document.getElementById('cfg-cmd').value=s.commander||''; document.getElementById('cfg-class').value=s.classification||''; document.getElementById('cfg-pp-green').value=(s.ppGreen!=null?s.ppGreen:''); document.getElementById('cfg-pp-yellow').value=(s.ppYellow!=null?s.ppYellow:''); renderTagList('type-tags',c.types,'types'); renderTagList('sector-tags',c.sectors,'sectors'); renderTagList('route-tags',c.routes,'routes'); renderTagList('duty-qual-tags',c.dutyQuals,'dutyQuals'); renderTagList('custom-role-tags',c.customRoles,'customRoles'); document.getElementById('cfg-day-start').value=c.dayNight.start; document.getElementById('cfg-day-end').value=c.dayNight.end; document.getElementById('cfg-admin-night-cap').value=(c.adminNightSentryCap!=null?c.adminNightSentryCap:DEFAULT_ADMIN_NIGHT_SENTRY_CAP); var ddq=c.driverDutyQuota||{sentryDay:0,sentryNight:0,roamingNight:0}; document.getElementById('cfg-driver-sentry-day').value=ddq.sentryDay||0; document.getElementById('cfg-driver-sentry-night').value=ddq.sentryNight||0; document.getElementById('cfg-driver-roaming-night').value=ddq.roamingNight||0; populateDutyQualSelects(); renderSentryPostRows(); renderDutyTypeRows(); renderDutyShiftRows(); renderRankTags(); renderPinStatus(); renderPptList(); }
 function saveDayNight(){
   D.config.dayNight={start:document.getElementById('cfg-day-start').value||'06:00',end:document.getElementById('cfg-day-end').value||'18:00'};
   remoteSaveConfig();
@@ -5934,6 +6043,16 @@ function saveAdminNightCap(){
   document.getElementById('cfg-admin-night-cap').value=v;
   remoteSaveConfig();
   audit('Max Administration/HQ on Night Sentry updated: '+v);
+}
+function saveDriverDutyQuota(){
+  function readVal(id){ var v=parseInt(document.getElementById(id).value); return (isNaN(v)||v<0)?0:v; }
+  var sentryDay=readVal('cfg-driver-sentry-day'), sentryNight=readVal('cfg-driver-sentry-night'), roamingNight=readVal('cfg-driver-roaming-night');
+  D.config.driverDutyQuota={sentryDay:sentryDay,sentryNight:sentryNight,roamingNight:roamingNight};
+  document.getElementById('cfg-driver-sentry-day').value=sentryDay;
+  document.getElementById('cfg-driver-sentry-night').value=sentryNight;
+  document.getElementById('cfg-driver-roaming-night').value=roamingNight;
+  remoteSaveConfig();
+  audit('Driver duty quota updated: Sentry Day='+sentryDay+', Sentry Night='+sentryNight+', Roaming='+roamingNight);
 }
 function populateDutyQualSelects(){
   var opts='<option value="">None</option>'+(D.config.dutyQuals||[]).map(function(q){return '<option value="'+escHtml(q)+'">'+escHtml(q)+'</option>';}).join('');
