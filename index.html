@@ -4371,7 +4371,15 @@ function dsFillPass(date,slotList,used,warnings,allowSgtFallback){
       var adminCapOk=true;
       if(isNightSentry){
         var adminCap=(D.config.adminNightSentryCap!=null)?D.config.adminNightSentryCap:DEFAULT_ADMIN_NIGHT_SENTRY_CAP;
-        var usedAdminCount=used.filter(function(id){ var tt=troopById(id); return tt&&isAdminTrade(tt); }).length;
+        // Scoped to Night Sentry slots already filled in THIS pass only —
+        // not the shared used[] list, which also includes Roaming/Line
+        // Duty picks. Counting those against this cap meant an
+        // Administration/HQ troop legitimately placed on Roaming or Line
+        // Duty could make the Sentry cap look "reached" before Sentry
+        // filling even started, so raising the cap appeared to do nothing.
+        var usedAdminCount=slotList.filter(function(s){
+          return s.chosenId&&s.category==='Sentry'&&!isDayTime(s.startTime);
+        }).filter(function(s){ var tt=troopById(s.chosenId); return tt&&isAdminTrade(tt); }).length;
         adminCapOk=usedAdminCount<adminCap;
       }
       if(adminCapOk){
