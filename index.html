@@ -2958,13 +2958,25 @@ function contingencyExcludedTroopIds(date,shift){
 // cancelled/deactivated, per the comment above. This exception only
 // applies when a real future date is supplied — checks for "right now"
 // (no date, e.g. Free Troops) still use every reservation source as before.
+//
+// TODAY'S-DATE EXCEPTION: picking TODAY explicitly in a date field (rather
+// than leaving it blank) must behave identically to "right now" — an
+// urgent same-night patrol request is often made with today's date filled
+// in, and should only be blocked by whichever shift is actually running
+// at this moment, not by the whole night's roster. So when opts.date
+// equals today, null is passed through to the two live-reservation
+// functions instead of the date string, giving the same now>=start&&
+// now<end check as a blank-date query. Only a genuine future date keeps
+// its own whole-day-window planning check (further down).
 function isTroopReserved(tid,opts){
   opts=opts||{};
   var todayISO=new Date().toISOString().slice(0,10);
   var isFutureDate=opts.date&&opts.date>todayISO;
+  var isToday=opts.date&&opts.date===todayISO;
   if(!isFutureDate){
-    if(loggedDutyReservedTroopIds(opts.excludeDutyId||null,opts.date||null)[tid]) return true;
-    if(dutyDraftReservedTroopIds(opts.excludeDutyDraftId||null,opts.date||null)[tid]) return true;
+    var shiftCheckDate=isToday?null:(opts.date||null);
+    if(loggedDutyReservedTroopIds(opts.excludeDutyId||null,shiftCheckDate)[tid]) return true;
+    if(dutyDraftReservedTroopIds(opts.excludeDutyDraftId||null,shiftCheckDate)[tid]) return true;
   }
   if(draftReservedTroopIds(opts.excludePatrolDraftId||null)[tid]) return true;
   if(contingencyExcludedTroopIds(opts.date||null)[tid]) return true;
@@ -2987,11 +2999,22 @@ function isTroopReserved(tid,opts){
 // only an already-logged patrol or an existing patrol draft for that date
 // still counts as a conflict — logged duty and duty drafts dated for that
 // future date are skipped here, same as isTroopReserved.
+//
+// TODAY'S-DATE EXCEPTION (matches isTroopReserved above): the blunt
+// "any non-cancelled duty dated today" check below doesn't look at shift
+// timing at all — it would hard-block EVERY troop on tonight's whole duty
+// roster (every shift shares today's date) the moment today is chosen as
+// the patrol date, even for shifts that haven't started yet or have
+// already ended. isTroopReserved already does the real, shift-time-aware
+// check for those same records, so this blunt date-match check is skipped
+// for today exactly like it's skipped for future dates — only a genuinely
+// past date (not expected in normal use) still hits it.
 function stmDateConflict(tid,date){
   if(!date) return false;
   var todayISO=new Date().toISOString().slice(0,10);
   var isFutureDate=date>todayISO;
-  if(!isFutureDate){
+  var isToday=date===todayISO;
+  if(!isFutureDate&&!isToday){
     if(D.duties.some(function(d){return !d.cancelled&&d.date===date&&(d.troops||[]).indexOf(tid)>=0;})) return true;
     if((D.dutyDrafts||[]).some(function(d){return d.plannedDate===date&&(d.records||[]).some(function(r){return (r.troops||[]).indexOf(tid)>=0;});})) return true;
   }
