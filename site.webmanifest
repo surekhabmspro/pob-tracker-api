@@ -1,7 +1,7 @@
 {
-  "name": "Patrol Tracker \u2014 POB Mobaye",
-  "short_name": "Patrol",
-  "description": "Track troop presence and patrol assignments \u2014 POB Mobaye",
+  "name": "Troops Management System",
+  "short_name": "TMS",
+  "description": "Troops Management System \u2014 POB Mobaye troop presence, duty, and patrol management",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#040c06",

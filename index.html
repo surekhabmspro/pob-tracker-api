@@ -73,11 +73,20 @@ body.light-mode{background:
   display:flex;align-items:center;justify-content:space-between;
   padding:0 12px;gap:8px;
 }
-.logo{display:flex;align-items:center;gap:10px;flex-shrink:1;min-width:0;}
+.logo{display:flex;align-items:center;gap:10px;flex-shrink:1;min-width:0;overflow:hidden;}
 .logo-hex{width:38px;height:38px;object-fit:contain;flex-shrink:0;
   filter:drop-shadow(0 2px 6px rgba(230,179,74,0.25));}
-.logo-text{min-width:0;}
-.logo-text h1{font-family:var(--font-display);font-size:15px;font-weight:700;color:var(--tan);letter-spacing:1px;text-transform:uppercase;line-height:1.15;text-shadow:0 0 18px rgba(230,179,74,0.25);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+.logo-text{min-width:0;overflow:hidden;}
+.logo-text h1{font-family:var(--font-display);font-size:15px;font-weight:700;color:var(--tan);letter-spacing:1px;text-transform:uppercase;line-height:1.15;text-shadow:0 0 18px rgba(230,179,74,0.25);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;display:block;}
+/* Below this width the full name can crowd the search icon in the header,
+   so switch to the short "TMS" form — this guarantees no overlap on any
+   phone regardless of exact device width, rather than relying on ellipsis
+   truncation alone. */
+.logo-text h1 .title-short{display:none;}
+@media (max-width:480px){
+  .logo-text h1 .title-full{display:none;}
+  .logo-text h1 .title-short{display:inline;}
+}
 .logo-text p{font-size:13.5px;color:var(--text-muted);letter-spacing:0.5px;font-weight:600;}
 .header-center{flex:1;display:flex;align-items:center;gap:6px;min-width:0;justify-content:flex-end;}
 /* Mobile: search is just a round icon button; overlay appears below header */
@@ -955,7 +964,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
   <div class="logo">
     <img class="logo-hex" id="logo-img" alt="Troops Management System">
     <div class="logo-text">
-      <h1 id="pob-title">Troops Management System</h1>
+      <h1 id="pob-title"><span class="title-full">Troops Management System</span><span class="title-short">TMS</span></h1>
       <p id="clock-disp">--:--:--</p>
     </div>
   </div>
@@ -7030,7 +7039,7 @@ function submitPinReset(){
   showAlert('cfg-alert','PIN reset successfully. You may now log in with your new PIN.','success');
   audit('Security PIN reset via recovery');
 }
-function applySettings(){ var s=D.settings; document.getElementById('pob-title').textContent='Troops Management System'; document.title='Troops Management System'; if(document.getElementById('print-org-name')) document.getElementById('print-org-name').textContent=s.pob; if(document.getElementById('print-mission')) document.getElementById('print-mission').textContent=s.mission||'Patrol Report'; var wm=document.getElementById('watermark-text'); if(wm) wm.textContent=s.classification||''; }
+function applySettings(){ var s=D.settings; var titleFullEl=document.querySelector('#pob-title .title-full'); if(titleFullEl) titleFullEl.textContent='Troops Management System'; else document.getElementById('pob-title').textContent='Troops Management System'; document.title='Troops Management System'; if(document.getElementById('print-org-name')) document.getElementById('print-org-name').textContent=s.pob; if(document.getElementById('print-mission')) document.getElementById('print-mission').textContent=s.mission||'Patrol Report'; var wm=document.getElementById('watermark-text'); if(wm) wm.textContent=s.classification||''; }
 function populateDropdowns(){ var types=D.config.types,sectors=D.config.sectors; var ptEl=document.getElementById('p-type'); if(ptEl) ptEl.innerHTML=types.map(function(t){return '<option>'+t+'</option>';}).join(''); var paEl=document.getElementById('p-area'); if(paEl) paEl.innerHTML='<option value="">-- Select Sector --</option>'+sectors.map(function(s){return '<option>'+s+'</option>';}).join(''); var ftEl=document.getElementById('ft'); if(ftEl) ftEl.innerHTML='<option value="">All Types</option>'+types.map(function(t){return '<option>'+t+'</option>';}).join(''); var faEl=document.getElementById('fa'); if(faEl) faEl.innerHTML='<option value="">All Sectors</option>'+sectors.map(function(s){return '<option>'+s+'</option>';}).join(''); }
 function populateReportYears(){ var sel=document.getElementById('report-year-sel'); if(!sel) return; var years=new Set(); var now=new Date().getFullYear(); D.patrols.forEach(function(p){if(p.date) years.add(parseInt(p.date.slice(0,4)));}); years.add(now); var sorted=Array.from(years).sort(function(a,b){return b-a;}); sel.innerHTML=sorted.map(function(y){return '<option value="'+y+'"'+(y===now?' selected':'')+'>'+y+'</option>';}).join(''); }
 
