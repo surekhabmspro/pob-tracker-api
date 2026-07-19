@@ -3492,7 +3492,8 @@ function stmManualPick(i,troopId){
 // open its picker, then tap a name here to assign them to that slot.
 function stmUpdateRemainingCount(){
   var usedIds={}; (_stmSlots||[]).forEach(function(s){ if(s.chosenId) usedIds[s.chosenId]=true; });
-  var n=D.troops.filter(function(t){return isAvailable(t)&&!usedIds[t.id];}).length;
+  var patrolDate=parseDate(document.getElementById('stm-patrol-date').value)||null;
+  var n=D.troops.filter(function(t){return isAvailable(t)&&!usedIds[t.id]&&!isTroopReserved(t.id,{date:patrolDate})&&!(patrolDate&&stmDateConflict(t.id,patrolDate));}).length;
   var el=document.getElementById('stm-remaining-count');
   if(el) el.textContent=n;
 }
@@ -3507,7 +3508,8 @@ function renderStmRemainingTroops(){
   var el=document.getElementById('stm-remaining-troops');
   if(!el) return;
   var usedIds={}; (_stmSlots||[]).forEach(function(s){ if(s.chosenId) usedIds[s.chosenId]=true; });
-  var remaining=sortTroops(D.troops.filter(function(t){return isAvailable(t)&&!usedIds[t.id];}));
+  var patrolDate=parseDate(document.getElementById('stm-patrol-date').value)||null;
+  var remaining=sortTroops(D.troops.filter(function(t){return isAvailable(t)&&!usedIds[t.id]&&!isTroopReserved(t.id,{date:patrolDate})&&!(patrolDate&&stmDateConflict(t.id,patrolDate));}));
   stmUpdateRemainingCount();
   if(remaining.length===0){ el.innerHTML='<div class="empty" style="padding:6px 0;">No remaining troops available.</div>'; return; }
   var hint=(_stmManualPickSlot>=0)
