@@ -2423,8 +2423,7 @@ var D = {
 // Used only to migrate legacy duty records that stored a start+end time
 // instead of start+duration (see migrateDutySystem).
 function legacyShiftDurationHours(startStr,endStr){
-  function toMin(s){ var p=(s||'00:00').split(':'); return (parseInt(p[0])||0)*60+(parseInt(p[1])||0); }
-  var s=toMin(startStr), e=toMin(endStr);
+  var s=timeToMin(startStr), e=timeToMin(endStr);
   if(e<=s) e+=24*60;
   return (e-s)/60;
 }
@@ -4826,7 +4825,7 @@ function logDutySuggestNow(){
   if(records.length===0){ showAlert('ds-warnings','Nothing to log — no troops suggested.','danger'); return; }
   records.forEach(function(r){
     var nd2RealDate=dutyRecordCalendarDate(_dsDate,r.startTime,_dsPeriod);
-    var nowIso2=new Date().toISOString(); var nd={id:uid('duty'),dutySeq:nextDutySeq(),date:nd2RealDate,logicalDate:dutyLogicalDate(nd2RealDate,r.startTime),type:r.category,postId:r.postId,postName:r.postName,startTime:r.startTime,durationHours:r.durationHours,troops:r.troops,remarks:'',adminOverride:false,replacements:[],createdAt:nowIso2,modifiedAt:nowIso2,cancelled:false,shiftIdx:(r.shiftIdx!=null?r.shiftIdx:null),shiftIdxCount:(r.shiftIdxCount!=null?r.shiftIdxCount:null)};
+    var nowIso2=new Date().toISOString(); var nd={id:uid('duty'),dutySeq:nextDutySeq(),date:nd2RealDate,logicalDate:_dsDate,type:r.category,postId:r.postId,postName:r.postName,startTime:r.startTime,durationHours:r.durationHours,troops:r.troops,remarks:'',adminOverride:false,replacements:[],createdAt:nowIso2,modifiedAt:nowIso2,cancelled:false,shiftIdx:(r.shiftIdx!=null?r.shiftIdx:null),shiftIdxCount:(r.shiftIdxCount!=null?r.shiftIdxCount:null)};
     nd.dutyId=dutyDisplayId(nd);
     D.duties.push(nd);
   });
@@ -4951,7 +4950,7 @@ function logDutyDraftNow(id){
   if(!d) return;
   (d.records||[]).forEach(function(r){
     var nd3RealDate=dutyRecordCalendarDate(d.plannedDate,r.startTime,d.period);
-    var nowIso3=new Date().toISOString(); var nd={id:uid('duty'),dutySeq:nextDutySeq(),date:nd3RealDate,logicalDate:dutyLogicalDate(nd3RealDate,r.startTime),type:r.category,postId:r.postId,postName:r.postName,startTime:r.startTime,durationHours:r.durationHours,troops:r.troops.slice(),remarks:'',adminOverride:false,replacements:[],createdAt:nowIso3,modifiedAt:nowIso3,cancelled:false,shiftIdx:(r.shiftIdx!=null?r.shiftIdx:null),shiftIdxCount:(r.shiftIdxCount!=null?r.shiftIdxCount:null)};
+    var nowIso3=new Date().toISOString(); var nd={id:uid('duty'),dutySeq:nextDutySeq(),date:nd3RealDate,logicalDate:d.plannedDate,type:r.category,postId:r.postId,postName:r.postName,startTime:r.startTime,durationHours:r.durationHours,troops:r.troops.slice(),remarks:'',adminOverride:false,replacements:[],createdAt:nowIso3,modifiedAt:nowIso3,cancelled:false,shiftIdx:(r.shiftIdx!=null?r.shiftIdx:null),shiftIdxCount:(r.shiftIdxCount!=null?r.shiftIdxCount:null)};
     nd.dutyId=dutyDisplayId(nd);
     D.duties.push(nd);
   });
@@ -5260,7 +5259,11 @@ function printDutyHistory(){
 // Shift Details print (item 7) — one specific date+shift's full detail:
 // every duty entry in it, who's assigned, and which posts are covered.
 function printShiftDetails(dateISO,shiftKey){
-  var list=D.duties.filter(function(d){return !d.cancelled&&dutyDisplayDate(d)===dateISO&&(isDayTime(d.startTime)?'day':'night')===shiftKey;}).sort(function(a,b){return (a.startTime||'').localeCompare(b.startTime||'');});
+  var list=D.duties.filter(function(d){return !d.cancelled&&dutyDisplayDate(d)===dateISO&&(isDayTime(d.startTime)?'day':'night')===shiftKey;}).sort(function(a,b){
+    var pa=a.postName?0:1, pb=b.postName?0:1;
+    if(pa!==pb) return pa-pb;
+    return nightAwareMin(a.startTime,shiftKey)-nightAwareMin(b.startTime,shiftKey);
+  });
   var totH=list.reduce(function(s,d){return s+(parseFloat(d.durationHours)||0);},0);
   var allTroops={}; list.forEach(function(d){(d.troops||[]).forEach(function(tid){allTroops[tid]=true;});});
   var posts=[],seenP={}; list.forEach(function(d){ if(d.postName&&!seenP[d.postName]){seenP[d.postName]=1;posts.push(d.postName);} });
@@ -5339,7 +5342,13 @@ function printDutyRoster(){
 // shifts, grouped the same way as the roster above.
 function printDailyDutyList(dateISO){
   dateISO=dateISO||new Date().toISOString().slice(0,10);
-  var list=D.duties.filter(function(d){return !d.cancelled&&dutyDisplayDate(d)===dateISO;}).sort(function(a,b){return (a.startTime||'').localeCompare(b.startTime||'');});
+  var list=D.duties.filter(function(d){return !d.cancelled&&dutyDisplayDate(d)===dateISO;}).sort(function(a,b){
+    var da=isDayTime(a.startTime)?'day':'night', db=isDayTime(b.startTime)?'day':'night';
+    if(da!==db) return da==='day'?-1:1;
+    var pa=a.postName?0:1, pb=b.postName?0:1;
+    if(pa!==pb) return pa-pb;
+    return nightAwareMin(a.startTime,da)-nightAwareMin(b.startTime,db);
+  });
   var totH=list.reduce(function(s,d){return s+(parseFloat(d.durationHours)||0);},0);
   var rowsHtml=list.length===0?'<tr><td colspan="6" style="text-align:center;color:#888;padding:20px;">No duty entries on this date.</td></tr>':
     list.map(function(d){ return '<tr><td>'+(d.dutyId||'—')+'</td><td>'+(isDayTime(d.startTime)?'☀ Day':'🌙 Night')+'</td><td>'+escHtml(d.type)+'</td><td>'+escHtml(d.postName||'—')+'</td><td>'+(d.startTime||'')+'–'+shiftEndTime(d.startTime,d.durationHours)+' ('+(d.durationHours||'—')+'h)</td><td style="font-size:11px;">'+(sortTroops((d.troops||[]).map(troopById).filter(Boolean)).map(function(t){return upLabel(t.rank,t.name);}).join(', ')||'—')+'</td></tr>'; }).join('');
@@ -5813,9 +5822,27 @@ function patrolCount(tid){ return D.patrols.filter(function(p){return (p.troops|
 function patrolHours(tid){ return D.patrols.filter(function(p){return (p.troops||[]).indexOf(tid)>=0;}).reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0); }
 
 /* ── DUTY ROSTER — shift time math, conflicts, eligibility, fairness ── */
+// Single shared "HH:MM" → minutes-since-midnight helper — used by every
+// duty time/date calculation below instead of each function redefining
+// its own identical copy.
+function timeToMin(s){ var p=(s||'00:00').split(':'); return (parseInt(p[0])||0)*60+(parseInt(p[1])||0); }
+// For a "night" shift's own internal ordering: the block runs 18:00 → 06:00
+// next day, but plain HH:MM minutes would sort the 00:00–05:59 tail BEFORE
+// 18:00–23:59 (since 0 < 1080). This pushes any time before day-start
+// (D.config.dayNight.start) an extra 24h ahead so it sorts as the correct
+// continuation of the same night instead of the start of a new day. Day
+// shifts (single continuous 06:00–18:00 block) don't need this — it's a
+// no-op for them.
+function nightAwareMin(startTime,shiftKey){
+  var m=timeToMin(startTime);
+  if(shiftKey==='night'){
+    var dn=D.config.dayNight||DEFAULT_DAY_NIGHT;
+    if(m<timeToMin(dn.start)) m+=1440;
+  }
+  return m;
+}
 function shiftMinRange(startStr,durHours){
-  function toMin(s){ var p=(s||'00:00').split(':'); return (parseInt(p[0])||0)*60+(parseInt(p[1])||0); }
-  var s=toMin(startStr);
+  var s=timeToMin(startStr);
   var e=s+Math.round((parseFloat(durHours)||0)*60);
   return [s,e];
 }
@@ -5829,9 +5856,8 @@ function shiftMinRange(startStr,durHours){
 // with the date it actually falls on, not blindly the roster's base date.
 function dutyRecordCalendarDate(baseDate,startTime,period){
   if(period!=='night'||!baseDate) return baseDate;
-  var toMin=function(s){ var p=(s||'00:00').split(':'); return (parseInt(p[0])||0)*60+(parseInt(p[1])||0); };
   var dn=D.config.dayNight||DEFAULT_DAY_NIGHT;
-  if(toMin(startTime)>=toMin(dn.end)) return baseDate;
+  if(timeToMin(startTime)>=timeToMin(dn.end)) return baseDate;
   var d=new Date(baseDate+'T12:00:00');
   d.setDate(d.getDate()+1);
   return d.toISOString().slice(0,10);
@@ -5854,9 +5880,8 @@ function dutyRecordCalendarDate(baseDate,startTime,period){
 // at/after that boundary (06:00–18:00), so this is a no-op for them.
 function dutyLogicalDate(dateStr,startTime){
   if(!dateStr) return dateStr;
-  var toMin=function(s){ var p=(s||'00:00').split(':'); return (parseInt(p[0])||0)*60+(parseInt(p[1])||0); };
   var dn=D.config.dayNight||DEFAULT_DAY_NIGHT;
-  if(toMin(startTime)>=toMin(dn.start)) return dateStr;
+  if(timeToMin(startTime)>=timeToMin(dn.start)) return dateStr;
   var d=new Date(dateStr+'T12:00:00');
   d.setDate(d.getDate()-1);
   return d.toISOString().slice(0,10);
