@@ -4875,7 +4875,12 @@ function printDutyDraft(id){
   var d=D.dutyDrafts.find(function(x){return x.id===id;});
   if(!d) return;
   var s=D.settings;
-  var rows=(d.records||[]).map(function(r){
+  var records=(d.records||[]).slice().sort(function(a,b){
+    var pa=a.postName?0:1, pb=b.postName?0:1;
+    if(pa!==pb) return pa-pb;
+    return nightAwareMin(a.startTime,d.period)-nightAwareMin(b.startTime,d.period);
+  });
+  var rows=records.map(function(r){
     var troops=sortTroops((r.troops||[]).map(troopById).filter(Boolean));
     var names=troops.map(function(t){return t.rank.toUpperCase()+' '+t.name.toUpperCase();}).join(', ')||'—';
     var endT=shiftEndTime(r.startTime,r.durationHours);
