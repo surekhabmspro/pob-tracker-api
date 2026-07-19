@@ -5122,9 +5122,14 @@ function dutyHistoryFilteredRows(){
     var names=sortTroops((d.troops||[]).map(troopById).filter(Boolean)).map(function(t){return t.name;}).join(' ').toLowerCase();
     return names.indexOf(s)>=0||(d.type||'').toLowerCase().indexOf(s)>=0||(d.postName||'').toLowerCase().indexOf(s)>=0||(d.remarks||'').toLowerCase().indexOf(s)>=0||(d.dutyId||'').toLowerCase().indexOf(s)>=0;
   });
-  if(sortMode==='date-asc') rows.sort(function(a,b){return dutyDisplayDate(a).localeCompare(dutyDisplayDate(b))||(a.dutySeq||0)-(b.dutySeq||0);});
+  function withinDayOrder(a,b){
+    var da=isDayTime(a.startTime)?'day':'night', db=isDayTime(b.startTime)?'day':'night';
+    if(da!==db) return da==='day'?-1:1;
+    return nightAwareMin(a.startTime,da)-nightAwareMin(b.startTime,db);
+  }
+  if(sortMode==='date-asc') rows.sort(function(a,b){return dutyDisplayDate(a).localeCompare(dutyDisplayDate(b))||withinDayOrder(a,b);});
   else if(sortMode==='modified-desc') rows.sort(function(a,b){return (b.modifiedAt||'').localeCompare(a.modifiedAt||'');});
-  else rows.sort(function(a,b){return dutyDisplayDate(b).localeCompare(dutyDisplayDate(a))||(b.dutySeq||0)-(a.dutySeq||0);});
+  else rows.sort(function(a,b){return dutyDisplayDate(b).localeCompare(dutyDisplayDate(a))||withinDayOrder(a,b);});
   return rows;
 }
 // One line per individual duty — used inside a shift card's expanded
@@ -5201,6 +5206,14 @@ function dutyGroupByShift(rows){
     var key=ld+'|'+shift;
     if(!groups[key]){ groups[key]={date:ld,shift:shift,duties:[]}; order.push(key); }
     groups[key].duties.push(d);
+  });
+  order.forEach(function(k){
+    var g=groups[k];
+    g.duties.sort(function(a,b){
+      var pa=a.postName?0:1, pb=b.postName?0:1;
+      if(pa!==pb) return pa-pb;
+      return nightAwareMin(a.startTime,g.shift)-nightAwareMin(b.startTime,g.shift);
+    });
   });
   return order.map(function(k){return groups[k];});
 }
@@ -5364,7 +5377,13 @@ function printDailyDutyList(dateISO){
 // post rather than by date/shift, for upcoming & today by default.
 function printSentryAssignments(){
   var today=new Date().toISOString().slice(0,10);
-  var list=D.duties.filter(function(d){return !d.cancelled&&d.postName&&dutyDisplayDate(d)>=today;}).sort(function(a,b){return dutyDisplayDate(a).localeCompare(dutyDisplayDate(b))||(a.startTime||'').localeCompare(b.startTime||'');});
+  var list=D.duties.filter(function(d){return !d.cancelled&&d.postName&&dutyDisplayDate(d)>=today;}).sort(function(a,b){
+    var ldc=dutyDisplayDate(a).localeCompare(dutyDisplayDate(b));
+    if(ldc!==0) return ldc;
+    var da=isDayTime(a.startTime)?'day':'night', db=isDayTime(b.startTime)?'day':'night';
+    if(da!==db) return da==='day'?-1:1;
+    return nightAwareMin(a.startTime,da)-nightAwareMin(b.startTime,db);
+  });
   var byPost={};
   list.forEach(function(d){ if(!byPost[d.postName]) byPost[d.postName]=[]; byPost[d.postName].push(d); });
   var postNames=Object.keys(byPost).sort();
@@ -5382,7 +5401,13 @@ function printMonthlyDutySummary(mo,yr){
   var now=new Date();
   mo=mo||(now.getMonth()+1); yr=yr||now.getFullYear();
   var moNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
-  var list=D.duties.filter(function(d){ if(d.cancelled) return false; var dd=new Date(dutyDisplayDate(d)+'T12:00:00'); return dd.getMonth()===(mo-1)&&dd.getFullYear()===yr; }).sort(function(a,b){return dutyDisplayDate(a).localeCompare(dutyDisplayDate(b));});
+  var list=D.duties.filter(function(d){ if(d.cancelled) return false; var dd=new Date(dutyDisplayDate(d)+'T12:00:00'); return dd.getMonth()===(mo-1)&&dd.getFullYear()===yr; }).sort(function(a,b){
+    var ldc=dutyDisplayDate(a).localeCompare(dutyDisplayDate(b));
+    if(ldc!==0) return ldc;
+    var da=isDayTime(a.startTime)?'day':'night', db=isDayTime(b.startTime)?'day':'night';
+    if(da!==db) return da==='day'?-1:1;
+    return nightAwareMin(a.startTime,da)-nightAwareMin(b.startTime,db);
+  });
   var totH=list.reduce(function(s,d){return s+(parseFloat(d.durationHours)||0);},0);
   var byType={}; list.forEach(function(d){ byType[d.type]=(byType[d.type]||0)+1; });
   var byPost={}; list.forEach(function(d){ if(d.postName) byPost[d.postName]=(byPost[d.postName]||0)+1; });
@@ -7762,7 +7787,7 @@ function showProfile(id, fromArch){
   // its own section below it, each duty shown compact with an expandable
   // detail (date, type, day/night, timing, duration, post are all
   // available at a glance; assignment count is the section header count).
-  var td=D.duties.filter(function(d){return !d.cancelled&&(d.troops||[]).indexOf(id)>=0;}).sort(function(a,b){return b.date.localeCompare(a.date);});
+  var td=D.duties.filter(function(d){return !d.cancelled&&(d.troops||[]).indexOf(id)>=0;}).sort(function(a,b){return dutyDisplayDate(b).localeCompare(dutyDisplayDate(a));});
   var totalDutyH=td.reduce(function(s,d){return s+(parseFloat(d.durationHours)||0);},0);
   var dutyPosts=[];td.forEach(function(d){if(d.postName&&dutyPosts.indexOf(d.postName)<0)dutyPosts.push(d.postName);});
   var dutyTypes={};td.forEach(function(d){dutyTypes[d.type]=(dutyTypes[d.type]||0)+1;});
@@ -7908,7 +7933,13 @@ function viewFullRecord(){
   else { monthKeys.forEach(function(mk){var mo=byMonth[mk];var moDate=new Date(mk+'-01T12:00:00');var moLabel=moDate.toLocaleString('default',{month:'long',year:'numeric'});var moH=mo.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0); rowsHtml+='<tr style="background:#e8f0e8;"><td colspan="6" style="font-family:\'Courier New\',monospace;font-size:11px;font-weight:700;color:#2d5a3d;letter-spacing:1px;text-transform:uppercase;padding:7px 10px;">'+moLabel+' · '+mo.length+' patrols · '+moH.toFixed(1)+'h</td></tr>'; mo.forEach(function(p){ rowsHtml+='<tr><td style="font-family:\'Courier New\',monospace;font-size:11px;color:#2d5a3d;white-space:nowrap;">'+(p.ptlId||'—')+'</td><td style="font-size:11px;white-space:nowrap;">'+fmtDate(p.date)+'</td><td><span style="display:inline-block;padding:2px 7px;border-radius:2px;font-size:10px;font-weight:700;background:#eef4ee;border:1px solid #9aaa9a;color:#333;">'+p.type+'</span></td><td style="font-size:12px;color:#555;">'+(p.area||'—')+'</td><td style="font-family:\'Courier New\',monospace;font-size:11px;">'+(p.duration?p.duration+'h':'—')+'</td><td style="font-size:11px;color:#777;">'+escHtml(p.remarks||'—')+'</td></tr>'; }); }); }
   // Duty side of the combined record (item 6 — "Combined operational
   // history print/PDF"), grouped by month the same way patrols are.
-  var td=D.duties.filter(function(d){return !d.cancelled&&(d.troops||[]).indexOf(id)>=0;}).sort(function(a,b){return dutyDisplayDate(a).localeCompare(dutyDisplayDate(b));});
+  var td=D.duties.filter(function(d){return !d.cancelled&&(d.troops||[]).indexOf(id)>=0;}).sort(function(a,b){
+    var ldc=dutyDisplayDate(a).localeCompare(dutyDisplayDate(b));
+    if(ldc!==0) return ldc;
+    var da=isDayTime(a.startTime)?'day':'night', db=isDayTime(b.startTime)?'day':'night';
+    if(da!==db) return da==='day'?-1:1;
+    return nightAwareMin(a.startTime,da)-nightAwareMin(b.startTime,db);
+  });
   var totalDutyH=td.reduce(function(s,d){return s+(parseFloat(d.durationHours)||0);},0);
   var dutyByMonth={};td.forEach(function(d){var key=dutyDisplayDate(d).slice(0,7);if(!dutyByMonth[key])dutyByMonth[key]=[];dutyByMonth[key].push(d);});
   var dutyMonthKeys=Object.keys(dutyByMonth).sort();
@@ -7938,7 +7969,13 @@ function printProfileSection(id,kind){
   var title,rowsHtml,headHtml,accent;
   if(kind==='duty'){
     accent='#8b1a2b';
-    var td=D.duties.filter(function(d){return !d.cancelled&&(d.troops||[]).indexOf(id)>=0;}).sort(function(a,b){return dutyDisplayDate(a).localeCompare(dutyDisplayDate(b));});
+    var td=D.duties.filter(function(d){return !d.cancelled&&(d.troops||[]).indexOf(id)>=0;}).sort(function(a,b){
+      var ldc=dutyDisplayDate(a).localeCompare(dutyDisplayDate(b));
+      if(ldc!==0) return ldc;
+      var da=isDayTime(a.startTime)?'day':'night', db=isDayTime(b.startTime)?'day':'night';
+      if(da!==db) return da==='day'?-1:1;
+      return nightAwareMin(a.startTime,da)-nightAwareMin(b.startTime,db);
+    });
     var totalDutyH=td.reduce(function(s2,d){return s2+(parseFloat(d.durationHours)||0);},0);
     title='DUTY HISTORY';
     headHtml='<th>Duty ID</th><th>Date</th><th>Type / Shift</th><th>Post</th><th>Timing</th><th>Remarks</th>';
