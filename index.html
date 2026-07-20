@@ -2149,6 +2149,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
       <label class="cb-wrap" style="font-size:13px;"><input type="checkbox" id="t-never-duty"><span class="cb-box"></span>Never assign to Sentry duty</label>
       <label class="cb-wrap" style="font-size:13px;"><input type="checkbox" id="t-restricted-range"><span class="cb-box"></span>Restricted range — not suitable for distant patrols (e.g. Armoury Keeper, Storeman)</label>
       <label class="cb-wrap" style="font-size:13px;"><input type="checkbox" id="t-senior-sgt"><span class="cb-box"></span>Eligible for Roaming duty</label>
+      <label class="cb-wrap" style="font-size:13px;"><input type="checkbox" id="t-dual-admin"><span class="cb-box"></span>Also Administration/HQ (dual-role) — keeps their Role/trade above (e.g. Driver) for patrol eligibility, but applies the Administration target % and Sentry cap to them too</label>
     </div>
     <div class="fg" id="t-duty-quals-wrap">
       <label class="field-label">🛡 Duty Qualifications</label>
@@ -2593,6 +2594,7 @@ function apiFetch(path, opts) {
 function dbToTroop(r) {
   return {id:r.id,name:r.name,rank:r.rank,unit:r.unit,sn:r.sn||'',status:r.status||'available',notes:r.notes||'',phoneLocal:r.phone_local||'',phoneWa:r.phone_wa||'',bloodGroup:r.blood_group||'',deploymentDate:r.deployment_date?String(r.deployment_date).slice(0,10):'',weaponNumber:r.weapon_number||'',gender:r.gender||'',category:r.category||'',trade:r.trade||'',driverQuals:r.driver_quals||'',targetPct:(r.target_pct!=null?r.target_pct:100),neverSuggest:!!r.never_suggest,restrictedRange:!!r.restricted_range,
     dutyQuals:r.duty_quals||r.dutyQuals||[],isSeniorSergeant:!!(r.is_senior_sergeant!=null?r.is_senior_sergeant:r.isSeniorSergeant),neverDuty:!!(r.never_duty!=null?r.never_duty:r.neverDuty),
+    dualAdmin:!!(r.dual_admin!=null?r.dual_admin:r.dualAdmin),
     statusSince:(r.status_since||r.statusSince)?String(r.status_since||r.statusSince).slice(0,10):'',excludedDays:(r.excluded_days!=null?r.excluded_days:(r.excludedDays!=null?r.excludedDays:0)),
     absences:(function(){var a=r.absences!=null?r.absences:[]; if(typeof a==='string'){ try{a=JSON.parse(a);}catch(e){a=[];} } return Array.isArray(a)?a:[];})()};
 }
@@ -6090,7 +6092,7 @@ function dutyFairnessScore(t){
 }
 function dutyTypeByName(name){ return (D.config.dutyTypes||[]).find(function(x){return x.name===name;})||null; }
 function dutyPostById(id){ return (D.config.dutyPosts||[]).find(function(x){return x.id===id;})||null; }
-function isAdminTrade(t){ return t&&(t.trade==='Administration'||t.trade==='POB Commander'); }
+function isAdminTrade(t){ return t&&(t.trade==='Administration'||t.trade==='POB Commander'||t.dualAdmin); }
 // Roaming eligibility: officers up to Captain, all JCOs (WO1/WO2/CSM), and
 // Sergeants specifically flagged as senior — not the general troop pool.
 function isRoamingEligible(t){
@@ -7557,6 +7559,7 @@ function saveTroop(){
   var neverDuty=document.getElementById('t-never-duty').checked;
   var restrictedRange=document.getElementById('t-restricted-range').checked;
   var isSeniorSergeant=document.getElementById('t-senior-sgt').checked;
+  var dualAdmin=document.getElementById('t-dual-admin').checked;
   var dutyQuals=Array.prototype.slice.call(document.querySelectorAll('#t-duty-quals-boxes input[type=checkbox]:checked')).map(function(el){return el.value;});
   var editId=document.getElementById('t-edit-id').value;
   if(!name){showAlert('t-alert','Please enter a name.','danger');return;}
@@ -7564,7 +7567,7 @@ function saveTroop(){
   if(editId){
     var t=D.troops.find(function(x){return x.id===editId;});
     if(t){
-      var wasAdmin=(t.trade==='Administration'||t.trade==='POB Commander');
+      var wasAdmin=(t.trade==='Administration'||t.trade==='POB Commander'||t.dualAdmin);
       var wasStatus=t.status;
       if(wasStatus!==status){
         // Status just changed — if they were on Leave/Sick and are now back
@@ -7575,10 +7578,11 @@ function saveTroop(){
         }
         t.statusSince=new Date().toISOString().slice(0,10);
       }
-      t.name=name;t.rank=rank;t.unit=unit;t.sn=sn;t.status=status;t.bloodGroup=bloodGroup;t.weaponNumber=weaponNumber;t.deploymentDate=deploymentDate;t.phoneLocal=phoneLocal;t.phoneWa=phoneWa;t.notes=notes;t.gender=gender;t.category=category;t.trade=trade;t.driverQuals=driverQuals;t.neverSuggest=neverSuggest;t.neverDuty=neverDuty;t.restrictedRange=restrictedRange;t.isSeniorSergeant=isSeniorSergeant;t.dutyQuals=dutyQuals;t.absences=_troopAbsenceEdits.slice();
+      t.name=name;t.rank=rank;t.unit=unit;t.sn=sn;t.status=status;t.bloodGroup=bloodGroup;t.weaponNumber=weaponNumber;t.deploymentDate=deploymentDate;t.phoneLocal=phoneLocal;t.phoneWa=phoneWa;t.notes=notes;t.gender=gender;t.category=category;t.trade=trade;t.driverQuals=driverQuals;t.neverSuggest=neverSuggest;t.neverDuty=neverDuty;t.restrictedRange=restrictedRange;t.isSeniorSergeant=isSeniorSergeant;t.dualAdmin=dualAdmin;t.dutyQuals=dutyQuals;t.absences=_troopAbsenceEdits.slice();
       // Target % is otherwise only managed in Settings. It's only auto-adjusted
-      // here the moment Trade actually switches to/from Administration or POB Commander.
-      var nowAdmin=(trade==='Administration'||trade==='POB Commander');
+      // here the moment the troop's admin-capped status (Trade = Administration/
+      // POB Commander, OR the dual-role Administration checkbox) actually switches on/off.
+      var nowAdmin=(trade==='Administration'||trade==='POB Commander'||dualAdmin);
       var adminPct=(D.settings.adminTargetPct!=null?D.settings.adminTargetPct:25);
       if(nowAdmin && !wasAdmin) t.targetPct=adminPct;
       else if(!nowAdmin && wasAdmin && t.targetPct===adminPct) t.targetPct=100;
@@ -7589,7 +7593,7 @@ function saveTroop(){
     audit('Troop updated: '+rank+' '+name); cancelEdit();
   } else {
     if(D.troops.find(function(t){return t.name.toLowerCase()===name.toLowerCase();})){showAlert('t-alert','Troop already exists.','danger');return;}
-    var newT={id:uid('t'),name:name,rank:rank,unit:unit,sn:sn,status:status,bloodGroup:bloodGroup,weaponNumber:weaponNumber,deploymentDate:deploymentDate,phoneLocal:phoneLocal,phoneWa:phoneWa,notes:notes,gender:gender,category:category,trade:trade,driverQuals:driverQuals,neverSuggest:neverSuggest,neverDuty:neverDuty,restrictedRange:restrictedRange,isSeniorSergeant:isSeniorSergeant,dutyQuals:dutyQuals,absences:_troopAbsenceEdits.slice(),statusSince:new Date().toISOString().slice(0,10),excludedDays:0,targetPct:((trade==='Administration'||trade==='POB Commander')?(D.settings.adminTargetPct!=null?D.settings.adminTargetPct:25):100)};
+    var newT={id:uid('t'),name:name,rank:rank,unit:unit,sn:sn,status:status,bloodGroup:bloodGroup,weaponNumber:weaponNumber,deploymentDate:deploymentDate,phoneLocal:phoneLocal,phoneWa:phoneWa,notes:notes,gender:gender,category:category,trade:trade,driverQuals:driverQuals,neverSuggest:neverSuggest,neverDuty:neverDuty,restrictedRange:restrictedRange,isSeniorSergeant:isSeniorSergeant,dualAdmin:dualAdmin,dutyQuals:dutyQuals,absences:_troopAbsenceEdits.slice(),statusSince:new Date().toISOString().slice(0,10),excludedDays:0,targetPct:((trade==='Administration'||trade==='POB Commander'||dualAdmin)?(D.settings.adminTargetPct!=null?D.settings.adminTargetPct:25):100)};
     D.troops.push(newT); remoteSaveTroop(newT); renderRoster(); populateAutoSuggestLists();
     showAlert('t-alert',rank+' '+name+' added!','success');
     audit('Troop added: '+rank+' '+name);
@@ -7599,7 +7603,7 @@ function saveTroop(){
     document.getElementById('t-trade').value='General'; toggleDriverQuals();
     document.getElementById('t-qual-apc').checked=false; document.getElementById('t-qual-heavy').checked=false; document.getElementById('t-qual-light').checked=false;
     document.getElementById('t-never-suggest').checked=false; document.getElementById('t-never-duty').checked=false; document.getElementById('t-restricted-range').checked=false;
-    document.getElementById('t-senior-sgt').checked=false; renderTroopDutyQualBoxes([]);
+    document.getElementById('t-senior-sgt').checked=false; document.getElementById('t-dual-admin').checked=false; renderTroopDutyQualBoxes([]);
     _troopAbsenceEdits=[]; renderTroopAbsenceList();
   }
 }
@@ -7637,6 +7641,7 @@ function editTroop(id){ var t=D.troops.find(function(x){return x.id===id;}); if(
   document.getElementById('t-never-duty').checked=!!t.neverDuty;
   document.getElementById('t-restricted-range').checked=!!t.restrictedRange;
   document.getElementById('t-senior-sgt').checked=!!t.isSeniorSergeant;
+  document.getElementById('t-dual-admin').checked=!!t.dualAdmin;
   renderTroopDutyQualBoxes(t.dutyQuals||[]);
   _troopAbsenceEdits=(t.absences||[]).slice();
   renderTroopAbsenceList();
@@ -7646,7 +7651,7 @@ function cancelEdit(){ document.getElementById('t-edit-id').value=''; populateTr
   document.getElementById('t-trade').value='General'; toggleDriverQuals();
   document.getElementById('t-qual-apc').checked=false; document.getElementById('t-qual-heavy').checked=false; document.getElementById('t-qual-light').checked=false;
   document.getElementById('t-never-suggest').checked=false; document.getElementById('t-never-duty').checked=false; document.getElementById('t-restricted-range').checked=false;
-  document.getElementById('t-senior-sgt').checked=false; renderTroopDutyQualBoxes([]);
+  document.getElementById('t-senior-sgt').checked=false; document.getElementById('t-dual-admin').checked=false; renderTroopDutyQualBoxes([]);
   _troopAbsenceEdits=[]; renderTroopAbsenceList();
   document.getElementById('t-form-title-text').textContent='Add Troop'; document.getElementById('t-submit-btn').textContent='Add Troop'; document.getElementById('t-alert').innerHTML=''; document.getElementById('troop-form-modal').classList.remove('open'); }
 function renderTroopDutyQualBoxes(checkedList){
@@ -7773,6 +7778,7 @@ function renderRoster(){
       (t.sn?'<span class="pc-chip">🪪 <strong>'+t.sn+'</strong></span>':'')+
       (t.weaponNumber?'<span class="pc-chip">🔫 <strong>'+t.weaponNumber+'</strong></span>':'')+
       (roleDisplay(t)?'<span class="pc-chip" style="border-color:var(--tan-dark);background:rgba(230,179,74,0.12);color:var(--tan);">🎖 <strong style="color:var(--tan);">'+roleDisplay(t).toUpperCase()+'</strong></span>':'')+
+      (t.dualAdmin?'<span class="pc-chip" style="border-color:#8a7bd8;background:rgba(138,123,216,0.15);color:#b3a6f0;">🗂 <strong>+ADMIN</strong></span>':'')+
       (t.gender?'<span class="pc-chip">⚧ '+t.gender+'</span>':'')+
       (t.unit?'<span class="pc-chip">🏢 '+t.unit+'</span>':'')+
       '</div>'+
