@@ -1020,6 +1020,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
   <div class="sidebar-item" data-mode="duty" style="display:none;" onclick="showTab('duty-dashboard')" data-tab="duty-dashboard"><span class="si-icon">🛡</span> Duty Dashboard</div>
   <div class="sidebar-item" data-mode="duty" style="display:none;" onclick="showTab('duty-roster')" data-tab="duty-roster"><span class="si-icon">📋</span> Duty Roster</div>
   <div class="sidebar-item" data-mode="duty" style="display:none;" onclick="showTab('duty-history')" data-tab="duty-history"><span class="si-icon">📜</span> Duty History</div>
+  <div class="sidebar-item" data-mode="duty" style="display:none;" onclick="showTab('soldier-duty-lookup')" data-tab="soldier-duty-lookup"><span class="si-icon">🔎</span> Soldier Duty Lookup</div>
   <div class="sidebar-item" data-mode="duty" style="display:none;" onclick="showTab('duty-settings')" data-tab="duty-settings"><span class="si-icon">⚙️</span> Duty Settings</div>
   <div class="sidebar-sep"></div>
   <div class="sidebar-label">System</div>
@@ -1398,6 +1399,53 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     <div id="duty-history-summary" style="display:none;margin-top:10px;" class="alert al-info"></div>
     <div id="duty-history-list" style="margin-top:10px;"></div>
     <div id="dhempty" class="empty" style="display:none;">No records found.</div>
+  </div>
+</div>
+
+<!-- ===== SOLDIER DUTY LOOKUP ===== -->
+<div id="soldier-duty-lookup" class="section">
+  <div class="card">
+    <div class="card-title">
+      <span>Soldier Duty Lookup</span>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn btn-ghost btn-sm" onclick="showTab('duty-history')">← Duty History</button>
+        <button class="btn btn-info btn-sm btn-print" onclick="printSoldierDutyLookup()">🖨 Print</button>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.5;">
+      Look up a soldier's day/night duty and post history over any date range, with automatic flags for
+      repeated posts or duty types.
+    </div>
+    <div class="toolbar-box">
+      <div class="subsection-hdr" style="margin-bottom:10px;">🔎 Soldier &amp; Range</div>
+      <div class="fg" style="margin-bottom:10px;position:relative;">
+        <input type="text" id="sdl-troop-search" placeholder="Type soldier name or rank..." oninput="sdlTroopSuggest(this.value)" autocomplete="off">
+        <div class="suggest-box" id="sdl-troop-suggest" style="display:none;"></div>
+      </div>
+      <div id="sdl-selected-troop" style="display:none;margin-bottom:10px;padding:8px 10px;background:var(--bg-2,#f5f0ee);border-radius:6px;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <span id="sdl-selected-troop-label"></span>
+        <button class="btn btn-ghost btn-sm" onclick="sdlClearTroop()" style="padding:3px 9px;font-size:11px;">✕ Change</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:10px;">
+        <div style="position:relative;grid-column:1/2;">
+          <input type="text" id="sdl-from" placeholder="From" maxlength="10" oninput="fmtDateInp(this);renderSoldierDutyLookup();" autocomplete="off" readonly onclick="toggleCal('cal-sdl-from',this)" style="padding-right:28px;font-size:12px;padding:9px 28px 9px 10px;">
+          <span class="cal-icon" onclick="toggleCal('cal-sdl-from',document.getElementById('sdl-from'))" style="font-size:13px;">📅</span>
+          <div class="cal-wrap" id="cal-sdl-from"></div>
+        </div>
+        <div style="position:relative;grid-column:2/3;">
+          <input type="text" id="sdl-to" placeholder="To" maxlength="10" oninput="fmtDateInp(this);renderSoldierDutyLookup();" autocomplete="off" readonly onclick="toggleCal('cal-sdl-to',this)" style="padding-right:28px;font-size:12px;padding:9px 28px 9px 10px;">
+          <span class="cal-icon" onclick="toggleCal('cal-sdl-to',document.getElementById('sdl-to'))" style="font-size:13px;">📅</span>
+          <div class="cal-wrap" id="cal-sdl-to"></div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="clearSoldierDutyLookupFilters()" style="grid-column:3/4;padding:0 10px;">✕</button>
+      </div>
+      <div class="fr">
+        <select id="sdl-shift" onchange="renderSoldierDutyLookup()"><option value="">Day &amp; Night</option><option value="day">☀ Day</option><option value="night">🌙 Night</option></select>
+      </div>
+    </div>
+    <div id="sdl-flag-summary" style="display:none;margin-top:10px;" class="alert al-warn"></div>
+    <div id="sdl-results" style="margin-top:10px;"></div>
+    <div id="sdlempty" class="empty" style="display:none;">Search for a soldier to see their duty history.</div>
   </div>
 </div>
 
@@ -2207,6 +2255,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
   <div class="more-item" data-mode="patrol" onclick="showTabFromMore('report')"><span class="mi-icon">📈</span><span class="mi-label">Report</span></div>
   <div class="more-item" data-mode="patrol" onclick="showTabFromMore('settings')"><span class="mi-icon">⚙️</span><span class="mi-label">Patrol Settings</span></div>
   <div class="more-item" data-mode="duty" style="display:none;" onclick="showTabFromMore('duty-history')"><span class="mi-icon">📜</span><span class="mi-label">Duty History</span></div>
+  <div class="more-item" data-mode="duty" style="display:none;" onclick="showTabFromMore('soldier-duty-lookup')"><span class="mi-icon">🔎</span><span class="mi-label">Soldier Duty Lookup</span></div>
   <div class="more-item" data-mode="duty" style="display:none;" onclick="showTabFromMore('duty-settings')"><span class="mi-icon">⚙️</span><span class="mi-label">Duty Settings</span></div>
   <div class="more-item" onclick="showTabFromMore('system')"><span class="mi-icon">🔐</span><span class="mi-label">System</span></div>
 </div>
@@ -4724,9 +4773,10 @@ function renderDsResults(){
         var s=_dsSlots[i];
         var t=s.chosenId?troopById(s.chosenId):null;
         var manualOpen=(_dsManualPickSlot===i);
+        var repeatWarn=t?dutyRecentRepeatWarning(t.id,_dsDate,s.category,s.postName):null;
         return '<div style="padding:5px 0;">'+
           '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'+
-          '<div style="font-size:13.5px;">'+(t?('<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>'):'<span style="color:var(--red-light);">— none available —</span>')+'</div>'+
+          '<div style="font-size:13.5px;">'+(t?('<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>'+(repeatWarn?' <span style="color:var(--orange);font-size:10.5px;" title="'+escHtml(repeatWarn)+'">⚠ '+escHtml(repeatWarn)+'</span>':'')):'<span style="color:var(--red-light);">— none available —</span>')+'</div>'+
           '<div style="display:flex;gap:6px;flex-shrink:0;">'+
           '<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:5px 9px;white-space:nowrap;" onclick="dsReplaceSlot('+i+')" title="Next fairest alternative">🔁</button>'+
           '<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:5px 9px;white-space:nowrap;'+(manualOpen?'border-color:var(--tan);color:var(--tan);':'')+'" onclick="dsToggleManualPick('+i+')" title="Pick a specific troop">🔍</button>'+
@@ -4810,7 +4860,8 @@ function dsManualSearch(i,val){
   var post=slot.postId?dutyPostById(slot.postId):null;
   box.innerHTML=matches.slice(0,8).map(function(t){
     var issues=dutyEligibilityIssuesRaw(t,post,slot);
-    var flag=issues.length?' <span style="color:var(--orange);font-size:10px;">⚠ '+escHtml(issues[0])+'</span>':'';
+    var repeatWarn=dutyRecentRepeatWarning(t.id,_dsDate,slot.category,slot.postName);
+    var flag=issues.length?' <span style="color:var(--orange);font-size:10px;">⚠ '+escHtml(issues[0])+'</span>':(repeatWarn?' <span style="color:var(--orange);font-size:10px;">⚠ '+escHtml(repeatWarn)+'</span>':'');
     return '<div class="suggest-item" onclick="dsManualPick('+i+',\''+t.id+'\')"><strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong> <span style="color:var(--text-muted);font-size:11px;">('+t.unit+')</span>'+flag+'</div>';
   }).join('');
 }
@@ -4825,6 +4876,29 @@ function dsManualPick(i,troopId){
 // Same rule-set as dutyEligibilityIssues, but usable outside the Assign Duty
 // modal's own DOM (the Suggest Duty Roster screen has its own date/type/post
 // context per slot rather than shared duty-date/duty-type-sel fields).
+// Duty Suggestion repeat warning: flags (never blocks) when a candidate had
+// the same Post or same Duty Type within the last 2 days before the date
+// being suggested for — e.g. asking for today's suggestion while they were
+// on the same post/duty yesterday or the day before. Mirrors the near-repeat
+// rule used in Soldier Duty Lookup, but only looks backward from _dsDate.
+function dutyRecentRepeatWarning(troopId,forDateISO,category,postName){
+  if(!troopId||!forDateISO) return null;
+  var matches=D.duties.filter(function(d){
+    if(d.cancelled) return false;
+    if((d.troops||[]).indexOf(troopId)<0) return false;
+    var gap=daysBetweenISO(dutyDisplayDate(d),forDateISO);
+    if(gap<1||gap>2) return false;
+    var samePost=postName&&d.postName&&d.postName===postName;
+    var sameType=category&&d.type&&d.type===category;
+    return samePost||sameType;
+  });
+  if(matches.length===0) return null;
+  matches.sort(function(a,b){return dutyDisplayDate(b).localeCompare(dutyDisplayDate(a));});
+  var m=matches[0];
+  var gap=daysBetweenISO(dutyDisplayDate(m),forDateISO);
+  var what=(postName&&m.postName===postName)?m.postName:m.type;
+  return (gap===1?'Same as yesterday: ':'Same as '+gap+' days ago: ')+what;
+}
 function dutyEligibilityIssuesRaw(t,post,slot){
   var issues=[];
   if(slot&&slot.category==='Roaming'&&!isRoamingEligible(t)) issues.push('not eligible for Roaming duty');
@@ -5322,6 +5396,148 @@ function printDutyHistory(){
   w.document.close();
   w.focus();
   setTimeout(function(){ w.print(); },300);
+}
+/* ── SOLDIER DUTY LOOKUP ── */
+var sdlSelectedTroopId=null;
+function sdlTroopSuggest(val){
+  var box=document.getElementById('sdl-troop-suggest');
+  if(!val||val.length===0){box.style.display='none';return;}
+  var q=val.toLowerCase();
+  var matches=sortTroops(allPersonnel()).filter(function(t){return (t.rank+' '+t.name+' '+t.unit).toLowerCase().indexOf(q)>=0;});
+  if(matches.length===0){box.style.display='none';return;}
+  box.style.display='block';
+  box.innerHTML=matches.slice(0,8).map(function(t){
+    var archTag=(D.archived||[]).indexOf(t)>=0?' <span style="color:var(--text-muted);font-size:10px;">(Archived)</span>':'';
+    return '<div class="suggest-item" onclick="sdlSelectTroop(\''+t.id+'\')">'+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>'+' <span style="color:var(--text-muted);font-size:11px;">('+t.unit+')</span>'+archTag+'</div>';
+  }).join('');
+}
+function sdlSelectTroop(id){
+  sdlSelectedTroopId=id;
+  document.getElementById('sdl-troop-search').value='';
+  document.getElementById('sdl-troop-suggest').style.display='none';
+  var t=personById(id);
+  document.getElementById('sdl-selected-troop-label').textContent=t?upLabel(t.rank,t.name)+' ('+t.unit+')':'';
+  document.getElementById('sdl-selected-troop').style.display='flex';
+  renderSoldierDutyLookup();
+}
+function sdlClearTroop(){
+  sdlSelectedTroopId=null;
+  document.getElementById('sdl-selected-troop').style.display='none';
+  renderSoldierDutyLookup();
+}
+function clearSoldierDutyLookupFilters(){
+  ['sdl-from','sdl-to','sdl-shift'].forEach(function(id){var e=document.getElementById(id); if(e) e.value='';});
+  renderSoldierDutyLookup();
+}
+function sdlFilteredRows(){
+  if(!sdlSelectedTroopId) return [];
+  var ff=parseDate(document.getElementById('sdl-from').value);
+  var fto=parseDate(document.getElementById('sdl-to').value);
+  var shiftF=document.getElementById('sdl-shift').value;
+  var rows=D.duties.filter(function(d){return !d.cancelled&&(d.troops||[]).indexOf(sdlSelectedTroopId)>=0;});
+  if(ff) rows=rows.filter(function(d){return dutyDisplayDate(d)>=ff;});
+  if(fto) rows=rows.filter(function(d){return dutyDisplayDate(d)<=fto;});
+  if(shiftF) rows=rows.filter(function(d){return (isDayTime(d.startTime)?'day':'night')===shiftF;});
+  rows.sort(function(a,b){return dutyDisplayDate(b).localeCompare(dutyDisplayDate(a))||nightAwareMin(b.startTime,isDayTime(b.startTime)?'day':'night')-nightAwareMin(a.startTime,isDayTime(a.startTime)?'day':'night');});
+  return rows;
+}
+function daysBetweenISO(a,b){
+  var da=new Date(a+'T12:00:00'), db=new Date(b+'T12:00:00');
+  return Math.round((db-da)/86400000);
+}
+// Repeat-flag engine shared by the Lookup screen and Duty Suggestion warnings.
+// Groups a soldier's duty records by Post and by Duty Type. Any group with
+// 2+ entries in the range gets a "range" flag; any pair of entries in a group
+// that land within 2 calendar days of each other gets a "near-repeat" flag,
+// even when the group has exactly 2 entries (so both flags can apply at once).
+function sdlComputeFlags(rows){
+  var flagMap={}, summary=[];
+  function ensure(id){ if(!flagMap[id]) flagMap[id]={}; return flagMap[id]; }
+  function processGroup(groups,kind,label){
+    Object.keys(groups).forEach(function(key){
+      var arr=groups[key];
+      if(arr.length>=2){
+        arr.forEach(function(r){ ensure(r.id)[kind+'Range']=true; });
+        summary.push('🚩 Same '+label+' — "'+key+'" — '+arr.length+' times in range');
+      }
+      var sorted=arr.slice().sort(function(a,b){return dutyDisplayDate(a).localeCompare(dutyDisplayDate(b));});
+      for(var i=1;i<sorted.length;i++){
+        var gap=Math.abs(daysBetweenISO(dutyDisplayDate(sorted[i-1]),dutyDisplayDate(sorted[i])));
+        if(gap<=2){
+          ensure(sorted[i-1].id)[kind+'Near']=true;
+          ensure(sorted[i].id)[kind+'Near']=true;
+          ensure(sorted[i].id)[kind+'NearDetail']='Same '+label+' '+gap+' day'+(gap!==1?'s':'')+' earlier ('+fmtDate(dutyDisplayDate(sorted[i-1]))+')';
+        }
+      }
+    });
+  }
+  var byPost={}, byType={};
+  rows.forEach(function(r){ if(r.postName){ (byPost[r.postName]=byPost[r.postName]||[]).push(r); } (byType[r.type]=byType[r.type]||[]).push(r); });
+  processGroup(byPost,'post','post');
+  processGroup(byType,'type','duty type');
+  return {flagMap:flagMap,summary:summary};
+}
+function renderSoldierDutyLookup(){
+  var resEl=document.getElementById('sdl-results');
+  var emEl=document.getElementById('sdlempty');
+  var sumEl=document.getElementById('sdl-flag-summary');
+  if(!sdlSelectedTroopId){
+    resEl.innerHTML=''; sumEl.style.display='none';
+    emEl.style.display=''; emEl.textContent='Search for a soldier to see their duty history.';
+    return;
+  }
+  var rows=sdlFilteredRows();
+  if(rows.length===0){
+    resEl.innerHTML=''; sumEl.style.display='none';
+    emEl.style.display=''; emEl.textContent='No duty records found for this soldier in the selected range.';
+    return;
+  }
+  emEl.style.display='none';
+  var fx=sdlComputeFlags(rows);
+  if(fx.summary.length){ sumEl.style.display=''; sumEl.innerHTML='⚠ '+fx.summary.join('<br>⚠ '); }
+  else { sumEl.style.display='none'; }
+  resEl.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:12.5px;">'+
+    '<thead><tr style="border-bottom:1px solid var(--border);text-align:left;">'+
+    '<th style="padding:6px 4px;">Date</th><th style="padding:6px 4px;">Shift</th><th style="padding:6px 4px;">Type</th><th style="padding:6px 4px;">Post</th><th style="padding:6px 4px;">Duty ID</th><th style="padding:6px 4px;">Flags</th>'+
+    '</tr></thead><tbody>'+
+    rows.map(function(d){
+      var f=fx.flagMap[d.id]||{};
+      var badges='';
+      if(f.postRange) badges+='<span class="badge b-red" style="font-size:9px;margin:1px 2px 1px 0;display:inline-block;" title="Same post 2+ times in range">🚩 Post</span>';
+      if(f.typeRange) badges+='<span class="badge b-red" style="font-size:9px;margin:1px 2px 1px 0;display:inline-block;" title="Same duty type 2+ times in range">🚩 Type</span>';
+      if(f.postNear) badges+='<span class="badge b-orange" style="font-size:9px;margin:1px 2px 1px 0;display:inline-block;" title="'+escHtml(f.postNearDetail||'')+'">⚠ Near·Post</span>';
+      if(f.typeNear) badges+='<span class="badge b-orange" style="font-size:9px;margin:1px 2px 1px 0;display:inline-block;" title="'+escHtml(f.typeNearDetail||'')+'">⚠ Near·Type</span>';
+      return '<tr style="border-bottom:1px solid var(--border);">'+
+        '<td style="padding:6px 4px;">'+fmtDate(dutyDisplayDate(d))+'</td>'+
+        '<td style="padding:6px 4px;">'+(isDayTime(d.startTime)?'☀ Day':'🌙 Night')+'</td>'+
+        '<td style="padding:6px 4px;">'+escHtml(d.type)+'</td>'+
+        '<td style="padding:6px 4px;">'+escHtml(d.postName||'—')+'</td>'+
+        '<td style="padding:6px 4px;">'+(d.dutyId||'—')+'</td>'+
+        '<td style="padding:6px 4px;">'+(badges||'—')+'</td>'+
+        '</tr>';
+    }).join('')+
+    '</tbody></table>';
+}
+function printSoldierDutyLookup(){
+  if(!sdlSelectedTroopId) return;
+  var t=personById(sdlSelectedTroopId);
+  var rows=sdlFilteredRows();
+  var fx=sdlComputeFlags(rows);
+  var ff=document.getElementById('sdl-from').value, fto=document.getElementById('sdl-to').value;
+  var rangeLabel=(ff||fto)?((ff||'…')+' – '+(fto||'…')):'All dates';
+  var rowsHtml=rows.length?rows.map(function(d){
+    var f=fx.flagMap[d.id]||{};
+    var flags=[];
+    if(f.postRange) flags.push('Repeat Post');
+    if(f.typeRange) flags.push('Repeat Type');
+    if(f.postNear) flags.push('Near-repeat Post');
+    if(f.typeNear) flags.push('Near-repeat Type');
+    return '<tr><td>'+fmtDate(dutyDisplayDate(d))+'</td><td>'+(isDayTime(d.startTime)?'Day':'Night')+'</td><td>'+escHtml(d.type)+'</td><td>'+escHtml(d.postName||'—')+'</td><td>'+(d.dutyId||'—')+'</td><td>'+(flags.join(', ')||'—')+'</td></tr>';
+  }).join(''):'<tr><td colspan="6" style="text-align:center;color:#888;padding:20px;">No duty records in this range.</td></tr>';
+  var body='<div class="sub-hdr">Duty Records</div><table><thead><tr><th>Date</th><th>Shift</th><th>Type</th><th>Post</th><th>Duty ID</th><th>Flags</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'+
+    (fx.summary.length?'<div class="sub-hdr">Flag Summary</div><p style="font-size:12.5px;">'+fx.summary.join('<br>')+'</p>':'');
+  var subtitle='<p>'+(t?upLabel(t.rank,t.name)+' ('+t.unit+')':'')+' · '+rangeLabel+'</p>';
+  dutyReportWindow('SOLDIER DUTY LOOKUP',subtitle,body);
 }
 // Shift Details print (item 7) — one specific date+shift's full detail:
 // every duty entry in it, who's assigned, and which posts are covered.
@@ -6424,9 +6640,9 @@ function toggleTheme(){ darkMode=!darkMode; document.body.classList.toggle('ligh
 // =====================================================================
 // NAV
 // =====================================================================
-var _moreMenuTabs=['inactive','hours-ranking','report','settings','duty-settings','system','duty-history'];
+var _moreMenuTabs=['inactive','hours-ranking','report','settings','duty-settings','system','duty-history','soldier-duty-lookup'];
 var _patrolTabs=['dashboard','patrol-log','inactive','hours-ranking','report','settings'];
-var _dutyTabs=['duty-dashboard','duty-roster','duty-settings','duty-history'];
+var _dutyTabs=['duty-dashboard','duty-roster','duty-settings','duty-history','soldier-duty-lookup'];
 var appMode='patrol';
 function setAppMode(mode){
   appMode=mode;
@@ -6486,6 +6702,7 @@ function _showTabInner(id){
     'duty-dashboard':renderDutyDashboard,
     'duty-roster':function(){ renderDutyPage(); },
     'duty-history':function(){ populateDutyHistoryFilters(); renderDutyHistoryList(); },
+    'soldier-duty-lookup':function(){ renderSoldierDutyLookup(); },
     'duty-settings':renderSettings,
     system:renderSettings,
     report:function(){populateReportYears();genReport();},
@@ -7181,6 +7398,7 @@ document.addEventListener('click',function(e){
   if(!e.target.closest('#troop-search')&&!e.target.closest('#troop-suggest')){ var s=document.getElementById('troop-suggest'); if(s) s.style.display='none'; }
   if(!e.target.closest('#draft-troop-search')&&!e.target.closest('#draft-troop-suggest')){ var ds=document.getElementById('draft-troop-suggest'); if(ds) ds.style.display='none'; }
   if(!e.target.closest('#duty-troop-search')&&!e.target.closest('#duty-troop-suggest')){ var dts=document.getElementById('duty-troop-suggest'); if(dts) dts.style.display='none'; }
+  if(!e.target.closest('#sdl-troop-search')&&!e.target.closest('#sdl-troop-suggest')){ var sdls=document.getElementById('sdl-troop-suggest'); if(sdls) sdls.style.display='none'; }
   if(!e.target.closest('#cg-troop-search')&&!e.target.closest('#cg-troop-suggest')){ var cts=document.getElementById('cg-troop-suggest'); if(cts) cts.style.display='none'; }
 });
 
