@@ -1422,9 +1422,9 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
         <input type="text" id="sdl-troop-search" placeholder="Type soldier name or rank..." oninput="sdlTroopSuggest(this.value)" autocomplete="off">
         <div class="suggest-box" id="sdl-troop-suggest" style="display:none;"></div>
       </div>
-      <div id="sdl-selected-troop" style="display:none;margin-bottom:10px;padding:8px 10px;background:var(--bg-2,#f5f0ee);border-radius:6px;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
-        <span id="sdl-selected-troop-label"></span>
-        <button class="btn btn-ghost btn-sm" onclick="sdlClearTroop()" style="padding:3px 9px;font-size:11px;">✕ Change</button>
+      <div id="sdl-selected-troop" style="display:none;margin-bottom:10px;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text);display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <span id="sdl-selected-troop-label" style="font-weight:700;"></span>
+        <button class="btn btn-ghost btn-sm" onclick="sdlClearTroop()" style="padding:3px 9px;font-size:11px;flex-shrink:0;">✕ Change</button>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:10px;">
         <div style="position:relative;grid-column:1/2;">
@@ -4773,7 +4773,7 @@ function renderDsResults(){
         var s=_dsSlots[i];
         var t=s.chosenId?troopById(s.chosenId):null;
         var manualOpen=(_dsManualPickSlot===i);
-        var repeatWarn=t?dutyRecentRepeatWarning(t.id,_dsDate,s.category,s.postName):null;
+        var repeatWarn=t?dutyRecentRepeatWarning(t.id,_dsDate,s.startTime,s.postName):null;
         return '<div style="padding:5px 0;">'+
           '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'+
           '<div style="font-size:13.5px;">'+(t?('<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>'+(repeatWarn?' <span style="color:var(--orange);font-size:10.5px;" title="'+escHtml(repeatWarn)+'">⚠ '+escHtml(repeatWarn)+'</span>':'')):'<span style="color:var(--red-light);">— none available —</span>')+'</div>'+
@@ -4860,7 +4860,7 @@ function dsManualSearch(i,val){
   var post=slot.postId?dutyPostById(slot.postId):null;
   box.innerHTML=matches.slice(0,8).map(function(t){
     var issues=dutyEligibilityIssuesRaw(t,post,slot);
-    var repeatWarn=dutyRecentRepeatWarning(t.id,_dsDate,slot.category,slot.postName);
+    var repeatWarn=dutyRecentRepeatWarning(t.id,_dsDate,slot.startTime,slot.postName);
     var flag=issues.length?' <span style="color:var(--orange);font-size:10px;">⚠ '+escHtml(issues[0])+'</span>':(repeatWarn?' <span style="color:var(--orange);font-size:10px;">⚠ '+escHtml(repeatWarn)+'</span>':'');
     return '<div class="suggest-item" onclick="dsManualPick('+i+',\''+t.id+'\')"><strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong> <span style="color:var(--text-muted);font-size:11px;">('+t.unit+')</span>'+flag+'</div>';
   }).join('');
@@ -4877,26 +4877,30 @@ function dsManualPick(i,troopId){
 // modal's own DOM (the Suggest Duty Roster screen has its own date/type/post
 // context per slot rather than shared duty-date/duty-type-sel fields).
 // Duty Suggestion repeat warning: flags (never blocks) when a candidate had
-// the same Post or same Duty Type within the last 2 days before the date
-// being suggested for — e.g. asking for today's suggestion while they were
-// on the same post/duty yesterday or the day before. Mirrors the near-repeat
-// rule used in Soldier Duty Lookup, but only looks backward from _dsDate.
-function dutyRecentRepeatWarning(troopId,forDateISO,category,postName){
+// the same exact Post, OR the same exact Shift (start time), within the
+// last 2 days before the date being suggested for — e.g. asking for today's
+// suggestion while they were on Main Gate yesterday, or on the same
+// numbered night shift yesterday. Deliberately NOT based on Duty Type
+// (Sentry etc.), since most ranks do Sentry repeatedly and that alone isn't
+// meaningful. Mirrors the Post/Shift rule used in Soldier Duty Lookup, but
+// only looks backward from _dsDate.
+function dutyRecentRepeatWarning(troopId,forDateISO,startTime,postName){
   if(!troopId||!forDateISO) return null;
+  var period=startTime?(isDayTime(startTime)?'day':'night'):null;
   var matches=D.duties.filter(function(d){
     if(d.cancelled) return false;
     if((d.troops||[]).indexOf(troopId)<0) return false;
     var gap=daysBetweenISO(dutyDisplayDate(d),forDateISO);
     if(gap<1||gap>2) return false;
     var samePost=postName&&d.postName&&d.postName===postName;
-    var sameType=category&&d.type&&d.type===category;
-    return samePost||sameType;
+    var sameShift=startTime&&d.startTime===startTime&&(isDayTime(d.startTime)?'day':'night')===period;
+    return samePost||sameShift;
   });
   if(matches.length===0) return null;
   matches.sort(function(a,b){return dutyDisplayDate(b).localeCompare(dutyDisplayDate(a));});
   var m=matches[0];
   var gap=daysBetweenISO(dutyDisplayDate(m),forDateISO);
-  var what=(postName&&m.postName===postName)?m.postName:m.type;
+  var what=(postName&&m.postName===postName)?m.postName:sdlShiftLabel(m);
   return (gap===1?'Same as yesterday: ':'Same as '+gap+' days ago: ')+what;
 }
 function dutyEligibilityIssuesRaw(t,post,slot){
@@ -5445,36 +5449,81 @@ function daysBetweenISO(a,b){
   var da=new Date(a+'T12:00:00'), db=new Date(b+'T12:00:00');
   return Math.round((db-da)/86400000);
 }
-// Repeat-flag engine shared by the Lookup screen and Duty Suggestion warnings.
-// Groups a soldier's duty records by Post and by Duty Type. Any group with
-// 2+ entries in the range gets a "range" flag; any pair of entries in a group
-// that land within 2 calendar days of each other gets a "near-repeat" flag,
-// even when the group has exactly 2 entries (so both flags can apply at once).
+// A "shift" is identified by its exact start time within its Day/Night
+// period (e.g. the post's 06:00 shift, or Roaming's 20:00 slot) — this is
+// what "1st night shift" etc. means in practice, independent of which post
+// it was at.
+function sdlShiftKey(d){ return (isDayTime(d.startTime)?'day':'night')+'@'+d.startTime; }
+function sdlShiftLabel(d){ return (isDayTime(d.startTime)?'☀':'🌙')+' '+d.startTime+' shift'; }
+// Expected rotation length for a Post repeat: how many distinct posts were
+// actually staffed (by anyone) on the earlier occurrence's date/period —
+// i.e. the real roster size in effect back then, NOT today's Duty Settings.
+// This means changing your posts later never reshuffles how old entries get
+// flagged. Falls back to today's active-post count only if that date has no
+// other duty data to read from (e.g. a very early/sparse record).
+function sdlPostRotationLengthAt(dateISO,isDay){
+  var names={};
+  D.duties.forEach(function(d){
+    if(d.cancelled||!d.postName) return;
+    if(dutyDisplayDate(d)!==dateISO) return;
+    if(isDayTime(d.startTime)!==isDay) return;
+    names[d.postName]=true;
+  });
+  var n=Object.keys(names).length;
+  if(n>0) return n;
+  var posts=(D.config.dutyPosts||[]).filter(function(p){return p.active&&!p.continuous;});
+  return Math.max(1,posts.length);
+}
+// Expected rotation length for a Shift repeat: how many shift slots exist
+// in that period. Prefers the count actually recorded on the duty entry
+// (shiftIdxCount, set when it was generated) since that reflects the real
+// roster size at the time; falls back to current config if not recorded
+// (e.g. manually added duties) — same historical-first principle as posts.
+function sdlShiftRotationLength(d){
+  if(d.shiftIdxCount) return Math.max(1,d.shiftIdxCount);
+  if(d.type==='Roaming'){
+    var rt=dutyTypeByName('Roaming');
+    return Math.max(1,rt?(rt.roamingShiftCount||8):8);
+  }
+  var isDay=isDayTime(d.startTime);
+  var shifts=(D.config.dutyShifts||[]).filter(function(sh){return sh&&sh.start&&isDayTime(sh.start)===isDay;});
+  return Math.max(1,shifts.length||1);
+}
+// Repeat-flag engine shared by the Lookup screen. Groups a soldier's duty
+// records by exact Post and by exact Shift (NOT Duty Type — most ranks do
+// Sentry repeatedly and that alone means nothing). A repeat is only flagged
+// when it happens SOONER than a full rotation would normally bring it back
+// around — e.g. with 5 active posts, landing on the same post again after
+// 5+ days is just the rotation completing a lap (no flag); coming back
+// after only 2-3 days is a real repeat (flag). Same idea for shifts, using
+// how many shift slots exist in that period. Both use the roster size that
+// was actually in effect at the time, not today's settings.
 function sdlComputeFlags(rows){
   var flagMap={}, summary=[];
   function ensure(id){ if(!flagMap[id]) flagMap[id]={}; return flagMap[id]; }
-  function processGroup(groups,kind,label){
+  function processGroup(groups,kind,labelFor,expectedFor){
     Object.keys(groups).forEach(function(key){
-      var arr=groups[key];
-      if(arr.length>=2){
-        arr.forEach(function(r){ ensure(r.id)[kind+'Range']=true; });
-        summary.push('🚩 Same '+label+' — "'+key+'" — '+arr.length+' times in range');
-      }
-      var sorted=arr.slice().sort(function(a,b){return dutyDisplayDate(a).localeCompare(dutyDisplayDate(b));});
+      var sorted=groups[key].slice().sort(function(a,b){return dutyDisplayDate(a).localeCompare(dutyDisplayDate(b));});
       for(var i=1;i<sorted.length;i++){
         var gap=Math.abs(daysBetweenISO(dutyDisplayDate(sorted[i-1]),dutyDisplayDate(sorted[i])));
-        if(gap<=2){
-          ensure(sorted[i-1].id)[kind+'Near']=true;
-          ensure(sorted[i].id)[kind+'Near']=true;
-          ensure(sorted[i].id)[kind+'NearDetail']='Same '+label+' '+gap+' day'+(gap!==1?'s':'')+' earlier ('+fmtDate(dutyDisplayDate(sorted[i-1]))+')';
+        var expected=expectedFor(sorted[i-1]);
+        if(gap<expected){
+          ensure(sorted[i-1].id)[kind]=true;
+          ensure(sorted[i].id)[kind]=true;
+          var detail='Same '+labelFor(sorted[i])+' after only '+gap+' day'+(gap!==1?'s':'')+' (expected ~'+expected+'+ based on that period\'s roster) — previously on '+fmtDate(dutyDisplayDate(sorted[i-1]));
+          ensure(sorted[i].id)[kind+'Detail']=detail;
+          summary.push('🚩 '+detail);
         }
       }
     });
   }
-  var byPost={}, byType={};
-  rows.forEach(function(r){ if(r.postName){ (byPost[r.postName]=byPost[r.postName]||[]).push(r); } (byType[r.type]=byType[r.type]||[]).push(r); });
-  processGroup(byPost,'post','post');
-  processGroup(byType,'type','duty type');
+  var byPost={}, byShift={};
+  rows.forEach(function(r){
+    if(r.postName){ (byPost[r.postName]=byPost[r.postName]||[]).push(r); }
+    var sk=sdlShiftKey(r); (byShift[sk]=byShift[sk]||[]).push(r);
+  });
+  processGroup(byPost,'post',function(r){return 'post — "'+r.postName+'"';},function(r){return sdlPostRotationLengthAt(dutyDisplayDate(r),isDayTime(r.startTime));});
+  processGroup(byShift,'shift',function(r){return sdlShiftLabel(r);},function(r){return sdlShiftRotationLength(r);});
   return {flagMap:flagMap,summary:summary};
 }
 function renderSoldierDutyLookup(){
@@ -5494,29 +5543,24 @@ function renderSoldierDutyLookup(){
   }
   emEl.style.display='none';
   var fx=sdlComputeFlags(rows);
-  if(fx.summary.length){ sumEl.style.display=''; sumEl.innerHTML='⚠ '+fx.summary.join('<br>⚠ '); }
+  if(fx.summary.length){ sumEl.style.display=''; sumEl.innerHTML=fx.summary.join('<br>'); }
   else { sumEl.style.display='none'; }
-  resEl.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:12.5px;">'+
-    '<thead><tr style="border-bottom:1px solid var(--border);text-align:left;">'+
-    '<th style="padding:6px 4px;">Date</th><th style="padding:6px 4px;">Shift</th><th style="padding:6px 4px;">Type</th><th style="padding:6px 4px;">Post</th><th style="padding:6px 4px;">Duty ID</th><th style="padding:6px 4px;">Flags</th>'+
-    '</tr></thead><tbody>'+
-    rows.map(function(d){
-      var f=fx.flagMap[d.id]||{};
-      var badges='';
-      if(f.postRange) badges+='<span class="badge b-red" style="font-size:9px;margin:1px 2px 1px 0;display:inline-block;" title="Same post 2+ times in range">🚩 Post</span>';
-      if(f.typeRange) badges+='<span class="badge b-red" style="font-size:9px;margin:1px 2px 1px 0;display:inline-block;" title="Same duty type 2+ times in range">🚩 Type</span>';
-      if(f.postNear) badges+='<span class="badge b-orange" style="font-size:9px;margin:1px 2px 1px 0;display:inline-block;" title="'+escHtml(f.postNearDetail||'')+'">⚠ Near·Post</span>';
-      if(f.typeNear) badges+='<span class="badge b-orange" style="font-size:9px;margin:1px 2px 1px 0;display:inline-block;" title="'+escHtml(f.typeNearDetail||'')+'">⚠ Near·Type</span>';
-      return '<tr style="border-bottom:1px solid var(--border);">'+
-        '<td style="padding:6px 4px;">'+fmtDate(dutyDisplayDate(d))+'</td>'+
-        '<td style="padding:6px 4px;">'+(isDayTime(d.startTime)?'☀ Day':'🌙 Night')+'</td>'+
-        '<td style="padding:6px 4px;">'+escHtml(d.type)+'</td>'+
-        '<td style="padding:6px 4px;">'+escHtml(d.postName||'—')+'</td>'+
-        '<td style="padding:6px 4px;">'+(d.dutyId||'—')+'</td>'+
-        '<td style="padding:6px 4px;">'+(badges||'—')+'</td>'+
-        '</tr>';
-    }).join('')+
-    '</tbody></table>';
+  // Card-per-record layout (not a wide table) so nothing gets clipped off
+  // the edge of a phone screen — every field stacks and wraps instead.
+  resEl.innerHTML=rows.map(function(d){
+    var f=fx.flagMap[d.id]||{};
+    var badges='';
+    if(f.post) badges+='<span class="badge b-red" style="font-size:9.5px;margin:2px 4px 2px 0;display:inline-block;" title="'+escHtml(f.postDetail||'')+'">🚩 Repeat Post</span>';
+    if(f.shift) badges+='<span class="badge b-red" style="font-size:9.5px;margin:2px 4px 2px 0;display:inline-block;" title="'+escHtml(f.shiftDetail||'')+'">🚩 Repeat Shift</span>';
+    return '<div class="card" style="margin-bottom:8px;padding:10px 12px;">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">'+
+      '<div style="font-size:14px;font-weight:700;">'+fmtDate(dutyDisplayDate(d))+' · '+(isDayTime(d.startTime)?'☀ Day':'🌙 Night')+'</div>'+
+      '<span class="badge b-tan" style="font-size:9px;">'+(d.dutyId||'—')+'</span>'+
+      '</div>'+
+      '<div style="font-size:12.5px;color:var(--text-muted);margin-top:4px;">'+escHtml(d.type)+(d.postName?' · '+escHtml(d.postName):'')+' · '+d.startTime+'–'+shiftEndTime(d.startTime,d.durationHours)+'</div>'+
+      (badges?'<div style="margin-top:8px;">'+badges+'</div>':'')+
+      '</div>';
+  }).join('');
 }
 function printSoldierDutyLookup(){
   if(!sdlSelectedTroopId) return;
@@ -5528,13 +5572,11 @@ function printSoldierDutyLookup(){
   var rowsHtml=rows.length?rows.map(function(d){
     var f=fx.flagMap[d.id]||{};
     var flags=[];
-    if(f.postRange) flags.push('Repeat Post');
-    if(f.typeRange) flags.push('Repeat Type');
-    if(f.postNear) flags.push('Near-repeat Post');
-    if(f.typeNear) flags.push('Near-repeat Type');
-    return '<tr><td>'+fmtDate(dutyDisplayDate(d))+'</td><td>'+(isDayTime(d.startTime)?'Day':'Night')+'</td><td>'+escHtml(d.type)+'</td><td>'+escHtml(d.postName||'—')+'</td><td>'+(d.dutyId||'—')+'</td><td>'+(flags.join(', ')||'—')+'</td></tr>';
-  }).join(''):'<tr><td colspan="6" style="text-align:center;color:#888;padding:20px;">No duty records in this range.</td></tr>';
-  var body='<div class="sub-hdr">Duty Records</div><table><thead><tr><th>Date</th><th>Shift</th><th>Type</th><th>Post</th><th>Duty ID</th><th>Flags</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'+
+    if(f.post) flags.push('Repeat Post');
+    if(f.shift) flags.push('Repeat Shift');
+    return '<tr><td>'+fmtDate(dutyDisplayDate(d))+'</td><td>'+(isDayTime(d.startTime)?'Day':'Night')+'</td><td>'+escHtml(d.type)+'</td><td>'+escHtml(d.postName||'—')+'</td><td>'+d.startTime+'</td><td>'+(d.dutyId||'—')+'</td><td>'+(flags.join(', ')||'—')+'</td></tr>';
+  }).join(''):'<tr><td colspan="7" style="text-align:center;color:#888;padding:20px;">No duty records in this range.</td></tr>';
+  var body='<div class="sub-hdr">Duty Records</div><table><thead><tr><th>Date</th><th>Shift</th><th>Type</th><th>Post</th><th>Start</th><th>Duty ID</th><th>Flags</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'+
     (fx.summary.length?'<div class="sub-hdr">Flag Summary</div><p style="font-size:12.5px;">'+fx.summary.join('<br>')+'</p>':'');
   var subtitle='<p>'+(t?upLabel(t.rank,t.name)+' ('+t.unit+')':'')+' · '+rangeLabel+'</p>';
   dutyReportWindow('SOLDIER DUTY LOOKUP',subtitle,body);
