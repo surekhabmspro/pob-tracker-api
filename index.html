@@ -3073,6 +3073,24 @@ function stmDateConflict(tid,date){
   if((D.drafts||[]).some(function(d){return d.plannedDate===date&&(d.troops||[]).indexOf(tid)>=0;})) return true;
   return false;
 }
+function isoAddDays(iso,n){
+  var d=new Date(iso+'T12:00:00');
+  d.setDate(d.getDate()+n);
+  return d.toISOString().slice(0,10);
+}
+// Drivers only: if a driver was on NIGHT Sentry duty the night before a
+// prospective patrol date, they're excluded from that patrol's suggestion
+// pool entirely — on sentry overnight means not also driving tomorrow's
+// patrol. Uses the same logical-date rollover as the rest of the duty
+// system (dutyDisplayDate), and only Sentry — Roaming/Line Duty aren't
+// included since the rule was specifically about Sentry.
+function driverHadNightSentryDayBefore(tid,patrolDateISO){
+  if(!patrolDateISO) return false;
+  var prevDay=isoAddDays(patrolDateISO,-1);
+  return D.duties.some(function(d){
+    return !d.cancelled&&d.type==='Sentry'&&!isDayTime(d.startTime)&&dutyDisplayDate(d)===prevDay&&(d.troops||[]).indexOf(tid)>=0;
+  });
+}
 // Patrol suggestion eligibility (Priority 1): on top of Available status,
 // this now also excludes anyone already reserved by an active/upcoming
 // duty, an uncompleted patrol draft (any date), or an uncompleted duty
@@ -3083,6 +3101,7 @@ function stmEligibleBase(excludeRestricted,patrolDate){
     if(isTroopReserved(t.id,{date:patrolDate||null})) return false;
     if(excludeRestricted&&t.restrictedRange) return false;
     if(patrolDate&&stmDateConflict(t.id,patrolDate)) return false;
+    if(t.trade==='Driver'&&patrolDate&&driverHadNightSentryDayBefore(t.id,patrolDate)) return false;
     return true;
   });
 }
@@ -3837,9 +3856,12 @@ function closeDutyModal(){
   document.getElementById('duty-modal').classList.remove('open');
 }
 function isNCE(t){ return t&&(t.rank||'').trim().toUpperCase()==='NCE'; }
-// Officers and JCOs are only ever put on Roaming duty — never Sentry
-// (including the continuous Signal/Medical posts) or Line Duty.
-function isRoamingOnlyRank(t){ return t&&isOfficerOrJCO(t.rank); }
+// Officers, JCOs (WO1/WO2), and CSM are only ever put on Roaming duty —
+// never Sentry (including the continuous Signal/Medical posts) or Line
+// Duty. Deliberately checks rank directly rather than the general
+// isOfficerOrJCO() keyword list (used elsewhere for reporting only) so
+// this stays independently controlled from that list.
+function isRoamingOnlyRank(t){ return !!(t&&(isRoamingOfficerRank(t)||isRoamingJCORank(t))); }
 function dutyEligibilityIssues(t,type,post){
   var issues=[];
   if(type&&type.eligibility==='roaming'&&!isRoamingEligible(t)) issues.push('not eligible for Roaming duty (officers up to Captain, JCOs, or designated senior Sergeants only)');
@@ -6351,13 +6373,18 @@ function dutyFairnessScore(t){
 function dutyTypeByName(name){ return (D.config.dutyTypes||[]).find(function(x){return x.name===name;})||null; }
 function dutyPostById(id){ return (D.config.dutyPosts||[]).find(function(x){return x.id===id;})||null; }
 function isAdminTrade(t){ return t&&(t.trade==='Administration'||t.trade==='POB Commander'||t.dualAdmin); }
-// Roaming eligibility: officers up to Captain, all JCOs (WO1/WO2/CSM), and
-// Sergeants specifically flagged as senior — not the general troop pool.
+// Roaming eligibility (Duty side only): officers up to Captain, JCOs
+// (WO1/WO2), CSM, and Sergeants specifically flagged as senior — not the
+// general troop pool. CSM is grouped with JCO/Officer here on purpose:
+// for internal Duty, CSM is Roaming-only just like Officer/JCO. This is
+// separate from the Patrol JCO fairness pool, where CSM must NOT stand
+// in as a JCO alternative — that's governed by t.category ('JCO' vs
+// 'Other Rank'), not by these rank-based Roaming checks.
 function isRoamingEligible(t){
   if(!t) return false;
   var r=(t.rank||'').toLowerCase();
   if(r.indexOf('major')>=0||r.indexOf('capt')>=0) return true; // officers up to Captain
-  if(r==='wo1'||r==='wo2'||r==='csm') return true; // JCOs
+  if(r==='wo1'||r==='wo2'||r==='csm') return true; // JCOs + CSM
   if(r==='sergeant') return !!t.isSeniorSergeant; // only designated senior sergeants
   return false;
 }
