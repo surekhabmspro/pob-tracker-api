@@ -2428,6 +2428,11 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     <div id="login-error" style="color:var(--red-light);font-size:12.5px;margin:4px 0 8px;"></div>
     <button class="btn btn-primary btn-full" id="login-submit-btn" onclick="submitLogin()">Sign In</button>
     <button class="btn btn-ghost btn-full" style="margin-top:8px;" onclick="hideLoginGate()">Continue Offline</button>
+    <button class="btn btn-ghost btn-full" style="margin-top:14px;font-size:12px;color:var(--text-muted);" onclick="toggleEmergencyTakeover()">Lost your main device? Recover access from here</button>
+    <div id="emergency-takeover-box" style="display:none;margin-top:8px;padding:10px;border:1px solid var(--red-light);border-radius:8px;">
+      <div style="font-size:12px;color:var(--red-light);margin-bottom:8px;">This makes <b>this device</b> (using the Device Name and Master Key above) the new main device, and immediately signs out whichever device currently holds that role. Only use this if that device is genuinely lost, broken, or unreachable — it cannot be undone from here.</div>
+      <button class="btn btn-danger btn-full" id="emergency-takeover-btn" onclick="submitEmergencyTakeover()">Make This Device Main Now</button>
+    </div>
   </div>
 </div>
 
@@ -2505,6 +2510,30 @@ function submitLogin(){
     })
     .catch(function(e){ errEl.textContent=(e&&e.message)||'Login failed. Check the master key and try again.'; })
     .finally(function(){ if(btn){ btn.disabled=false; btn.textContent='Sign In'; } });
+}
+function toggleEmergencyTakeover(){
+  var box=document.getElementById('emergency-takeover-box');
+  if(box) box.style.display=(box.style.display==='none')?'':'none';
+}
+function submitEmergencyTakeover(){
+  var label=(document.getElementById('login-device-label').value||'').trim();
+  var key=(document.getElementById('login-master-key').value||'').trim();
+  var errEl=document.getElementById('login-error');
+  if(!label){ errEl.textContent='Enter a name for this device (e.g. "My Phone").'; return; }
+  if(!key){ errEl.textContent='Enter the master key.'; return; }
+  if(!confirm('This will make "'+label+'" the new main device and immediately sign out whichever device currently holds that role. Continue?')) return;
+  var btn=document.getElementById('emergency-takeover-btn');
+  if(btn){ btn.disabled=true; btn.textContent='Taking over…'; }
+  fetch(API_URL+'/emergency-takeover',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceLabel:label,masterKey:key})})
+    .then(function(r){ return r.json().then(function(data){ if(!r.ok){ var e=new Error((data&&data.error)||'Takeover failed'); e.data=data; throw e; } return data; }); })
+    .then(function(data){
+      saveSession(data.token,data.sessionId,data.deviceLabel,data.isMain);
+      hideLoginGate();
+      document.getElementById('login-master-key').value='';
+      manualSync();
+    })
+    .catch(function(e){ errEl.textContent=(e&&e.message)||'Takeover failed. Check the master key and try again.'; })
+    .finally(function(){ if(btn){ btn.disabled=false; btn.textContent='Make This Device Main Now'; } });
 }
 function relTimeFromNow(iso){
   if(!iso) return '—';

@@ -191,6 +191,65 @@ app.post('/login', async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
 });
 
+// POST /emergency-takeover — body: { deviceLabel, masterKey }. For when
+// the main device is lost/broken/inaccessible and no other signed-in
+// device is available to hand it off normally (see /sessions/:id/make-main)
+// or claim it (see /sessions/claim-main, which only works when NO session
+// currently holds main). This is the one path that works from a totally
+// new device in every case, because it doesn't require an existing
+// session at all — just the shared master key, same as /login.
+//
+// Deliberately NOT gated by requireSession, and reuses the exact same
+// bad-key throttling as /login so it can't be brute-forced any more
+// easily than signing in normally already could. Because anyone who
+// knows the master key can already sign in as any device today, this
+// doesn't introduce a new class of risk — it just closes the gap where
+// that same person couldn't also become main without DB access.
+//
+// What it does: creates a normal new session for this device (same as
+// /login), then forcibly revokes and demotes whatever session currently
+// holds main (if any) and makes this new session main instead. The old
+// main device's session is revoked, not just demoted — if it turns out
+// not to be lost after all, it can simply log back in with the master
+// key like any other deactivated device. The takeover is written to
+// audit_log so it's visible from Duty History → Audit afterward.
+app.post('/emergency-takeover', async (req, res) => {
+  try {
+    const ip = req.ip || 'unknown';
+    const now = Date.now();
+    const blockEntry = _badKeyBlocks.get(ip);
+    if (blockEntry && now < blockEntry.until) {
+      return res.status(403).json({ error: 'Too many invalid attempts. Blocked temporarily.' });
+    }
+    const masterKey = (req.body && req.body.masterKey) || '';
+    if (!safeCompare(masterKey, API_KEY)) {
+      console.warn('Rejected emergency takeover with invalid master key from IP:', ip);
+      const rec = _badKeyFails.get(ip) || { count: 0, start: now };
+      if (now - rec.start > BAD_KEY_WINDOW_MS) { rec.count = 0; rec.start = now; }
+      rec.count++;
+      _badKeyFails.set(ip, rec);
+      if (rec.count >= BAD_KEY_MAX) {
+        _badKeyBlocks.set(ip, { until: now + BAD_KEY_BLOCK_MS });
+        _badKeyFails.delete(ip);
+        console.warn('IP temporarily blocked for repeated invalid emergency-takeover attempts:', ip);
+      }
+      return res.status(401).json({ error: 'Incorrect master key.' });
+    }
+    const deviceLabel = clip((req.body && req.body.deviceLabel) || 'Unnamed device', 100);
+    const id = genSessionId();
+    const token = genToken();
+    const { rows: prevMainRows } = await pool.query('SELECT id, device_label FROM sessions WHERE is_main = TRUE');
+    await pool.query('INSERT INTO sessions (id, token, device_label, is_main) VALUES ($1, $2, $3, TRUE)', [id, token, deviceLabel]);
+    await pool.query('UPDATE sessions SET is_main = FALSE, revoked = TRUE WHERE id != $1 AND is_main = TRUE', [id]);
+    const prevLabel = prevMainRows.length ? prevMainRows[0].device_label : '(none)';
+    await pool.query(
+      'INSERT INTO audit_log (ts, msg) VALUES ($1, $2)',
+      [new Date().toISOString(), clip(`Emergency takeover: "${deviceLabel}" became main device, replacing "${prevLabel}", from IP ${ip}.`, 500)]
+    );
+    res.json({ token, sessionId: id, deviceLabel, isMain: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
+});
+
 // Every real data route requires a valid, non-revoked session token
 // instead of the old shared static key.
 async function requireSession(req, res, next) {
