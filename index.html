@@ -8203,14 +8203,44 @@ function showProfile(id, fromArch){
     '<div><div class="pf-label">UNIT</div><div class="pf-value">'+(t.unit||'—')+'</div></div>'+
     '<div><div class="pf-label">PERSONAL NO.</div><div class="pf-value">'+(t.sn||'—')+'</div></div>'+
     '<div><div class="pf-label">🔫 WEAPON NO.</div><div class="pf-value">'+(t.weaponNumber||'Not recorded')+'</div></div>'+
-    '<div><div class="pf-label">STATUS</div><div style="margin-top:2px;">'+statusBadge(t.status||'available')+'</div></div>'+
+    '<div><div class="pf-label">STATUS</div><div style="margin-top:2px;">'+statusBadge(t.status||'available')+((t.status==='sick'||t.status==='leave')&&t.statusSince?' <span style="font-size:11px;color:var(--text-muted);">since '+fmtDate(t.statusSince)+'</span>':'')+'</div></div>'+
     '<div><div class="pf-label">🩸 BLOOD GROUP</div><div class="pf-value" style="'+(t.bloodGroup?'color:var(--red-light);':'')+'">'+(t.bloodGroup||'Not recorded')+'</div></div>'+
+    '<div><div class="pf-label">CATEGORY</div><div class="pf-value">'+(t.category||'Not recorded')+'</div></div>'+
+    '<div><div class="pf-label">TARGET %</div><div class="pf-value">'+(t.targetPct!=null?t.targetPct:100)+'%</div></div>'+
     '<div><div class="pf-label">DEPLOYMENT DATE</div><div class="pf-value">'+(t.deploymentDate?fmtDateLong(t.deploymentDate):'Not recorded')+'</div></div>'+
     '<div><div class="pf-label">📞 LOCAL NO.</div><div class="pf-value">'+(t.phoneLocal?'<a href="tel:'+t.phoneLocal.replace(/\s+/g,'')+'" style="color:var(--tan);text-decoration:none;">'+t.phoneLocal+'</a>':'—')+'</div></div>'+
     '<div><div class="pf-label">💬 WHATSAPP NO.</div><div class="pf-value">'+(t.phoneWa?'<a href="https://wa.me/'+t.phoneWa.replace(/[^0-9]/g,'')+'" target="_blank" style="color:var(--tan);text-decoration:none;">'+t.phoneWa+'</a>':'—')+'</div></div>'+
     '</div>'+
     (t.notes?'<div class="notes-field">'+escHtml(t.notes)+'</div>':'')+
     '</div>'+
+    (function(){
+      // Qualifications & flags — every remaining personal detail that isn't
+      // already in the info grid above, so the profile view reflects
+      // everything actually entered on this troop.
+      var quals=(t.dutyQuals||[]).slice();
+      var flags=[];
+      if(t.neverSuggest) flags.push('Never Suggest (Patrol)');
+      if(t.neverDuty) flags.push('Never Suggest (Duty)');
+      if(t.restrictedRange) flags.push('Restricted Range');
+      if(t.isSeniorSergeant) flags.push('Senior Sergeant');
+      if(t.dualAdmin) flags.push('Dual Admin');
+      if(quals.length===0&&flags.length===0) return '';
+      return '<div class="section-hdr">Qualifications &amp; Flags</div>'+
+        (quals.length?'<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Duty Quals: '+quals.map(function(q){return '<span class="badge b-gray" style="margin-right:3px;margin-bottom:3px;">'+escHtml(q)+'</span>';}).join('')+'</div>':'')+
+        (flags.length?'<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">'+flags.map(function(f){return '<span class="badge b-gray" style="margin-right:3px;margin-bottom:3px;">'+f+'</span>';}).join('')+'</div>':'');
+    })()+
+    (function(){
+      // Leave / Sick / Absence Records — was previously nowhere in the
+      // profile view or any print, even though it directly affects the
+      // participation % (see effectiveDeploymentDate/participationStats).
+      var abs=(t.absences||[]).slice().sort(function(a,b){return b.start.localeCompare(a.start);});
+      if(abs.length===0) return '<div class="section-hdr">Leave / Sick / Absence Records</div><div class="empty">None recorded.</div>';
+      return '<div class="section-hdr">Leave / Sick / Absence Records ('+abs.length+')</div>'+
+        abs.map(function(a){
+          return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12.5px;">'+
+            '<div><strong>'+escHtml(a.type)+'</strong> · '+fmtDate(a.start)+' – '+fmtDate(a.end)+' <span style="color:var(--text-muted);">('+a.days+'d)</span></div></div>';
+        }).join('');
+    })()+
     '<div class="section-hdr">Statistics</div>'+
     '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;">'+
     '<div class="stat"><div class="stat-num">'+tp.length+'</div><div class="stat-label">Patrols</div></div>'+
@@ -8347,9 +8377,45 @@ function viewFullRecord(){
   var dutyRowsHtml='';
   if(td.length===0){ dutyRowsHtml='<tr><td colspan="6" style="text-align:center;color:#888;padding:20px;">No duty records.</td></tr>'; }
   else { dutyMonthKeys.forEach(function(mk){var mo=dutyByMonth[mk];var moDate=new Date(mk+'-01T12:00:00');var moLabel=moDate.toLocaleString('default',{month:'long',year:'numeric'});var moH=mo.reduce(function(s,d){return s+(parseFloat(d.durationHours)||0);},0); dutyRowsHtml+='<tr style="background:#f0e8e8;"><td colspan="6" style="font-family:\'Courier New\',monospace;font-size:11px;font-weight:700;color:#5a0f1a;letter-spacing:1px;text-transform:uppercase;padding:7px 10px;">'+moLabel+' · '+mo.length+' duties · '+moH.toFixed(1)+'h</td></tr>'; mo.forEach(function(d){ var endT=shiftEndTime(d.startTime,d.durationHours); dutyRowsHtml+='<tr><td style="font-family:\'Courier New\',monospace;font-size:11px;color:#5a0f1a;white-space:nowrap;">'+(d.dutyId||'—')+'</td><td style="font-size:11px;white-space:nowrap;">'+fmtDate(dutyDisplayDate(d))+'</td><td><span style="display:inline-block;padding:2px 7px;border-radius:2px;font-size:10px;font-weight:700;background:#f4eeee;border:1px solid #aa9a9a;color:#333;">'+d.type+' · '+(isDayTime(d.startTime)?'Day':'Night')+'</span></td><td style="font-size:12px;color:#555;">'+(d.postName||'—')+'</td><td style="font-family:\'Courier New\',monospace;font-size:11px;">'+(d.startTime||'')+'–'+endT+' ('+(d.durationHours||'—')+'h)</td><td style="font-size:11px;color:#777;">'+escHtml(d.remarks||'—')+'</td></tr>'; }); }); }
+  // Personal Details block — every field entered on the troop, plus the
+  // Leave/Sick/Absence history. Previously this print only had patrol/duty
+  // tables and left out personal info and absence records entirely.
+  var quals=(t.dutyQuals||[]).slice();
+  var flags=[];
+  if(t.neverSuggest) flags.push('Never Suggest (Patrol)');
+  if(t.neverDuty) flags.push('Never Suggest (Duty)');
+  if(t.restrictedRange) flags.push('Restricted Range');
+  if(t.isSeniorSergeant) flags.push('Senior Sergeant');
+  if(t.dualAdmin) flags.push('Dual Admin');
+  var pdField=function(label,val){ return '<div class="pd-item"><div class="pd-lbl">'+label+'</div><div class="pd-val">'+val+'</div></div>'; };
+  var personalHtml='<div class="sub-hdr">Personal Details</div><div class="pd-grid">'+
+    pdField('Rank',t.rank||'—')+
+    pdField('Name',t.name||'—')+
+    pdField('Personal No.',t.sn||'—')+
+    pdField('Unit',t.unit||'—')+
+    pdField('Gender',t.gender||'Not recorded')+
+    pdField('Category',t.category||'Not recorded')+
+    pdField('Role',roleDisplay(t)||'Not set')+
+    pdField('Blood Group',t.bloodGroup||'Not recorded')+
+    pdField('Weapon No.',t.weaponNumber||'Not recorded')+
+    pdField('Status',(t.status||'available')+(((t.status==='sick'||t.status==='leave')&&t.statusSince)?' (since '+fmtDate(t.statusSince)+')':''))+
+    pdField('Deployment Date',t.deploymentDate?fmtDateLong(t.deploymentDate):'Not recorded')+
+    pdField('Target %',(t.targetPct!=null?t.targetPct:100)+'%')+
+    pdField('Local No.',t.phoneLocal||'—')+
+    pdField('WhatsApp No.',t.phoneWa||'—')+
+    (quals.length?pdField('Duty Quals',quals.join(', ')):'')+
+    (flags.length?pdField('Flags',flags.join(', ')):'')+
+    '</div>'+
+    (t.notes?'<div style="font-size:12px;color:#444;background:#f5f5f5;border:1px solid #ccc;border-radius:4px;padding:8px 10px;margin-bottom:14px;">'+escHtml(t.notes)+'</div>':'');
+  var absList=(t.absences||[]).slice().sort(function(a,b){return b.start.localeCompare(a.start);});
+  var absenceRowsHtml=absList.length===0?'<tr><td colspan="4" style="text-align:center;color:#888;padding:14px;">No leave/sick/absence records.</td></tr>':
+    absList.map(function(a){ return '<tr><td>'+escHtml(a.type)+'</td><td>'+fmtDate(a.start)+'</td><td>'+fmtDate(a.end)+'</td><td>'+a.days+'d</td></tr>'; }).join('');
+  var absenceHtml='<div class="sub-hdr">Leave / Sick / Absence Records ('+absList.length+')</div><table><colgroup><col style="width:25%"><col style="width:25%"><col style="width:25%"><col style="width:25%"></colgroup><thead><tr><th>Type</th><th>From</th><th>To</th><th>Days</th></tr></thead><tbody>'+absenceRowsHtml+'</tbody></table>';
   var win=window.open('','_blank','width=960,height=750');
-  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Combined Operational Record — '+upLabel(t.rank,t.name)+'</title><style>body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:14px;}.hdr{text-align:center;border-bottom:2px solid #2d5a3d;padding-bottom:14px;margin-bottom:20px;}.hdr h2{margin:0 0 4px;font-size:20px;color:#1a3a2a;}.hdr p{margin:2px 0;font-size:13px;font-weight:700;color:#555;}.info-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;}.info-box{background:#f5f5f5;border:1px solid #ccc;border-radius:4px;padding:10px;text-align:center;}.info-num{font-size:22px;font-weight:700;color:#2d5a3d;font-family:\'Courier New\',monospace;}.info-lbl{font-size:12px;font-weight:700;color:#666;letter-spacing:0.5px;text-transform:uppercase;margin-top:3px;}.sub-hdr{font-family:\'Segoe UI\',Arial,sans-serif;font-weight:700;font-size:12px;color:#2d5a3d;letter-spacing:1px;text-transform:uppercase;margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid #ccc;}.sub-hdr.duty{color:#5a0f1a;}table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;}th{background:#2d5a3d;color:#fff;font-family:\'Segoe UI\',Arial,sans-serif;font-weight:700;font-size:12px;letter-spacing:0.5px;text-transform:uppercase;padding:8px 10px;text-align:left;}th.duty{background:#8b1a2b;}td{padding:7px 10px;border-bottom:1px solid #e0e8e0;word-wrap:break-word;vertical-align:top;}tr:hover td{background:#f8fff8;}.footer{margin-top:20px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}@media print{@page{margin:1cm;}.no-print{display:none!important;}}</style></head><body>'+
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Combined Operational Record — '+upLabel(t.rank,t.name)+'</title><style>body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:14px;}.hdr{text-align:center;border-bottom:2px solid #2d5a3d;padding-bottom:14px;margin-bottom:20px;}.hdr h2{margin:0 0 4px;font-size:20px;color:#1a3a2a;}.hdr p{margin:2px 0;font-size:13px;font-weight:700;color:#555;}.info-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;}.info-box{background:#f5f5f5;border:1px solid #ccc;border-radius:4px;padding:10px;text-align:center;}.info-num{font-size:22px;font-weight:700;color:#2d5a3d;font-family:\'Courier New\',monospace;}.info-lbl{font-size:12px;font-weight:700;color:#666;letter-spacing:0.5px;text-transform:uppercase;margin-top:3px;}.pd-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 14px;margin-bottom:12px;}.pd-item{border-bottom:1px solid #e0e8e0;padding-bottom:5px;}.pd-lbl{font-size:10px;font-weight:700;color:#888;letter-spacing:0.5px;text-transform:uppercase;}.pd-val{font-size:13px;color:#222;margin-top:1px;}.sub-hdr{font-family:\'Segoe UI\',Arial,sans-serif;font-weight:700;font-size:12px;color:#2d5a3d;letter-spacing:1px;text-transform:uppercase;margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid #ccc;}.sub-hdr.duty{color:#5a0f1a;}table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;}th{background:#2d5a3d;color:#fff;font-family:\'Segoe UI\',Arial,sans-serif;font-weight:700;font-size:12px;letter-spacing:0.5px;text-transform:uppercase;padding:8px 10px;text-align:left;}th.duty{background:#8b1a2b;}td{padding:7px 10px;border-bottom:1px solid #e0e8e0;word-wrap:break-word;vertical-align:top;}tr:hover td{background:#f8fff8;}.footer{margin-top:20px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}@media print{@page{margin:1cm;}.no-print{display:none!important;}}</style></head><body>'+
   '<div class="hdr"><div style="font-size:12px;font-weight:700;color:#999;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">'+(s.classification||'')+(s.classification?' — ':'')+''+(s.pob||'POB Mobaye')+'</div><h2>COMBINED OPERATIONAL RECORD</h2><p style="font-size:14px;font-weight:700;color:#1a3a2a;">'+(t.sn?('Personal No: '+t.sn+' · '):'')+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>'+'</p><p>Unit: '+(t.unit||'—')+'</p><p>Period: <strong>'+(earliest?fmtDateLong(earliest):'N/A')+' — '+fmtDateLong(todayStr)+'</strong></p><p style="color:#888;">Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p></div>'+
+  personalHtml+
+  absenceHtml+
   '<div class="info-grid"><div class="info-box"><div class="info-num">'+tp.length+'</div><div class="info-lbl">Total Patrols</div></div><div class="info-box"><div class="info-num">'+totalH.toFixed(1)+'</div><div class="info-lbl">Patrol Hours</div></div><div class="info-box"><div class="info-num">'+td.length+'</div><div class="info-lbl">Total Duties</div></div><div class="info-box"><div class="info-num">'+totalDutyH.toFixed(1)+'</div><div class="info-lbl">Duty Hours</div></div></div>'+
   (sectors.length>0?'<div class="sub-hdr">Sectors Covered</div><p style="font-size:13px;color:#444;margin-bottom:14px;">'+sectors.join(', ')+'</p>':'')+
   (Object.keys(types).length>0?'<div class="sub-hdr">Patrol Types</div><p style="font-size:13px;color:#444;margin-bottom:14px;">'+Object.entries(types).sort(function(a,b){return b[1]-a[1];}).map(function(kv){return kv[0]+': <strong>'+kv[1]+'</strong>';}).join(' · ')+'</p>':'')+
