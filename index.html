@@ -2442,8 +2442,9 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
       <span>📱 Manage Devices</span>
       <button class="btn btn-ghost btn-sm" onclick="closeModal('devices-modal')">Close</button>
     </div>
-    <div style="padding:4px 2px 10px;font-size:12.5px;color:var(--text-muted);">Every device signed in to this app. Deactivating a device signs it out immediately — it can sign back in anytime with the master key.</div>
-    <button class="btn btn-danger btn-full" style="margin-bottom:10px;" onclick="revokeOtherDevices()">🚫 Deactivate All Other Devices</button>
+    <div id="devices-note" style="padding:4px 2px 10px;font-size:12.5px;color:var(--text-muted);">Every device signed in to this app. Deactivating a device signs it out immediately — it can sign back in anytime with the master key.</div>
+    <button class="btn btn-ghost btn-full" id="devices-claim-main-btn" style="margin-bottom:10px;display:none;" onclick="claimMainDevice()">⭐ Claim Main Device</button>
+    <button class="btn btn-danger btn-full" id="devices-deactivate-all-btn" style="margin-bottom:10px;" onclick="revokeOtherDevices()">🚫 Deactivate All Other Devices</button>
     <div id="devices-list" style="max-height:55vh;overflow-y:auto;"></div>
   </div>
 </div>
@@ -2465,13 +2466,15 @@ var API_URL = 'https://pob-tracker-api.onrender.com';
 // Replaces the old shared static API_KEY as day-to-day auth. Each device
 // logs in once (Device Label + the shared master key) via the login gate
 // below and gets its own token, stored only on that device. Any device
-// can then see and sign out any other from Settings → Manage Devices,
-// without needing to change the master key itself.
+// can see every other device from Settings → Manage Devices, but only
+// the "main" device can actually sign one out — see isMainDevice() and
+// the server-side isMain check in index.js.
 var SESS_KEY = 'pob_session_v1';
 function getSession(){ try{ var r=localStorage.getItem(SESS_KEY); return r?JSON.parse(r):null; }catch(e){ return null; } }
-function saveSession(token,sessionId,deviceLabel){ localStorage.setItem(SESS_KEY,JSON.stringify({token:token,sessionId:sessionId,deviceLabel:deviceLabel})); }
+function saveSession(token,sessionId,deviceLabel,isMain){ localStorage.setItem(SESS_KEY,JSON.stringify({token:token,sessionId:sessionId,deviceLabel:deviceLabel,isMain:!!isMain})); }
 function clearSession(){ localStorage.removeItem(SESS_KEY); }
 function getSessionToken(){ var s=getSession(); return s?s.token:''; }
+function isMainDevice(){ var s=getSession(); return !!(s&&s.isMain); }
 var _loginGateShown=false;
 function showLoginGate(message){
   if(_loginGateShown) return;
@@ -2495,7 +2498,7 @@ function submitLogin(){
   fetch(API_URL+'/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceLabel:label,masterKey:key})})
     .then(function(r){ return r.json().then(function(data){ if(!r.ok){ var e=new Error((data&&data.error)||'Login failed'); e.data=data; throw e; } return data; }); })
     .then(function(data){
-      saveSession(data.token,data.sessionId,data.deviceLabel);
+      saveSession(data.token,data.sessionId,data.deviceLabel,data.isMain);
       hideLoginGate();
       document.getElementById('login-master-key').value='';
       manualSync();
@@ -2516,24 +2519,51 @@ function openDevicesModal(){
   document.getElementById('devices-modal').classList.add('open');
   document.getElementById('devices-list').innerHTML='<div class="empty">Loading…</div>';
   apiFetch('/sessions').then(function(rows){
+    var iAmMain=isMainDevice();
+    var noActiveMain=!rows.some(function(r){ return r.isMain && !r.revoked; });
+    var noteEl=document.getElementById('devices-note');
+    if(noteEl){
+      if(iAmMain){ noteEl.textContent='Every device signed in to this app. Deactivating a device signs it out immediately — it can sign back in anytime with the master key.'; }
+      else if(noActiveMain){ noteEl.textContent='No main device is currently active. Claim main status below to manage other devices.'; }
+      else { noteEl.textContent='Only the main device can deactivate other devices. You can view this list from here, but not manage it.'; }
+    }
+    var allBtn=document.getElementById('devices-deactivate-all-btn');
+    if(allBtn) allBtn.style.display=iAmMain?'':'none';
+    var claimBtn=document.getElementById('devices-claim-main-btn');
+    if(claimBtn) claimBtn.style.display=(!iAmMain&&noActiveMain)?'':'none';
     if(rows.length===0){ document.getElementById('devices-list').innerHTML='<div class="empty">No devices found.</div>'; return; }
     document.getElementById('devices-list').innerHTML=rows.map(function(r){
+      var actions='';
+      if(iAmMain&&!r.revoked){
+        if(!r.isMain) actions+='<button class="rb-btn rb-info" onclick="makeMainDevice(\''+r.id+'\')">Make Main</button>';
+        if(!r.isCurrent) actions+='<button class="rb-btn rb-danger-soft" onclick="revokeDevice(\''+r.id+'\')">Deactivate</button>';
+      }
       return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 0;border-bottom:1px solid var(--border);">'+
         '<div style="min-width:0;flex:1;">'+
-        '<div style="font-size:14px;"><strong>'+escHtml(r.deviceLabel)+'</strong>'+(r.isCurrent?' <span class="badge b-green" style="font-size:9px;">THIS DEVICE</span>':'')+(r.revoked?' <span class="badge b-red" style="font-size:9px;">DEACTIVATED</span>':'')+'</div>'+
+        '<div style="font-size:14px;"><strong>'+escHtml(r.deviceLabel)+'</strong>'+(r.isCurrent?' <span class="badge b-green" style="font-size:9px;">THIS DEVICE</span>':'')+(r.isMain?' <span class="badge b-tan" style="font-size:9px;">MAIN</span>':'')+(r.revoked?' <span class="badge b-red" style="font-size:9px;">DEACTIVATED</span>':'')+'</div>'+
         '<div style="font-size:11px;color:var(--text-muted);">Last active '+relTimeFromNow(r.lastSeenAt)+' · Signed in '+relTimeFromNow(r.createdAt)+'</div>'+
         '</div>'+
-        (r.revoked?'':'<button class="rb-btn rb-danger-soft" onclick="revokeDevice(\''+r.id+'\')">Deactivate</button>')+
+        (actions?'<div style="display:flex;gap:6px;flex-shrink:0;">'+actions+'</div>':'')+
         '</div>';
     }).join('');
   }).catch(function(){ document.getElementById('devices-list').innerHTML='<div class="empty">Could not load devices. Check your connection.</div>'; });
 }
 function revokeDevice(id){
-  apiFetch('/sessions/'+id+'/revoke',{method:'POST'}).then(function(){ openDevicesModal(); }).catch(function(){ alert('Could not deactivate that device. Try again.'); });
+  apiFetch('/sessions/'+id+'/revoke',{method:'POST'}).then(function(){ openDevicesModal(); }).catch(function(e){ alert((e&&e.data&&e.data.error)||'Could not deactivate that device. Try again.'); });
 }
 function revokeOtherDevices(){
   if(!confirm('Deactivate every other device signed in to this app? They will need the master key to sign back in.')) return;
-  apiFetch('/sessions/revoke-others',{method:'POST'}).then(function(){ openDevicesModal(); }).catch(function(){ alert('Could not deactivate other devices. Try again.'); });
+  apiFetch('/sessions/revoke-others',{method:'POST'}).then(function(){ openDevicesModal(); }).catch(function(e){ alert((e&&e.data&&e.data.error)||'Could not deactivate other devices. Try again.'); });
+}
+function makeMainDevice(id){
+  if(!confirm('Make this device the main device? It will become the only device that can deactivate others.')) return;
+  apiFetch('/sessions/'+id+'/make-main',{method:'POST'}).then(function(){ openDevicesModal(); }).catch(function(e){ alert((e&&e.data&&e.data.error)||'Could not update main device. Try again.'); });
+}
+function claimMainDevice(){
+  apiFetch('/sessions/claim-main',{method:'POST'}).then(function(){
+    var s=getSession(); if(s){ s.isMain=true; localStorage.setItem(SESS_KEY,JSON.stringify(s)); }
+    openDevicesModal();
+  }).catch(function(e){ alert((e&&e.data&&e.data.error)||'Could not claim main device. A main device may already be active — refresh and try again.'); });
 }
 var APP_VERSION = '2026.07.03.1';
 var SK = 'pob_v4';

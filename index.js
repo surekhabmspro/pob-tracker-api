@@ -136,9 +136,12 @@ function requireApiKey(req, res, next) {
 // data route below. A device logs in ONCE with the shared master key
 // (still the API_KEY value — nothing new to configure in Render) plus a
 // label for itself, and gets back its own session token to use from then
-// on. Because each device has its own row in `sessions`, any device can
-// be individually or collectively signed out from the Devices screen —
-// the master key itself never needs to change for that, unlike before.
+// on. Because each device has its own row in `sessions`, devices can be
+// individually or collectively signed out from the Devices screen — but
+// only by the "main" device (the first to ever log in, or whoever it
+// hands that status to). Non-main devices can see the list but can't
+// revoke anyone. The master key itself never needs to change for any
+// of this, unlike before.
 function genToken() { return crypto.randomBytes(32).toString('hex'); }
 function genSessionId() { return 'sess_' + crypto.randomBytes(12).toString('hex'); }
 
@@ -171,11 +174,20 @@ app.post('/login', async (req, res) => {
     const deviceLabel = clip((req.body && req.body.deviceLabel) || 'Unnamed device', 100);
     const id = genSessionId();
     const token = genToken();
+    // The very first device to ever log in becomes the "main" device —
+    // from here on, only the main device can deactivate other devices
+    // from Manage Devices (see requireSession/isMain and the /sessions
+    // routes below). If the main device is later lost or deactivated,
+    // the next device to log in does NOT automatically inherit main
+    // status; it has to claim the (now-empty) seat via
+    // POST /sessions/claim-main.
+    const { rows: countRows } = await pool.query('SELECT COUNT(*)::int AS c FROM sessions');
+    const isMain = countRows[0].c === 0;
     await pool.query(
-      'INSERT INTO sessions (id, token, device_label) VALUES ($1, $2, $3)',
-      [id, token, deviceLabel]
+      'INSERT INTO sessions (id, token, device_label, is_main) VALUES ($1, $2, $3, $4)',
+      [id, token, deviceLabel, isMain]
     );
-    res.json({ token, sessionId: id, deviceLabel });
+    res.json({ token, sessionId: id, deviceLabel, isMain });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
 });
 
@@ -185,11 +197,12 @@ async function requireSession(req, res, next) {
   try {
     const token = req.header('x-session-token') || '';
     if (!token) return res.status(401).json({ error: 'No session token.', code: 'no_session' });
-    const { rows } = await pool.query('SELECT id, revoked FROM sessions WHERE token = $1', [token]);
+    const { rows } = await pool.query('SELECT id, revoked, is_main FROM sessions WHERE token = $1', [token]);
     if (rows.length === 0 || rows[0].revoked) {
       return res.status(401).json({ error: 'Session signed out. Please log in again.', code: 'invalid_session' });
     }
     req.sessionId = rows[0].id;
+    req.isMain = rows[0].is_main;
     pool.query('UPDATE sessions SET last_seen_at = now() WHERE id = $1', [rows[0].id]).catch(() => {});
     next();
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
@@ -267,8 +280,13 @@ async function migrateSchema() {
       device_label TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      revoked BOOLEAN NOT NULL DEFAULT FALSE
+      revoked BOOLEAN NOT NULL DEFAULT FALSE,
+      is_main BOOLEAN NOT NULL DEFAULT FALSE
     )`);
+    // For deployments where the sessions table already existed before
+    // the "main device" concept: add the column without touching
+    // existing rows (they stay FALSE until claimed — see /sessions/claim-main).
+    await pool.query('ALTER TABLE sessions ADD COLUMN IF NOT EXISTS is_main BOOLEAN NOT NULL DEFAULT FALSE');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token)');
     console.log('Schema check OK: blood_group, deployment_date, weapon_number, gender, category, trade, driver_quals, target_pct, never_suggest, restricted_range, duty_quals, is_senior_sergeant, never_duty, status_since, excluded_days, absences, ptl_seq, sessions table present.');
   } catch (e) {
@@ -291,16 +309,17 @@ app.get('/health', (_, res) => res.json({ status: 'ok', time: new Date() }));
 app.use(requireSession);
 
 // ── DEVICE SESSIONS MANAGEMENT ─────────────────────────────────────────
-// Lets any already-logged-in device see every device that's ever logged
-// in, and sign specific ones (or all others) out. Signing a device out
-// just flips its `revoked` flag — its next request gets a 401 with
-// code:'invalid_session', and the front-end sends it back to the login
-// screen. No master-key rotation needed, and no limit on how many
-// devices can register — see /login above.
+// Any already-logged-in device can see every device that's ever logged
+// in, but only the main device can sign specific ones (or all others)
+// out — enforced via req.isMain, set in requireSession. Signing a
+// device out just flips its `revoked` flag — its next request gets a
+// 401 with code:'invalid_session', and the front-end sends it back to
+// the login screen. No master-key rotation needed, and no limit on how
+// many devices can register — see /login above.
 app.get('/sessions', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT id, device_label, created_at, last_seen_at, revoked FROM sessions ORDER BY last_seen_at DESC'
+      'SELECT id, device_label, created_at, last_seen_at, revoked, is_main FROM sessions ORDER BY last_seen_at DESC'
     );
     res.json(rows.map(r => ({
       id: r.id,
@@ -308,13 +327,23 @@ app.get('/sessions', async (req, res) => {
       createdAt: r.created_at,
       lastSeenAt: r.last_seen_at,
       revoked: r.revoked,
+      isMain: r.is_main,
       isCurrent: r.id === req.sessionId
     })));
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
 });
 
+// Only the main device may deactivate other devices — otherwise any
+// device that knows the shared master key could sign in and kick every
+// other device out. req.isMain is set by requireSession above.
 app.post('/sessions/:id/revoke', async (req, res) => {
   try {
+    if (!req.isMain) {
+      return res.status(403).json({ error: 'Only the main device can deactivate other devices.' });
+    }
+    if (req.params.id === req.sessionId) {
+      return res.status(400).json({ error: 'Sign out from this device instead of deactivating it here.' });
+    }
     await pool.query('UPDATE sessions SET revoked = TRUE WHERE id = $1', [req.params.id]);
     res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
@@ -322,7 +351,46 @@ app.post('/sessions/:id/revoke', async (req, res) => {
 
 app.post('/sessions/revoke-others', async (req, res) => {
   try {
+    if (!req.isMain) {
+      return res.status(403).json({ error: 'Only the main device can deactivate other devices.' });
+    }
     await pool.query('UPDATE sessions SET revoked = TRUE WHERE id != $1', [req.sessionId]);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
+});
+
+// Lets the current main device hand main status to another
+// already-signed-in device — e.g. when deliberately switching your
+// primary phone.
+app.post('/sessions/:id/make-main', async (req, res) => {
+  try {
+    if (!req.isMain) {
+      return res.status(403).json({ error: 'Only the main device can do that.' });
+    }
+    const { rows } = await pool.query('SELECT revoked FROM sessions WHERE id = $1', [req.params.id]);
+    if (rows.length === 0 || rows[0].revoked) {
+      return res.status(404).json({ error: 'Device not found or already deactivated.' });
+    }
+    await pool.query('UPDATE sessions SET is_main = FALSE WHERE id != $1', [req.params.id]);
+    await pool.query('UPDATE sessions SET is_main = TRUE WHERE id = $1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
+});
+
+// Recovery path for when the main device was lost, wiped, or
+// deactivated and no session currently holds main status: any
+// signed-in device can claim it, but only while the seat is genuinely
+// empty — so this can't be used to steal main status from an active
+// main device.
+app.post('/sessions/claim-main', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT COUNT(*)::int AS c FROM sessions WHERE is_main = TRUE AND revoked = FALSE'
+    );
+    if (rows[0].c > 0) {
+      return res.status(403).json({ error: 'A main device is already active.' });
+    }
+    await pool.query('UPDATE sessions SET is_main = TRUE WHERE id = $1', [req.sessionId]);
     res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
 });
