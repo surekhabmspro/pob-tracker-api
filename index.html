@@ -2519,7 +2519,20 @@ function openDevicesModal(){
   document.getElementById('devices-modal').classList.add('open');
   document.getElementById('devices-list').innerHTML='<div class="empty">Loading…</div>';
   apiFetch('/sessions').then(function(rows){
-    var iAmMain=isMainDevice();
+    // Determine main status from the server's own list for THIS device's
+    // current session (r.isCurrent), not from the cached localStorage flag.
+    // The cache is only ever set at login or in claimMainDevice(), so it
+    // goes stale the moment main status changes hands via makeMainDevice()
+    // — either because this device just received main and never heard
+    // about it, or because this device just gave main away but its own
+    // cached flag was never flipped off. Re-deriving it here every time
+    // the modal opens (and re-syncing the cache to match) keeps both
+    // directions correct without touching the server-side enforcement,
+    // which was already correct.
+    var mine=rows.find(function(r){ return r.isCurrent; });
+    var iAmMain=!!(mine&&mine.isMain&&!mine.revoked);
+    var cached=getSession();
+    if(cached&&cached.isMain!==iAmMain){ cached.isMain=iAmMain; localStorage.setItem(SESS_KEY,JSON.stringify(cached)); }
     var noActiveMain=!rows.some(function(r){ return r.isMain && !r.revoked; });
     var noteEl=document.getElementById('devices-note');
     if(noteEl){
