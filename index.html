@@ -1685,6 +1685,11 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     </div>
   </div>
   <div class="card">
+    <div class="card-title">Device Sessions</div>
+    <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">See every device signed in to this app and sign specific ones out, remotely, from here.</p>
+    <button class="btn btn-primary btn-full" onclick="requirePin(function(){openDevicesModal();})">📱 Manage Devices</button>
+  </div>
+  <div class="card">
     <div class="card-title">Security PIN</div>
     <p style="color:var(--text-muted);font-size:14px;margin-bottom:12px;" id="pin-status-text">No PIN set — Log Patrol and edit/delete/archive actions are unprotected.</p>
     <div class="fg"><label class="field-label">Security Question (for PIN recovery)</label>
@@ -2407,6 +2412,42 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
   </div>
 </div>
 
+<!-- LOGIN GATE — shown whenever this device has no valid session (first
+     run on a new device, or after being signed out from Manage Devices).
+     Deliberately NOT closable via the usual overlay-tap/Close pattern —
+     cached data underneath is still fully visible and usable offline;
+     this only blocks syncing with the server until the device logs back
+     in with the shared master key. -->
+<div class="modal-ov" id="login-modal">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-handle"></div>
+    <div class="card-title modal-hdr-sticky"><span>🔑 Device Sign-In</span></div>
+    <div style="padding:4px 2px 12px;font-size:12.5px;color:var(--text-muted);">This device isn't signed in to the server yet. Enter a name for this device and the shared master key to continue syncing. You can keep viewing locally saved data in the meantime.</div>
+    <div class="fg"><label class="field-label">Device Name</label><input type="text" id="login-device-label" placeholder="e.g. Rekha's Phone"></div>
+    <div class="fg"><label class="field-label">Master Key</label><input type="password" id="login-master-key" placeholder="Shared master key"></div>
+    <div id="login-error" style="color:var(--red-light);font-size:12.5px;margin:4px 0 8px;"></div>
+    <button class="btn btn-primary btn-full" id="login-submit-btn" onclick="submitLogin()">Sign In</button>
+    <button class="btn btn-ghost btn-full" style="margin-top:8px;" onclick="hideLoginGate()">Continue Offline</button>
+  </div>
+</div>
+
+<!-- MANAGE DEVICES — lists every device that has ever logged in, with a
+     per-device Deactivate button and a single "Deactivate All Other
+     Devices" action. Reached from Settings, behind the same PIN gate as
+     other sensitive actions. -->
+<div class="modal-ov" id="devices-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="card-title modal-hdr-sticky">
+      <span>📱 Manage Devices</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('devices-modal')">Close</button>
+    </div>
+    <div style="padding:4px 2px 10px;font-size:12.5px;color:var(--text-muted);">Every device signed in to this app. Deactivating a device signs it out immediately — it can sign back in anytime with the master key.</div>
+    <button class="btn btn-danger btn-full" style="margin-bottom:10px;" onclick="revokeOtherDevices()">🚫 Deactivate All Other Devices</button>
+    <div id="devices-list" style="max-height:55vh;overflow-y:auto;"></div>
+  </div>
+</div>
+
 <script>
 // =====================================================================
 // DATA & CONSTANTS
@@ -2420,7 +2461,80 @@ var API_URL = 'https://pob-tracker-api.onrender.com';
 // anyone who has this file can read this value out of it. Treat it as a
 // lock on the door, not a guarantee against someone who already has a key
 // to the house — see the security notes shared alongside this update.
-var API_KEY = 'ClCsXG9eY87D-PgpBJ7pxBMmHZpcRNAM0bnWBevOC1U';
+// ── DEVICE SESSION (multi-device sign-in/sign-out) ─────────────────────
+// Replaces the old shared static API_KEY as day-to-day auth. Each device
+// logs in once (Device Label + the shared master key) via the login gate
+// below and gets its own token, stored only on that device. Any device
+// can then see and sign out any other from Settings → Manage Devices,
+// without needing to change the master key itself.
+var SESS_KEY = 'pob_session_v1';
+function getSession(){ try{ var r=localStorage.getItem(SESS_KEY); return r?JSON.parse(r):null; }catch(e){ return null; } }
+function saveSession(token,sessionId,deviceLabel){ localStorage.setItem(SESS_KEY,JSON.stringify({token:token,sessionId:sessionId,deviceLabel:deviceLabel})); }
+function clearSession(){ localStorage.removeItem(SESS_KEY); }
+function getSessionToken(){ var s=getSession(); return s?s.token:''; }
+var _loginGateShown=false;
+function showLoginGate(message){
+  if(_loginGateShown) return;
+  _loginGateShown=true;
+  var errEl=document.getElementById('login-error');
+  if(errEl) errEl.textContent=message||'';
+  var lbl=document.getElementById('login-device-label');
+  if(lbl&&!lbl.value){ lbl.value=(getSession()&&getSession().deviceLabel)||''; }
+  var modalEl=document.getElementById('login-modal');
+  if(modalEl) modalEl.classList.add('open');
+}
+function hideLoginGate(){ _loginGateShown=false; var modalEl=document.getElementById('login-modal'); if(modalEl) modalEl.classList.remove('open'); }
+function submitLogin(){
+  var label=(document.getElementById('login-device-label').value||'').trim();
+  var key=(document.getElementById('login-master-key').value||'').trim();
+  var errEl=document.getElementById('login-error');
+  if(!label){ errEl.textContent='Enter a name for this device (e.g. "My Phone").'; return; }
+  if(!key){ errEl.textContent='Enter the master key.'; return; }
+  var btn=document.getElementById('login-submit-btn');
+  if(btn){ btn.disabled=true; btn.textContent='Signing in…'; }
+  fetch(API_URL+'/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceLabel:label,masterKey:key})})
+    .then(function(r){ return r.json().then(function(data){ if(!r.ok){ var e=new Error((data&&data.error)||'Login failed'); e.data=data; throw e; } return data; }); })
+    .then(function(data){
+      saveSession(data.token,data.sessionId,data.deviceLabel);
+      hideLoginGate();
+      document.getElementById('login-master-key').value='';
+      manualSync();
+    })
+    .catch(function(e){ errEl.textContent=(e&&e.message)||'Login failed. Check the master key and try again.'; })
+    .finally(function(){ if(btn){ btn.disabled=false; btn.textContent='Sign In'; } });
+}
+function relTimeFromNow(iso){
+  if(!iso) return '—';
+  var then=new Date(iso).getTime(), now=Date.now(), diffMin=Math.round((now-then)/60000);
+  if(diffMin<1) return 'just now';
+  if(diffMin<60) return diffMin+'m ago';
+  var diffH=Math.round(diffMin/60);
+  if(diffH<24) return diffH+'h ago';
+  return Math.round(diffH/24)+'d ago';
+}
+function openDevicesModal(){
+  document.getElementById('devices-modal').classList.add('open');
+  document.getElementById('devices-list').innerHTML='<div class="empty">Loading…</div>';
+  apiFetch('/sessions').then(function(rows){
+    if(rows.length===0){ document.getElementById('devices-list').innerHTML='<div class="empty">No devices found.</div>'; return; }
+    document.getElementById('devices-list').innerHTML=rows.map(function(r){
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 0;border-bottom:1px solid var(--border);">'+
+        '<div style="min-width:0;flex:1;">'+
+        '<div style="font-size:14px;"><strong>'+escHtml(r.deviceLabel)+'</strong>'+(r.isCurrent?' <span class="badge b-green" style="font-size:9px;">THIS DEVICE</span>':'')+(r.revoked?' <span class="badge b-red" style="font-size:9px;">DEACTIVATED</span>':'')+'</div>'+
+        '<div style="font-size:11px;color:var(--text-muted);">Last active '+relTimeFromNow(r.lastSeenAt)+' · Signed in '+relTimeFromNow(r.createdAt)+'</div>'+
+        '</div>'+
+        (r.revoked?'':'<button class="rb-btn rb-danger-soft" onclick="revokeDevice(\''+r.id+'\')">Deactivate</button>')+
+        '</div>';
+    }).join('');
+  }).catch(function(){ document.getElementById('devices-list').innerHTML='<div class="empty">Could not load devices. Check your connection.</div>'; });
+}
+function revokeDevice(id){
+  apiFetch('/sessions/'+id+'/revoke',{method:'POST'}).then(function(){ openDevicesModal(); }).catch(function(){ alert('Could not deactivate that device. Try again.'); });
+}
+function revokeOtherDevices(){
+  if(!confirm('Deactivate every other device signed in to this app? They will need the master key to sign back in.')) return;
+  apiFetch('/sessions/revoke-others',{method:'POST'}).then(function(){ openDevicesModal(); }).catch(function(){ alert('Could not deactivate other devices. Try again.'); });
+}
 var APP_VERSION = '2026.07.03.1';
 var SK = 'pob_v4';
 var DEFAULT_RANKS = ['Major','Captain','WO1','WO2','CSM','Sergeant','Corporal','Lance Corporal','Private','NCE'];
@@ -2627,13 +2741,17 @@ function flushOutbox(){
 // status so the existing retry/offline-queue logic actually engages.
 function apiFetch(path, opts) {
   opts = opts || {};
-  var headers = Object.assign({'Content-Type':'application/json','x-api-key':API_KEY}, opts.headers||{});
+  var headers = Object.assign({'Content-Type':'application/json','x-session-token':getSessionToken()}, opts.headers||{});
   return fetch(API_URL + path, Object.assign({}, opts, {headers:headers}))
     .then(function(r){
       return r.json().catch(function(){ return {}; }).then(function(data){
         if(!r.ok){
           var err=new Error((data&&data.error)||('Request failed with status '+r.status));
           err.status=r.status; err.data=data;
+          if(data&&(data.code==='invalid_session'||data.code==='no_session')){
+            clearSession();
+            showLoginGate('This device was signed out. Enter the master key to sign back in.');
+          }
           throw err;
         }
         return data;
@@ -9082,6 +9200,7 @@ document.addEventListener('DOMContentLoaded',resetSearchFields);
   wirePinInputs();
   relocateCalendarsToBody();
   loadData().then(function(){
+    if(!getSessionToken()) showLoginGate();
     try{
       applySettings();
       populateDropdowns();
@@ -9125,6 +9244,10 @@ function wirePinInputs(){
   if(resetConfirm) resetConfirm.addEventListener('keydown',function(e){ if(e.key==='Enter') submitPinReset(); });
   var secA=document.getElementById('security-a-input');
   if(secA) secA.addEventListener('keydown',function(e){ if(e.key==='Enter') verifySecurityAnswer(); });
+  var loginKey=document.getElementById('login-master-key');
+  if(loginKey) loginKey.addEventListener('keydown',function(e){ if(e.key==='Enter') submitLogin(); });
+  var loginLabel=document.getElementById('login-device-label');
+  if(loginLabel) loginLabel.addEventListener('keydown',function(e){ if(e.key==='Enter') document.getElementById('login-master-key').focus(); });
 }
 
 // ── OFFLINE APP SHELL ──────────────────────────────────────────────────

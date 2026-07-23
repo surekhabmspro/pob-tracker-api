@@ -15,7 +15,7 @@ const ALLOWED_ORIGIN = 'https://surekhabmspro.github.io';
 app.use(cors({
   origin: ALLOWED_ORIGIN,
   methods: ['GET', 'POST', 'PATCH', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'x-api-key']
+  allowedHeaders: ['Content-Type', 'x-api-key', 'x-session-token']
 }));
 app.use(express.json({ limit: '200kb' })); // caps request size against oversized-payload abuse
 
@@ -131,6 +131,70 @@ function requireApiKey(req, res, next) {
   next();
 }
 
+// ── DEVICE SESSIONS ─────────────────────────────────────────────────────
+// Replaces the single shared API key as the day-to-day auth for every
+// data route below. A device logs in ONCE with the shared master key
+// (still the API_KEY value — nothing new to configure in Render) plus a
+// label for itself, and gets back its own session token to use from then
+// on. Because each device has its own row in `sessions`, any device can
+// be individually or collectively signed out from the Devices screen —
+// the master key itself never needs to change for that, unlike before.
+function genToken() { return crypto.randomBytes(32).toString('hex'); }
+function genSessionId() { return 'sess_' + crypto.randomBytes(12).toString('hex'); }
+
+// POST /login — body: { deviceLabel, masterKey }. Not gated by
+// requireSession (a device obviously has no session yet the first time),
+// but reuses the exact same bad-key throttling as the old API-key gate so
+// this can't be brute-forced any more easily than before.
+app.post('/login', async (req, res) => {
+  try {
+    const ip = req.ip || 'unknown';
+    const now = Date.now();
+    const blockEntry = _badKeyBlocks.get(ip);
+    if (blockEntry && now < blockEntry.until) {
+      return res.status(403).json({ error: 'Too many invalid attempts. Blocked temporarily.' });
+    }
+    const masterKey = (req.body && req.body.masterKey) || '';
+    if (!safeCompare(masterKey, API_KEY)) {
+      console.warn('Rejected login with invalid master key from IP:', ip);
+      const rec = _badKeyFails.get(ip) || { count: 0, start: now };
+      if (now - rec.start > BAD_KEY_WINDOW_MS) { rec.count = 0; rec.start = now; }
+      rec.count++;
+      _badKeyFails.set(ip, rec);
+      if (rec.count >= BAD_KEY_MAX) {
+        _badKeyBlocks.set(ip, { until: now + BAD_KEY_BLOCK_MS });
+        _badKeyFails.delete(ip);
+        console.warn('IP temporarily blocked for repeated invalid login attempts:', ip);
+      }
+      return res.status(401).json({ error: 'Incorrect master key.' });
+    }
+    const deviceLabel = clip((req.body && req.body.deviceLabel) || 'Unnamed device', 100);
+    const id = genSessionId();
+    const token = genToken();
+    await pool.query(
+      'INSERT INTO sessions (id, token, device_label) VALUES ($1, $2, $3)',
+      [id, token, deviceLabel]
+    );
+    res.json({ token, sessionId: id, deviceLabel });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
+});
+
+// Every real data route requires a valid, non-revoked session token
+// instead of the old shared static key.
+async function requireSession(req, res, next) {
+  try {
+    const token = req.header('x-session-token') || '';
+    if (!token) return res.status(401).json({ error: 'No session token.', code: 'no_session' });
+    const { rows } = await pool.query('SELECT id, revoked FROM sessions WHERE token = $1', [token]);
+    if (rows.length === 0 || rows[0].revoked) {
+      return res.status(401).json({ error: 'Session signed out. Please log in again.', code: 'invalid_session' });
+    }
+    req.sessionId = rows[0].id;
+    pool.query('UPDATE sessions SET last_seen_at = now() WHERE id = $1', [rows[0].id]).catch(() => {});
+    next();
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
+}
+
 // ── INPUT VALIDATION ──────────────────────────────────────────────────
 // Even with a valid key, this stops obviously malformed or oversized
 // data from being written — caps free-text field lengths and makes sure
@@ -192,7 +256,21 @@ async function migrateSchema() {
     // participation-% window, not just tracked going forward via status.
     await pool.query("ALTER TABLE troops ADD COLUMN IF NOT EXISTS absences JSONB DEFAULT '[]'");
     await pool.query('ALTER TABLE patrols ADD COLUMN IF NOT EXISTS ptl_seq INTEGER');
-    console.log('Schema check OK: blood_group, deployment_date, weapon_number, gender, category, trade, driver_quals, target_pct, never_suggest, restricted_range, duty_quals, is_senior_sergeant, never_duty, status_since, excluded_days, absences, ptl_seq present.');
+    // Device sessions (multi-device sign-in/sign-out) — each device that
+    // logs in with the shared master key gets its own row here and its own
+    // token, so any device can be individually or collectively signed out
+    // from the Devices screen without affecting the others or requiring a
+    // master-key rotation.
+    await pool.query(`CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,
+      token TEXT NOT NULL UNIQUE,
+      device_label TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      revoked BOOLEAN NOT NULL DEFAULT FALSE
+    )`);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token)');
+    console.log('Schema check OK: blood_group, deployment_date, weapon_number, gender, category, trade, driver_quals, target_pct, never_suggest, restricted_range, duty_quals, is_senior_sergeant, never_duty, status_since, excluded_days, absences, ptl_seq, sessions table present.');
   } catch (e) {
     console.error('Schema migration failed:', e.message);
   }
@@ -207,8 +285,47 @@ app.get('/version', (_, res) => res.json({ version: API_VERSION }));
 // Left open — just a heartbeat, reveals nothing about your data.
 app.get('/health', (_, res) => res.json({ status: 'ok', time: new Date() }));
 
-// Everything below this line handles real data and requires the API key.
-app.use(requireApiKey);
+// Everything below this line handles real data and requires a valid,
+// non-revoked device session (see requireSession above) instead of the
+// old shared static key.
+app.use(requireSession);
+
+// ── DEVICE SESSIONS MANAGEMENT ─────────────────────────────────────────
+// Lets any already-logged-in device see every device that's ever logged
+// in, and sign specific ones (or all others) out. Signing a device out
+// just flips its `revoked` flag — its next request gets a 401 with
+// code:'invalid_session', and the front-end sends it back to the login
+// screen. No master-key rotation needed, and no limit on how many
+// devices can register — see /login above.
+app.get('/sessions', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, device_label, created_at, last_seen_at, revoked FROM sessions ORDER BY last_seen_at DESC'
+    );
+    res.json(rows.map(r => ({
+      id: r.id,
+      deviceLabel: r.device_label,
+      createdAt: r.created_at,
+      lastSeenAt: r.last_seen_at,
+      revoked: r.revoked,
+      isCurrent: r.id === req.sessionId
+    })));
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
+});
+
+app.post('/sessions/:id/revoke', async (req, res) => {
+  try {
+    await pool.query('UPDATE sessions SET revoked = TRUE WHERE id = $1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
+});
+
+app.post('/sessions/revoke-others', async (req, res) => {
+  try {
+    await pool.query('UPDATE sessions SET revoked = TRUE WHERE id != $1', [req.sessionId]);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
+});
 
 // ── TROOPS (active) ───────────────────────────────────────────────────
 app.get('/troops', async (req, res) => {
