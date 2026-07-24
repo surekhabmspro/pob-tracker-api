@@ -512,9 +512,9 @@ body.light-mode .sidebar-item.active{background:#f5e8cc;color:var(--tan);}
 #duty-dashboard .stat{background:linear-gradient(155deg,rgba(242,73,90,0.10),var(--surface));border-color:rgba(242,73,90,0.35);}
 #duty-dashboard .stat.clickable:hover{border-color:var(--red-light);box-shadow:var(--card-bevel),0 4px 16px rgba(242,73,90,0.18);}
 #duty-dashboard .stat.clickable:active{border-color:var(--red-light);}
-/* Duty stats went from 6 cards to 5 (Duties This Month removed) — auto-fit
-   instead of a fixed column count so 5 wrap evenly (e.g. 3+2 centered-ish)
-   rather than leaving a single orphan card alone on the last row. */
+/* Duty stats: down to 4 cards (Duties This Month, then Contingency Groups,
+   both removed as duplicate/unneeded) — auto-fit instead of a fixed column
+   count so they wrap evenly rather than leaving an orphan card alone. */
 #duty-dash-stats.stat-grid{grid-template-columns:repeat(auto-fit,minmax(120px,1fr));}
 #duty-dashboard .btn-primary,#duty-roster .btn-primary,#duty-settings .btn-primary,
 #duty-suggest-modal .btn-primary,#duty-drafts-modal .btn-primary,#contingency-modal .btn-primary{
@@ -5329,7 +5329,6 @@ function renderDutyDashboard(){
     '<div class="stat clickable" onclick="showDashDetail(\'duty-active-now\')"><div class="stat-icon">🛡</div><div class="stat-num" style="color:var(--green-light);">'+onDutyCount+'</div><div class="stat-label">On Duty Now</div></div>'+
     '<div class="stat clickable" onclick="showDashDetail(\'free-now\')"><div class="stat-icon">🟢</div><div class="stat-num" style="color:var(--green-light);">'+freeNow.length+'</div><div class="stat-label">Free Now</div></div>'+
     '<div class="stat clickable" onclick="showDashDetail(\'duty-posts\')"><div class="stat-icon">📍</div><div class="stat-num">'+activePosts.length+'</div><div class="stat-label">Active Posts</div></div>'+
-    '<div class="stat clickable" onclick="openContingencyModal()" style="'+(activeContingency.length>0?'border-color:var(--orange);':'')+'"><div class="stat-icon">🚧</div><div class="stat-num" style="color:'+(activeContingency.length>0?'var(--orange)':'var(--tan)')+';">'+activeContingency.length+'</div><div class="stat-label">Contingency Groups</div></div>'+
     '<div class="stat clickable" onclick="showDashDetail(\'duty-upcoming\')"><div class="stat-icon">📅</div><div class="stat-num">'+upcomingPersonCount+'</div><div class="stat-label">Upcoming Duties (Persons)</div></div>';
   var alerts='';
   if(activeContingency.length>0){
@@ -6141,13 +6140,12 @@ function renderContingencyList(){
   var shiftLabel={full:'🌗 Both Shifts',day:'☀️ Day Only',night:'🌙 Night Only'};
   el.innerHTML=D.dutyContingency.slice().reverse().map(function(g){
     var troops=(g.troopIds||[]).map(troopById).filter(Boolean);
-    var names=sortTroops(troops).map(function(t){return upLabel(t.rank,t.name);}).join(', ');
     return '<div style="padding:8px 0;border-bottom:1px solid var(--border);">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">'+
       '<strong style="font-size:13px;">'+escHtml(g.reason)+'</strong>'+
       '<span class="badge '+(g.active?'b-green':'b-tan')+'" style="font-size:9px;">'+(g.active?'ACTIVE':'INACTIVE')+'</span></div>'+
       '<div style="font-size:11px;color:var(--text-muted);margin:3px 0;">'+fmtDate(g.startDate)+(g.endDate?(' – '+fmtDate(g.endDate)):' – ongoing')+' · <span class="badge b-tan" style="font-size:9px;">'+(shiftLabel[g.shift||'full'])+'</span></div>'+
-      '<div style="font-size:12px;margin-bottom:6px;">'+(names||'—')+'</div>'+
+      '<div style="margin-bottom:6px;"><button class="btn btn-ghost btn-sm" onclick="showDashDetail(\'contingency-members\',\''+g.id+'\')">👥 View Members ('+troops.length+') →</button></div>'+
       '<div style="display:flex;gap:6px;">'+
       '<button class="btn btn-ghost btn-sm" onclick="toggleContingencyActive(\''+g.id+'\')">'+(g.active?'Deactivate':'Reactivate')+'</button>'+
       '<button class="btn btn-ghost btn-sm" style="color:var(--red-light);border-color:var(--red-light);" onclick="deleteContingencyGroup(\''+g.id+'\')">🗑️ Delete</button>'+
@@ -7811,7 +7809,7 @@ function renderDash(){
 // Shows a quick detail modal for a clicked dashboard stat/tile, so the person
 // doesn't have to navigate away just to see what's behind a number.
 function dashDetailRow(main,sub){ return '<div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:14px;"><strong>'+main+'</strong><div style="font-size:12px;color:var(--text-muted);margin-top:2px;">'+sub+'</div></div>'; }
-function showDashDetail(kind){
+function showDashDetail(kind,extra){
   var now=new Date(),mo=now.getMonth(),yr=now.getFullYear();
   var cta=document.getElementById('dash-detail-cta'); if(cta){ cta.style.display='none'; cta.onclick=null; }
   var moPats=D.patrols.filter(function(p){var d=new Date(p.date+'T12:00:00');return d.getMonth()===mo&&d.getFullYear()===yr;});
@@ -7848,6 +7846,11 @@ function showDashDetail(kind){
     var flagIcon={'b-green':'🟢','b-orange':'🟡','b-red':'🔴'};
     body=pd3.rows.length?pd3.rows.map(function(r){return dashDetailRow((flagIcon[r.flag]||'')+' '+r.t.rank.toUpperCase()+' '+r.t.name.toUpperCase(),(r.t.unit||'')+' · '+r.pct.toFixed(1)+'% of unit patrol hours');}).join(''):'';
     if(cta){ cta.style.display=''; cta.textContent='Open Full Participation Page'; cta.onclick=function(){ closeModal('dash-detail-modal'); showTab('hours-ranking'); }; }
+  } else if(kind==='contingency-members'){
+    var grp=(D.dutyContingency||[]).find(function(g){return g.id===extra;});
+    var gTroops=grp?sortTroops((grp.troopIds||[]).map(troopById).filter(Boolean)):[];
+    title=(grp?escHtml(grp.reason):'Exclusion Group')+' — Members ('+gTroops.length+')';
+    body=gTroops.length?gTroops.map(function(t){return dashDetailRow(t.rank.toUpperCase()+' '+t.name.toUpperCase(),(t.unit||''));}).join(''):'<div class="empty">No troops in this group.</div>';
   } else if(kind==='duty-posts'){
     var aposts=(D.config.dutyPosts||[]).filter(function(p){return p.active;});
     title='Active Posts ('+aposts.length+')';
