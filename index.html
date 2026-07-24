@@ -332,14 +332,15 @@ body.light-mode{background:
   .stat-label{font-size:12px;margin-top:5px;}
   .stat{padding:18px 12px;border-radius:12px;}
 
-  /* ── Dashboard 2-col row (Participation + Monthly Overview) ── */
-  /* Participation card is now much shorter (just 3 summary chips — names
-     live in a popup instead), so it's no longer stretched to match
-     Monthly Overview's height; that used to leave a large empty gap
-     below the chips. Each card now sizes to its own content, keeping
-     the row — and the whole dashboard — compact on desktop. */
-  .dash-row2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;margin-bottom:14px;}
-  .dash-row2 .card{margin-bottom:0;box-sizing:border-box;}
+  /* ── Dashboard 2-col row (Participation + Monthly Overview), equal height ── */
+  /* Participation card now carries real content of its own (avg % + range,
+     not just 3 chips), so it naturally reaches a height close to Monthly
+     Overview's. Stretch is kept as a safety net only — any small residual
+     difference just adds a touch of padding to the shorter card instead of
+     leaving a visible background gap, which is what happened when the
+     card was mostly empty and got stretched to fill a much larger gap. */
+  .dash-row2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:stretch;margin-bottom:14px;}
+  .dash-row2 .card{margin-bottom:0;height:100%;box-sizing:border-box;}
 
   /* ── Cards ── */
   .card{border-radius:12px;padding:22px;margin-bottom:18px;}
@@ -1069,9 +1070,11 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
   <div class="stat-grid" id="dash-stats"></div>
 
   <!-- Patrol Participation Status + Monthly Overview — side by side on
-       desktop, each sized to its own content (no forced equal height).
-       Recent Patrols card removed (redundant with the Patrol Log tab) to
-       keep the dashboard scroll-free on desktop. -->
+       desktop, equal height via grid stretch. Participation now carries
+       real content (avg % + range) so the stretch just tidies up a small
+       residual difference instead of masking near-empty content. Recent
+       Patrols card removed (redundant with the Patrol Log tab) to keep
+       the dashboard scroll-free on desktop. -->
   <div class="dash-row2">
     <div class="card" id="dash-participation-card">
       <div class="card-title">
@@ -7893,12 +7896,23 @@ function renderDash(){
     var gC=pd.rows.filter(function(r){return r.flag==='b-green';}).length;
     var yC=pd.rows.filter(function(r){return r.flag==='b-orange';}).length;
     var rC=pd.rows.filter(function(r){return r.flag==='b-red';}).length;
+    var pcts=pd.rows.map(function(r){return r.pct;});
+    var avgPct=pcts.length?(pcts.reduce(function(s,v){return s+v;},0)/pcts.length):0;
+    var minPct=pcts.length?Math.min.apply(null,pcts):0;
+    var maxPct=pcts.length?Math.max.apply(null,pcts):0;
     document.getElementById('dash-participation').innerHTML=
       '<div class="pp-summary-grid">'+
       '<div class="pp-summary-chip b-green clickable" onclick="showDashDetail(\'pp-green\')">🟢 <strong>'+gC+'</strong></div>'+
       '<div class="pp-summary-chip b-orange clickable" onclick="showDashDetail(\'pp-yellow\')">🟡 <strong>'+yC+'</strong></div>'+
       '<div class="pp-summary-chip b-red clickable" onclick="showDashDetail(\'pp-red\')">🔴 <strong>'+rC+'</strong></div>'+
-      '</div>';
+      '</div>'+
+      (pcts.length?(
+        '<div style="margin-top:12px;padding:10px;background:rgba(230,179,74,0.08);border:1px solid rgba(230,179,74,0.2);border-radius:8px;font-size:13px;">'+
+        '<div style="color:var(--tan);font-weight:700;">📊 Unit Average: <strong style="color:#1a1206;background:var(--tan);padding:1px 7px;border-radius:5px;">'+avgPct.toFixed(1)+'%</strong></div>'+
+        '<div style="color:var(--text-muted);margin-top:4px;">across '+pcts.length+' troop'+(pcts.length!==1?'s':'')+' tracked</div>'+
+        '</div>'+
+        '<div class="tag-pill"><span>📈 Range</span><strong>'+minPct.toFixed(1)+'% – '+maxPct.toFixed(1)+'%</strong></div>'
+      ):'<div class="empty" style="margin-top:12px;">No participation data yet.</div>');
   }
 }
 // Shows a quick detail modal for a clicked dashboard stat/tile, so the person
