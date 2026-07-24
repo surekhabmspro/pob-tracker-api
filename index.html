@@ -516,6 +516,11 @@ body.light-mode .sidebar-item.active{background:#f5e8cc;color:var(--tan);}
    both removed as duplicate/unneeded) — auto-fit instead of a fixed column
    count so they wrap evenly rather than leaving an orphan card alone. */
 #duty-dash-stats.stat-grid{grid-template-columns:repeat(auto-fit,minmax(120px,1fr));}
+/* Main Patrol Dashboard stats: also down to 4 cards (Patrols This Month
+   removed as a duplicate of the Monthly Overview tile below it) — same
+   auto-fit fix so a wide desktop's forced 5-column layout doesn't leave
+   an empty trailing gap. */
+#dash-stats.stat-grid{grid-template-columns:repeat(auto-fit,minmax(120px,1fr));}
 #duty-dashboard .btn-primary,#duty-roster .btn-primary,#duty-settings .btn-primary,
 #duty-suggest-modal .btn-primary,#duty-drafts-modal .btn-primary,#contingency-modal .btn-primary{
   background:linear-gradient(160deg,var(--red-light),var(--red));border-color:var(--red);color:#fff;}
@@ -7750,7 +7755,6 @@ function renderDash(){
     '<div class="stat clickable" onclick="showDashDetail(\'total\')"><div class="stat-icon">👥</div><div class="stat-num">'+D.troops.length+'</div><div class="stat-label">Total Troops</div>'+absentFlagHTML+'</div>'+
     '<div class="stat clickable" onclick="showDashDetail(\'available\')"><div class="stat-icon">✅</div><div class="stat-num" style="color:var(--green-light);">'+availTroops.length+'</div><div class="stat-label">Available</div></div>'+
     '<div class="stat clickable" onclick="showDashDetail(\'free-now\')"><div class="stat-icon">🟢</div><div class="stat-num" style="color:var(--green-light);">'+freeNow2.length+'</div><div class="stat-label">Free Now</div></div>'+
-    '<div class="stat clickable" onclick="showDashDetail(\'mo-patrols\')"><div class="stat-icon">🧭</div><div class="stat-num">'+moPats.length+'</div><div class="stat-label">Patrols This Month</div></div>'+
     '<div class="stat clickable" onclick="showTab(\'inactive\')" style="'+(inactive7.length>0?'border-color:var(--red-light);':'')+'">'+
     '<div class="stat-icon">'+(inactive7.length>0?'⚠':'🕒')+'</div><div class="stat-num" style="color:'+(inactive7.length>0?'var(--red-light)':'var(--tan)')+';">'+inactive7.length+'</div>'+
     '<div class="stat-label">Inactive &gt;7 Days</div></div>';
