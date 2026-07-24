@@ -332,9 +332,14 @@ body.light-mode{background:
   .stat-label{font-size:12px;margin-top:5px;}
   .stat{padding:18px 12px;border-radius:12px;}
 
-  /* ── Dashboard 2-col row (Participation + Monthly Overview), equal height ── */
-  .dash-row2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:stretch;margin-bottom:14px;}
-  .dash-row2 .card{margin-bottom:0;height:100%;box-sizing:border-box;}
+  /* ── Dashboard 2-col row (Participation + Monthly Overview) ── */
+  /* Participation card is now much shorter (just 3 summary chips — names
+     live in a popup instead), so it's no longer stretched to match
+     Monthly Overview's height; that used to leave a large empty gap
+     below the chips. Each card now sizes to its own content, keeping
+     the row — and the whole dashboard — compact on desktop. */
+  .dash-row2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;margin-bottom:14px;}
+  .dash-row2 .card{margin-bottom:0;box-sizing:border-box;}
 
   /* ── Cards ── */
   .card{border-radius:12px;padding:22px;margin-bottom:18px;}
@@ -1063,9 +1068,10 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
   <!-- Stats Bar — 4 cols mobile, 4-5 cols desktop via CSS -->
   <div class="stat-grid" id="dash-stats"></div>
 
-  <!-- Patrol Participation Status + Monthly Overview — side by side on desktop,
-       equal height via grid stretch. Recent Patrols card removed (redundant
-       with the Patrol Log tab) to keep the dashboard scroll-free on desktop. -->
+  <!-- Patrol Participation Status + Monthly Overview — side by side on
+       desktop, each sized to its own content (no forced equal height).
+       Recent Patrols card removed (redundant with the Patrol Log tab) to
+       keep the dashboard scroll-free on desktop. -->
   <div class="dash-row2">
     <div class="card" id="dash-participation-card">
       <div class="card-title">
