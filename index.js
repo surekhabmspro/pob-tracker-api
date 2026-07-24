@@ -616,6 +616,69 @@ app.post('/config', async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
 });
 
+// ── FACTORY RESET ───────────────────────────────────────────────────
+// Lets the main device wipe the shared database and start fresh. Gated
+// two ways: only the main device may call it (same rule as deactivating
+// other devices), AND it requires re-entering the master key even though
+// the caller already has a valid session — a destructive, irreversible,
+// all-devices-affected action deserves its own fresh confirmation rather
+// than riding on whatever session happened to already be open. Reuses
+// the same bad-key throttling as /login and /emergency-takeover.
+//
+// scope 'data' — clears troops (including archived), patrols, patrol
+//                drafts, duty records, duty drafts, contingency
+//                exclusion groups, and the audit log. Unit settings,
+//                patrol/duty type lists, sectors/routes, duty posts,
+//                and the security PIN are left untouched.
+// scope 'full' — everything 'data' does, PLUS unit settings, all
+//                configuration lists, and the security PIN — a true
+//                factory-fresh state.
+//
+// Signed-in devices (sessions) are never touched by either scope — a
+// data reset shouldn't sign anyone out of the app itself.
+app.post('/factory-reset', async (req, res) => {
+  try {
+    if (!req.isMain) {
+      return res.status(403).json({ error: 'Only the main device can reset all data.' });
+    }
+    const ip = req.ip || 'unknown';
+    const now = Date.now();
+    const blockEntry = _badKeyBlocks.get(ip);
+    if (blockEntry && now < blockEntry.until) {
+      return res.status(403).json({ error: 'Too many invalid attempts. Blocked temporarily.' });
+    }
+    const masterKey = (req.body && req.body.masterKey) || '';
+    if (!safeCompare(masterKey, API_KEY)) {
+      console.warn('Rejected factory reset with invalid master key from IP:', ip);
+      const rec = _badKeyFails.get(ip) || { count: 0, start: now };
+      if (now - rec.start > BAD_KEY_WINDOW_MS) { rec.count = 0; rec.start = now; }
+      rec.count++;
+      _badKeyFails.set(ip, rec);
+      if (rec.count >= BAD_KEY_MAX) {
+        _badKeyBlocks.set(ip, { until: now + BAD_KEY_BLOCK_MS });
+        _badKeyFails.delete(ip);
+        console.warn('IP temporarily blocked for repeated invalid factory-reset attempts:', ip);
+      }
+      return res.status(401).json({ error: 'Incorrect master key.' });
+    }
+    const scope = (req.body && req.body.scope === 'full') ? 'full' : 'data';
+    await pool.query('DELETE FROM patrols');
+    await pool.query('DELETE FROM troops');
+    await pool.query(`DELETE FROM app_config WHERE key IN ('drafts','duties','dutyContingency','dutyDrafts')`);
+    await pool.query(`INSERT INTO app_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2`, ['counter', JSON.stringify(1)]);
+    await pool.query(`INSERT INTO app_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2`, ['dutyCounter', JSON.stringify(1)]);
+    if (scope === 'full') {
+      await pool.query(`DELETE FROM app_config WHERE key IN ('settings','config','security')`);
+    }
+    await pool.query('DELETE FROM audit_log');
+    await pool.query(
+      'INSERT INTO audit_log (ts, msg) VALUES ($1, $2)',
+      [new Date().toISOString(), clip(`FACTORY RESET performed (${scope === 'full' ? 'full — including settings, config and PIN' : 'operational data only — settings, config and PIN kept'}) from IP ${ip}.`, 500)]
+    );
+    res.json({ ok: true, scope });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
+});
+
 // ── CATCH-ALL ─────────────────────────────────────────────────────────
 // Any URL that isn't one of the routes above gets a plain, uninformative
 // 404 — doesn't hint at what routes do or don't exist.

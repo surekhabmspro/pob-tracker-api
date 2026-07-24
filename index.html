@@ -1793,7 +1793,38 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
         <div class="card-title">System Info</div>
         <div id="sys-info" style="font-family:'Courier New',monospace;font-size:12px;color:var(--text-muted);line-height:2;"></div>
       </div>
+      <div class="card" style="margin-bottom:0;border-color:rgba(220,55,55,0.45);">
+        <div class="card-title" style="color:var(--red-light);">⚠ Danger Zone</div>
+        <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">Wipe all troops, patrols, duties, drafts, archived records, and history from the shared database and start completely fresh. Irreversible, affects every signed-in device, and only available from the main device.</p>
+        <button class="btn btn-danger btn-full" onclick="openFactoryResetModal()">🗑️ Reset All Data…</button>
+      </div>
     </div>
+  </div>
+</div>
+
+<!-- Factory Reset — destructive, irreversible, main-device-only. Requires
+     re-entering the master key AND typing RESET, on top of the server's
+     own main-device check, since this affects every signed-in device
+     and cannot be undone. -->
+<div class="modal-ov" id="factory-reset-modal">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-handle"></div>
+    <div class="card-title modal-hdr-sticky" style="color:var(--red-light);">
+      <span>⚠ Reset All Data</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeFactoryResetModal()">Close</button>
+    </div>
+    <div class="alert al-warn" style="margin-bottom:14px;">This is permanent and takes effect on every signed-in device immediately. If you haven't already, download a backup first (above) before continuing.</div>
+    <div class="fg">
+      <label class="field-label">What should be reset?</label>
+      <select id="fr-scope">
+        <option value="data">Operational data only — troops, patrols, duties, drafts, archived &amp; audit log (keeps unit settings, types/sectors/posts, and the PIN)</option>
+        <option value="full">Everything — also unit settings, all configuration lists, and the security PIN</option>
+      </select>
+    </div>
+    <div class="fg"><label class="field-label">Master Key</label><input type="password" id="fr-master-key" placeholder="Enter master key" autocomplete="off"></div>
+    <div class="fg"><label class="field-label">Type RESET to confirm</label><input type="text" id="fr-confirm-text" placeholder="RESET" autocomplete="off"></div>
+    <div id="fr-error" style="color:var(--red-light);font-size:12.5px;margin-bottom:10px;"></div>
+    <button class="btn btn-danger btn-full" id="fr-submit-btn" onclick="submitFactoryReset()">🗑️ Reset All Data Now</button>
   </div>
 </div>
 
@@ -7098,6 +7129,37 @@ function openBackupModal(){
   if(hasPinSet()){ requirePin(doOpen, function(){}); } else { doOpen(); }
 }
 function closeBackupModal(){ document.getElementById('backup-modal').classList.remove('open'); }
+function openFactoryResetModal(){
+  if(!isMainDevice()){ alert('Only the main device can reset all data. Check Manage Devices (Settings → Security) to see which device that is.'); return; }
+  document.getElementById('fr-scope').value='data';
+  document.getElementById('fr-master-key').value='';
+  document.getElementById('fr-confirm-text').value='';
+  document.getElementById('fr-error').textContent='';
+  document.getElementById('factory-reset-modal').classList.add('open');
+}
+function closeFactoryResetModal(){ document.getElementById('factory-reset-modal').classList.remove('open'); }
+function submitFactoryReset(){
+  var scope=document.getElementById('fr-scope').value;
+  var key=(document.getElementById('fr-master-key').value||'').trim();
+  var confirmText=(document.getElementById('fr-confirm-text').value||'').trim();
+  var errEl=document.getElementById('fr-error');
+  if(!key){ errEl.textContent='Enter the master key.'; return; }
+  if(confirmText!=='RESET'){ errEl.textContent='Type RESET (all capitals) to confirm.'; return; }
+  var warnMsg=scope==='full'
+    ? 'This will permanently erase EVERYTHING — troops, patrols, duties, settings, configuration, and the security PIN — from the shared database, on every device. This cannot be undone. Continue?'
+    : 'This will permanently erase all troops, patrols, duties, drafts, archived records, and the audit log from the shared database, on every device. Unit settings and the PIN will be kept. This cannot be undone. Continue?';
+  if(!confirm(warnMsg)) return;
+  var btn=document.getElementById('fr-submit-btn');
+  if(btn){ btn.disabled=true; btn.textContent='Resetting…'; }
+  apiFetch('/factory-reset',{method:'POST',body:JSON.stringify({scope:scope,masterKey:key})})
+    .then(function(){
+      closeFactoryResetModal();
+      alert('All data has been reset. The app will now reload.');
+      location.reload();
+    })
+    .catch(function(e){ errEl.textContent=(e&&e.message)||'Reset failed. Check the master key and try again.'; })
+    .finally(function(){ if(btn){ btn.disabled=false; btn.textContent='🗑️ Reset All Data Now'; } });
+}
 function toggleMoreMenu(){
   var m=document.getElementById('more-menu');
   var o=document.getElementById('more-overlay');
@@ -9171,6 +9233,7 @@ function confirmDel(type,id){ requirePin(function(){ pendingDel={type:type,id:id
 document.getElementById('draft-edit-modal').addEventListener('click',function(e){ if(e.target===this) cancelDraftEdit(); });
 document.getElementById('duty-modal').addEventListener('click',function(e){ if(e.target===this) closeDutyModal(); });
 document.getElementById('contingency-modal').addEventListener('click',function(e){ if(e.target===this) closeContingencyModal(); });
+document.getElementById('factory-reset-modal').addEventListener('click',function(e){ if(e.target===this) closeFactoryResetModal(); });
 document.getElementById('fairness-list-modal').addEventListener('click',function(e){ if(e.target===this) closeFairnessListModal(); });
 document.getElementById('duty-suggest-modal').addEventListener('click',function(e){ if(e.target===this) closeDutySuggestModal(); });
 document.getElementById('duty-drafts-modal').addEventListener('click',function(e){ if(e.target===this) closeDutyDraftsModal(); });
