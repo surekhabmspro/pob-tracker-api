@@ -512,6 +512,10 @@ body.light-mode .sidebar-item.active{background:#f5e8cc;color:var(--tan);}
 #duty-dashboard .stat{background:linear-gradient(155deg,rgba(242,73,90,0.10),var(--surface));border-color:rgba(242,73,90,0.35);}
 #duty-dashboard .stat.clickable:hover{border-color:var(--red-light);box-shadow:var(--card-bevel),0 4px 16px rgba(242,73,90,0.18);}
 #duty-dashboard .stat.clickable:active{border-color:var(--red-light);}
+/* Duty stats went from 6 cards to 5 (Duties This Month removed) — auto-fit
+   instead of a fixed column count so 5 wrap evenly (e.g. 3+2 centered-ish)
+   rather than leaving a single orphan card alone on the last row. */
+#duty-dash-stats.stat-grid{grid-template-columns:repeat(auto-fit,minmax(120px,1fr));}
 #duty-dashboard .btn-primary,#duty-roster .btn-primary,#duty-settings .btn-primary,
 #duty-suggest-modal .btn-primary,#duty-drafts-modal .btn-primary,#contingency-modal .btn-primary{
   background:linear-gradient(160deg,var(--red-light),var(--red));border-color:var(--red);color:#fff;}
@@ -1061,7 +1065,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     <div class="card" id="dash-participation-card">
       <div class="card-title">
         📊 Patrol Participation Status
-        <button class="btn btn-ghost btn-sm" onclick="showTab('hours-ranking')">View All →</button>
+        <button class="btn btn-ghost btn-sm" onclick="showDashDetail('pp-all')">View All →</button>
       </div>
       <div id="dash-participation"></div>
     </div>
@@ -5312,8 +5316,6 @@ function deleteDutyDraft(id){
 function renderDutyDashboard(){
   updateTodayDutyWidget();
   var today=new Date().toISOString().slice(0,10);
-  var now=new Date(),moNum=now.getMonth(),yrNum=now.getFullYear();
-  var moDuties=D.duties.filter(function(d){if(d.cancelled) return false; var dd=new Date(dutyDisplayDate(d)+'T12:00:00');return dd.getMonth()===moNum&&dd.getFullYear()===yrNum;});
   var activePosts=(D.config.dutyPosts||[]).filter(function(p){return p.active;});
   var activeContingency=(D.dutyContingency||[]).filter(function(g){return g.active!==false&&(!g.endDate||g.endDate>=today);});
   var upcoming=upcomingDuties();
@@ -5321,13 +5323,14 @@ function renderDutyDashboard(){
   var onDutyTroopIds={}; activeNowDuties.forEach(function(d){ (d.troops||[]).forEach(function(tid){ onDutyTroopIds[tid]=true; }); });
   var onDutyCount=Object.keys(onDutyTroopIds).length;
   var freeNow=freeTroopsNow();
+  var upcomingTroopIds={}; upcoming.forEach(function(d){ (d.troops||[]).forEach(function(tid){ upcomingTroopIds[tid]=true; }); });
+  var upcomingPersonCount=Object.keys(upcomingTroopIds).length;
   document.getElementById('duty-dash-stats').innerHTML=
     '<div class="stat clickable" onclick="showDashDetail(\'duty-active-now\')"><div class="stat-icon">🛡</div><div class="stat-num" style="color:var(--green-light);">'+onDutyCount+'</div><div class="stat-label">On Duty Now</div></div>'+
     '<div class="stat clickable" onclick="showDashDetail(\'free-now\')"><div class="stat-icon">🟢</div><div class="stat-num" style="color:var(--green-light);">'+freeNow.length+'</div><div class="stat-label">Free Now</div></div>'+
-    '<div class="stat clickable" onclick="showDashDetail(\'duty-month\')"><div class="stat-icon">📋</div><div class="stat-num">'+moDuties.length+'</div><div class="stat-label">Duties This Month</div></div>'+
     '<div class="stat clickable" onclick="showDashDetail(\'duty-posts\')"><div class="stat-icon">📍</div><div class="stat-num">'+activePosts.length+'</div><div class="stat-label">Active Posts</div></div>'+
     '<div class="stat clickable" onclick="openContingencyModal()" style="'+(activeContingency.length>0?'border-color:var(--orange);':'')+'"><div class="stat-icon">🚧</div><div class="stat-num" style="color:'+(activeContingency.length>0?'var(--orange)':'var(--tan)')+';">'+activeContingency.length+'</div><div class="stat-label">Contingency Groups</div></div>'+
-    '<div class="stat clickable" onclick="showDashDetail(\'duty-upcoming\')"><div class="stat-icon">📅</div><div class="stat-num">'+upcoming.length+'</div><div class="stat-label">Upcoming Duties</div></div>';
+    '<div class="stat clickable" onclick="showDashDetail(\'duty-upcoming\')"><div class="stat-icon">📅</div><div class="stat-num">'+upcomingPersonCount+'</div><div class="stat-label">Upcoming Duties (Persons)</div></div>';
   var alerts='';
   if(activeContingency.length>0){
     var names=activeContingency.map(function(g){return g.reason;}).join(', ');
@@ -6353,6 +6356,10 @@ var TYPE_BADGE_MAP={'Escort':'b-escort','Link-up':'b-patrol','FET':'b-recon','Ai
 function typeBadge(type){ return 'badge '+(TYPE_BADGE_MAP[type]||'b-gray'); }
 function typeAccentCls(type){ return TYPE_BADGE_MAP[type]||'b-gray'; }
 var STATUS_BADGE_MAP={available:'b-available',leave:'b-leave',sick:'b-sick',detached:'b-detached'};
+// Small flag shown right next to a troop's name (in addition to the corner
+// status badge) so sick/leave/detached troops are visible at a glance
+// while scanning names, not just when reading the badge separately.
+var STATUS_FLAG_ICON={leave:'🟠',sick:'🔴',detached:'🔵'};
 function statusBadge(s){ var l={available:'Available',leave:'On Leave',sick:'Sick',detached:'Detached'}; return '<span class="badge '+(STATUS_BADGE_MAP[s]||'b-gray')+'">'+(l[s]||s)+'</span>'; }
 function statusAccentCls(s){ return STATUS_BADGE_MAP[s]||'b-gray'; }
 function showAlert(elId,msg,type){ var el=document.getElementById(elId); if(!el) return; el.innerHTML='<div class="alert al-'+type+'">'+msg+'</div>'; setTimeout(function(){if(el) el.innerHTML='';},5000); }
@@ -7732,8 +7739,17 @@ function renderDash(){
 
   // ── STAT CARDS ──────────────────────────────────────────────────────
   var freeNow2=freeTroopsNow();
+  var sickCount=D.troops.filter(function(t){return t.status==='sick';}).length;
+  var leaveCount=D.troops.filter(function(t){return t.status==='leave';}).length;
+  var detachedCount=D.troops.filter(function(t){return t.status==='detached';}).length;
+  var absentTotal=sickCount+leaveCount+detachedCount;
+  var absentFlagParts=[];
+  if(sickCount>0) absentFlagParts.push(sickCount+' Sick');
+  if(leaveCount>0) absentFlagParts.push(leaveCount+' Leave');
+  if(detachedCount>0) absentFlagParts.push(detachedCount+' Detached');
+  var absentFlagHTML=absentTotal>0?'<div style="font-size:10px;color:var(--red-light);margin-top:3px;font-weight:600;letter-spacing:0.3px;">⚠ '+absentFlagParts.join(' · ')+'</div>':'';
   document.getElementById('dash-stats').innerHTML=
-    '<div class="stat clickable" onclick="showDashDetail(\'total\')"><div class="stat-icon">👥</div><div class="stat-num">'+D.troops.length+'</div><div class="stat-label">Total Troops</div></div>'+
+    '<div class="stat clickable" onclick="showDashDetail(\'total\')"><div class="stat-icon">👥</div><div class="stat-num">'+D.troops.length+'</div><div class="stat-label">Total Troops</div>'+absentFlagHTML+'</div>'+
     '<div class="stat clickable" onclick="showDashDetail(\'available\')"><div class="stat-icon">✅</div><div class="stat-num" style="color:var(--green-light);">'+availTroops.length+'</div><div class="stat-label">Available</div></div>'+
     '<div class="stat clickable" onclick="showDashDetail(\'free-now\')"><div class="stat-icon">🟢</div><div class="stat-num" style="color:var(--green-light);">'+freeNow2.length+'</div><div class="stat-label">Free Now</div></div>'+
     '<div class="stat clickable" onclick="showDashDetail(\'mo-patrols\')"><div class="stat-icon">🧭</div><div class="stat-num">'+moPats.length+'</div><div class="stat-label">Patrols This Month</div></div>'+
@@ -7757,7 +7773,10 @@ function renderDash(){
   // ── MONTHLY STATS ───────────────────────────────────────────────────
   var moH=moPats.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0);
   var smap={};moPats.forEach(function(p){if(p.area)smap[p.area]=(smap[p.area]||0)+1;});
-  var topSector=Object.keys(smap).sort(function(a,b){return smap[b]-smap[a];})[0];
+  // Outer Perimeter is excluded from Top Sector — it's the catch-all/default
+  // area for most patrols, so counting it would make it "win" almost every
+  // month and hide which specific named sector actually saw the most activity.
+  var topSector=Object.keys(smap).filter(function(a){return a!=='Outer Perimeter';}).sort(function(a,b){return smap[b]-smap[a];})[0];
   var moTroops=new Set(moPats.reduce(function(a,p){return a.concat(p.troops||[]);},[]));
 
   document.getElementById('monthly-stats').innerHTML=
@@ -7781,17 +7800,12 @@ function renderDash(){
     var gC=pd.rows.filter(function(r){return r.flag==='b-green';}).length;
     var yC=pd.rows.filter(function(r){return r.flag==='b-orange';}).length;
     var rC=pd.rows.filter(function(r){return r.flag==='b-red';}).length;
-    var worst=pd.rows.slice(0,3);
     document.getElementById('dash-participation').innerHTML=
       '<div class="pp-summary-grid">'+
       '<div class="pp-summary-chip b-green clickable" onclick="showDashDetail(\'pp-green\')">🟢 <strong>'+gC+'</strong></div>'+
       '<div class="pp-summary-chip b-orange clickable" onclick="showDashDetail(\'pp-yellow\')">🟡 <strong>'+yC+'</strong></div>'+
       '<div class="pp-summary-chip b-red clickable" onclick="showDashDetail(\'pp-red\')">🔴 <strong>'+rC+'</strong></div>'+
-      '</div>'+
-      (worst.length?'<div style="margin-top:10px;">'+worst.map(function(r){return '<div class="pp-row" data-accent="'+r.flag+'" onclick="showProfile(\''+r.t.id+'\')">'+
-        '<div class="pp-flag-dot '+r.flag+'"></div>'+
-        '<div style="min-width:0;flex:1;"><div style="font-size:14px;"><strong>'+r.t.rank.toUpperCase()+' '+r.t.name.toUpperCase()+'</strong></div></div>'+
-        '<div class="pp-pct '+r.flag+'" style="font-size:16px;">'+r.pct.toFixed(1)+'%</div></div>';}).join('')+'</div>':'');
+      '</div>';
   }
 }
 // Shows a quick detail modal for a clicked dashboard stat/tile, so the person
@@ -7804,7 +7818,10 @@ function showDashDetail(kind){
   var title='',body='';
   if(kind==='total'){
     title='All Troops ('+D.troops.length+')';
-    body=sortTroops(D.troops).map(function(t){return dashDetailRow(t.rank.toUpperCase()+' '+t.name.toUpperCase(),(t.unit||'')+' · '+patrolCount(t.id)+' patrols total');}).join('');
+    body=sortTroops(D.troops).map(function(t){
+      var flag=STATUS_FLAG_ICON[t.status]?(STATUS_FLAG_ICON[t.status]+' '):'';
+      return dashDetailRow(flag+t.rank.toUpperCase()+' '+t.name.toUpperCase(),(t.unit||'')+' · '+patrolCount(t.id)+' patrols total'+(STATUS_FLAG_ICON[t.status]?' · '+({leave:'On Leave',sick:'Sick',detached:'Detached'}[t.status]):''));
+    }).join('');
   } else if(kind==='available'){
     var av=sortTroops(D.troops.filter(isAvailable));
     title='Available Troops ('+av.length+')';
@@ -7825,17 +7842,21 @@ function showDashDetail(kind){
     var rows=pd2.rows.filter(function(r){return r.flag===flagMap[kind];});
     title=labelMap[kind]+' ('+rows.length+')';
     body=rows.length?rows.map(function(r){return dashDetailRow(r.t.rank.toUpperCase()+' '+r.t.name.toUpperCase(),(r.t.unit||'')+' · '+r.pct.toFixed(1)+'% of unit patrol hours');}).join(''):'';
-  } else if(kind==='duty-month'){
-    var moD=D.duties.filter(function(d){if(d.cancelled) return false; var dd=new Date(dutyDisplayDate(d)+'T12:00:00');return dd.getMonth()===mo&&dd.getFullYear()===yr;}).sort(function(a,b){return dutyDisplayDate(a).localeCompare(dutyDisplayDate(b));});
-    title='Duties This Month ('+moD.length+')';
-    body=moD.length?moD.map(function(d,i){return dutyMiniCardHTML(d,'moD'+i);}).join(''):'<div class="empty">No duties logged this month.</div>';
+  } else if(kind==='pp-all'){
+    var pd3=participationData();
+    title='Patrol Participation Status ('+pd3.rows.length+')';
+    var flagIcon={'b-green':'🟢','b-orange':'🟡','b-red':'🔴'};
+    body=pd3.rows.length?pd3.rows.map(function(r){return dashDetailRow((flagIcon[r.flag]||'')+' '+r.t.rank.toUpperCase()+' '+r.t.name.toUpperCase(),(r.t.unit||'')+' · '+r.pct.toFixed(1)+'% of unit patrol hours');}).join(''):'';
+    if(cta){ cta.style.display=''; cta.textContent='Open Full Participation Page'; cta.onclick=function(){ closeModal('dash-detail-modal'); showTab('hours-ranking'); }; }
   } else if(kind==='duty-posts'){
     var aposts=(D.config.dutyPosts||[]).filter(function(p){return p.active;});
     title='Active Posts ('+aposts.length+')';
     body=aposts.length?aposts.map(function(p){return dashDetailRow(p.name+(p.continuous?' (Continuous)':''),p.continuous?(p.dayStrength+' troop, 24h'):(p.dayStrength+' day / '+p.nightStrength+' night')+(p.qualRequired?' · needs '+p.qualRequired:''));}).join(''):'';
   } else if(kind==='duty-upcoming'){
     var up=upcomingDuties();
-    title='Upcoming Duties ('+up.length+')';
+    var upIds={}; up.forEach(function(d){ (d.troops||[]).forEach(function(tid){ upIds[tid]=true; }); });
+    var upPersons=Object.keys(upIds).length;
+    title='Upcoming Duties — '+upPersons+' Troop'+(upPersons!==1?'s':'')+' ('+up.length+' Duty Entr'+(up.length!==1?'ies':'y')+')';
     body=up.length?up.map(function(d,i){return dutyMiniCardHTML(d,'upD'+i);}).join(''):'<div class="empty">No upcoming duties scheduled.</div>';
   } else if(kind==='duty-active-now'){
     var an=dutiesActiveNow().sort(function(a,b){return (a.postName||a.type).localeCompare(b.postName||b.type);});
