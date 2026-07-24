@@ -1252,7 +1252,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
   <div class="stat-grid" id="duty-dash-stats"></div>
   <div class="card" style="padding:10px 12px;">
     <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px;">📊 Duty Reports</div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">
       <button class="btn btn-ghost btn-sm" style="font-size:11.5px;" onclick="printDailyDutyList()">📅 Daily List (Today)</button>
       <button class="btn btn-ghost btn-sm" style="font-size:11.5px;" onclick="printSentryAssignments()">📍 Sentry Assignments</button>
       <button class="btn btn-ghost btn-sm" style="font-size:11.5px;" onclick="printMonthlyDutySummary()">🗓 Monthly Summary</button>
