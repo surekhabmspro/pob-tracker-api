@@ -2989,9 +2989,7 @@ function startCountdown() {
 }
 
 // Pulls fresh data from the server and replaces local state with it.
-// Only ever called once the outbox is confirmed empty AND no write is still in
-// flight (_pendingWrites===0, checked in backgroundSync), so a pull can never
-// clobber a local edit that hasn't been confirmed by the server yet.
+// Only ever called once the outbox is confirmed empty, so a pull can never clobber unsent local edits.
 function pullFromServer(){
   return Promise.all([
     apiFetch('/troops'),apiFetch('/archived'),apiFetch('/patrols'),apiFetch('/audit'),apiFetch('/config')
@@ -3053,16 +3051,9 @@ function pullFromServer(){
 function backgroundSync() {
   if (_syncState==='syncing') return Promise.resolve(false);
   if (typeof navigator!=='undefined' && navigator.onLine===false) { setSyncState('offline'); return Promise.resolve(false); }
-  // A save (e.g. logging a duty) may still be in flight — sent but not yet
-  // confirmed. Pulling now would fetch the server's pre-save snapshot and
-  // overwrite local state with it, silently erasing what's being saved. Skip
-  // this cycle; the next tick will catch it once the write has settled.
-  if (_pendingWrites>0) { _syncCountdown=_autoSyncSeconds; return Promise.resolve(false); }
   setSyncState('syncing');
   return flushOutbox().then(function(){
     if (loadOutbox().length>0) { setSyncState('offline'); _syncCountdown=_autoSyncSeconds; return false; }
-    // Re-check: a new write could have started while flushOutbox was running.
-    if (_pendingWrites>0) { setSyncState('online'); _syncCountdown=_autoSyncSeconds; return false; }
     return pullFromServer();
   }).catch(function(err){
     console.warn('Sync failed:',err); setSyncState('offline'); _syncCountdown=_autoSyncSeconds; return false;
@@ -3078,23 +3069,10 @@ function loadData(){
 function saveData(){ localStorage.setItem(SK,JSON.stringify(D)); }
 
 // ── Remote write helpers ───────────────────────────────────────────────
-// _pendingWrites counts remote saves that have been SENT but not yet confirmed
-// (success or failure). backgroundSync's pull must never run while this is >0 —
-// otherwise a pull can land on the server's stale/pre-save snapshot and overwrite
-// local state with data that's already out of date, silently erasing whatever the
-// in-flight save was writing (e.g. a just-logged duty) even though that save may
-// go on to succeed a moment later. Outbox-based retry logic already covers writes
-// that have FAILED; this covers the gap for writes that are simply still in flight,
-// which matters most on slow/unreliable connections.
-var _pendingWrites = 0;
-function _trackWrite(promise){
-  _pendingWrites++;
-  return promise.then(function(r){ _pendingWrites--; return r; }, function(e){ _pendingWrites--; throw e; });
-}
-function remoteSaveTroop(t){ saveData(); return _trackWrite(apiFetch('/troops',{method:'POST',body:JSON.stringify(t)}).catch(function(e){console.error('saveTroop failed',e); queueOp('saveTroop',t);})); }
-function remoteDeleteTroop(id){ saveData(); return _trackWrite(apiFetch('/troops/'+id,{method:'DELETE'}).catch(function(e){console.error(e); queueOp('deleteTroop',{id:id});})); }
-function remoteArchiveTroop(id,archived){ saveData(); return _trackWrite(apiFetch('/troops/'+id+'/archive',{method:'PATCH',body:JSON.stringify({archived:archived})}).catch(function(e){console.error(e); queueOp('archiveTroop',{id:id,archived:archived});})); }
-function remoteSavePatrol(p){ saveData(); var body={id:p.id,ptl_id:p.ptlId,ptl_seq:(p.ptlSeq!=null?p.ptlSeq:null),date:p.date,type:p.type,troops:p.troops,area:p.area,duration:p.duration,route:p.route,remarks:p.remarks,commander:p.commander||null,commander_auto:p.commanderAuto===false?false:(p.commanderAuto===true?true:null)}; return _trackWrite(apiFetch('/patrols',{method:'POST',body:JSON.stringify(body)}).catch(function(e){console.error(e); queueOp('savePatrol',body);})); }
+function remoteSaveTroop(t){ saveData(); return apiFetch('/troops',{method:'POST',body:JSON.stringify(t)}).catch(function(e){console.error('saveTroop failed',e); queueOp('saveTroop',t);}); }
+function remoteDeleteTroop(id){ saveData(); return apiFetch('/troops/'+id,{method:'DELETE'}).catch(function(e){console.error(e); queueOp('deleteTroop',{id:id});}); }
+function remoteArchiveTroop(id,archived){ saveData(); return apiFetch('/troops/'+id+'/archive',{method:'PATCH',body:JSON.stringify({archived:archived})}).catch(function(e){console.error(e); queueOp('archiveTroop',{id:id,archived:archived});}); }
+function remoteSavePatrol(p){ saveData(); var body={id:p.id,ptl_id:p.ptlId,ptl_seq:(p.ptlSeq!=null?p.ptlSeq:null),date:p.date,type:p.type,troops:p.troops,area:p.area,duration:p.duration,route:p.route,remarks:p.remarks,commander:p.commander||null,commander_auto:p.commanderAuto===false?false:(p.commanderAuto===true?true:null)}; return apiFetch('/patrols',{method:'POST',body:JSON.stringify(body)}).catch(function(e){console.error(e); queueOp('savePatrol',body);}); }
 // POB Commander is now a Role (set in Add/Edit Troop), not a Rank — this
 // quietly removes it from anyone's saved Rank list if it's still there
 // from before, so it doesn't show up twice in two different fields.
@@ -3123,31 +3101,14 @@ function migrateCommanders(){
     changed.forEach(function(p){ remoteSavePatrol(p); });
   }
 }
-function remoteDeletePatrol(id){ saveData(); return _trackWrite(apiFetch('/patrols/'+id,{method:'DELETE'}).catch(function(e){console.error(e); queueOp('deletePatrol',{id:id});})); }
-function remoteSaveAudit(entry){ return _trackWrite(apiFetch('/audit',{method:'POST',body:JSON.stringify(entry)}).catch(function(e){console.error(e); queueOp('saveAudit',entry);})); }
-// remoteSaveConfig used to fire all 9 key/value writes to /config in parallel.
-// If the server stores config as one document and does read-modify-write per
-// request, concurrent requests can race: one reads the doc before another's
-// write lands, then writes back its own change on top of the older copy,
-// silently reverting the other's update (e.g. a just-logged duty disappearing
-// the moment it "syncs"). Serializing every /config write — one at a time,
-// across ALL calls to remoteSaveConfig, not just within a single call — removes
-// that race regardless of how the backend persists the document.
-var _configSaveChain = Promise.resolve();
+function remoteDeletePatrol(id){ saveData(); return apiFetch('/patrols/'+id,{method:'DELETE'}).catch(function(e){console.error(e); queueOp('deletePatrol',{id:id});}); }
+function remoteSaveAudit(entry){ return apiFetch('/audit',{method:'POST',body:JSON.stringify(entry)}).catch(function(e){console.error(e); queueOp('saveAudit',entry);}); }
 function remoteSaveConfig(){
   saveData();
   var jobs=[{key:'settings',value:D.settings},{key:'config',value:D.config},{key:'counter',value:D.counter},{key:'security',value:D.security},{key:'drafts',value:D.drafts},{key:'duties',value:D.duties},{key:'dutyCounter',value:D.dutyCounter},{key:'dutyContingency',value:D.dutyContingency},{key:'dutyDrafts',value:D.dutyDrafts}];
-  var runP = _configSaveChain.then(function(){
-    return jobs.reduce(function(chain,j){
-      return chain.then(function(){
-        return apiFetch('/config',{method:'POST',body:JSON.stringify(j)}).catch(function(e){console.error(e); queueOp('saveConfig',j);});
-      });
-    }, Promise.resolve());
-  });
-  // Keep the chain alive for the next caller even if this batch errors, and
-  // never let it reject (a rejection would wedge every future config save).
-  _configSaveChain = runP.catch(function(){});
-  return _trackWrite(runP);
+  return Promise.all(jobs.map(function(j){
+    return apiFetch('/config',{method:'POST',body:JSON.stringify(j)}).catch(function(e){console.error(e); queueOp('saveConfig',j);});
+  }));
 }
 
 // =====================================================================
@@ -3300,15 +3261,16 @@ function contingencyExcludedTroopIds(date,shift){
 // showing up as reserved on the very next check — no separate "release"
 // step is ever needed.
 //
-// FUTURE-DATE PLANNING: for any date after today (tomorrow, day-after-
-// tomorrow, or further out), logged duty and duty drafts ARE checked, but
-// against that specific date's real window (via loggedDutyReservedTroopIds
-// / dutyDraftReservedTroopIds' targetDate boundary logic) rather than a
-// blunt date-string match — so a duty genuinely scheduled FOR that future
-// date correctly reserves its troops, while tonight's night shift (dated
-// today, tailing into tomorrow morning) still never wrongly blocks
-// tomorrow's planning. Same rule for every future date, no per-day
-// special-casing.
+// FUTURE-DATE PLANNING EXCEPTION: when opts.date is a genuine future date
+// (strictly after today), logged duty and duty drafts are deliberately
+// NOT checked — a troop on tonight's night shift (even one still active
+// right now) must be free to suggest for tomorrow's or any later date's
+// patrol/duty. Only an uncompleted patrol draft or an active Contingency
+// exclusion can reserve a troop against a future date; both already
+// release automatically the moment they're logged/completed or
+// cancelled/deactivated, per the comment above. This exception only
+// applies when a real future date is supplied — checks for "right now"
+// (no date, e.g. Free Troops) still use every reservation source as before.
 //
 // TODAY'S-DATE EXCEPTION: picking TODAY explicitly in a date field (rather
 // than leaving it blank) must behave identically to "right now" — an
@@ -3318,24 +3280,17 @@ function contingencyExcludedTroopIds(date,shift){
 // equals today, null is passed through to the two live-reservation
 // functions instead of the date string, giving the same now>=start&&
 // now<end check as a blank-date query. Only a genuine future date keeps
-// its own whole-day-window planning check.
+// its own whole-day-window planning check (further down).
 function isTroopReserved(tid,opts){
   opts=opts||{};
   var todayISO=new Date().toISOString().slice(0,10);
+  var isFutureDate=opts.date&&opts.date>todayISO;
   var isToday=opts.date&&opts.date===todayISO;
-  // "Today" (or no date — an urgent right-now request) keeps the live
-  // check: only a duty ACTUALLY RUNNING at this exact moment reserves its
-  // troops (shiftCheckDate=null). Any other date — tomorrow, the day
-  // after, or further out — is checked against that specific date's real
-  // window via loggedDutyReservedTroopIds/dutyDraftReservedTroopIds, which
-  // already correctly attribute cross-midnight shifts to the right day
-  // (e.g. tonight's night shift never wrongly blocks tomorrow, but a duty
-  // actually scheduled FOR tomorrow correctly does). No date-specific
-  // special-casing beyond that — the same rule applies to every future
-  // date uniformly.
-  var shiftCheckDate=isToday?null:(opts.date||null);
-  if(loggedDutyReservedTroopIds(opts.excludeDutyId||null,shiftCheckDate)[tid]) return true;
-  if(dutyDraftReservedTroopIds(opts.excludeDutyDraftId||null,shiftCheckDate)[tid]) return true;
+  if(!isFutureDate){
+    var shiftCheckDate=isToday?null:(opts.date||null);
+    if(loggedDutyReservedTroopIds(opts.excludeDutyId||null,shiftCheckDate)[tid]) return true;
+    if(dutyDraftReservedTroopIds(opts.excludeDutyDraftId||null,shiftCheckDate)[tid]) return true;
+  }
   if(draftReservedTroopIds(opts.excludePatrolDraftId||null)[tid]) return true;
   if(contingencyExcludedTroopIds(opts.date||null)[tid]) return true;
   return false;
@@ -3347,14 +3302,26 @@ function isTroopReserved(tid,opts){
 // picked, so planning ahead (item 6) checks real availability instead of
 // always assuming "now".
 //
-// FUTURE-DATE PLANNING (matches isTroopReserved above): isTroopReserved is
-// always called first (see stmEligibleBase) and already does the real,
-// time-window-aware duty/duty-draft check for any future date — including
-// correctly reserving a troop already scheduled for THAT date, while still
-// excluding a post-midnight tail shift left over from tonight. So this
-// blunt "any non-cancelled duty dated today" check would only duplicate
-// (or for today, wrongly over-block) that — it's skipped for both today
-// and future dates, and only applies to a genuinely past date.
+// FUTURE-DATE PLANNING EXCEPTION (matches isTroopReserved above): a
+// post-midnight tail shift from TONIGHT's roster (e.g. a 02:00 post) gets
+// calendar-stamped with tomorrow's date by dutyRecordCalendarDate even
+// though it's really part of tonight's duty — so without this exception,
+// asking for a suggestion on that very next date would still wrongly
+// hard-block those troops (while dates further out were never affected,
+// since nothing is dated that far ahead yet). For a genuine future date,
+// only an already-logged patrol or an existing patrol draft for that date
+// still counts as a conflict — logged duty and duty drafts dated for that
+// future date are skipped here, same as isTroopReserved.
+//
+// TODAY'S-DATE EXCEPTION (matches isTroopReserved above): the blunt
+// "any non-cancelled duty dated today" check below doesn't look at shift
+// timing at all — it would hard-block EVERY troop on tonight's whole duty
+// roster (every shift shares today's date) the moment today is chosen as
+// the patrol date, even for shifts that haven't started yet or have
+// already ended. isTroopReserved already does the real, shift-time-aware
+// check for those same records, so this blunt date-match check is skipped
+// for today exactly like it's skipped for future dates — only a genuinely
+// past date (not expected in normal use) still hits it.
 function stmDateConflict(tid,date){
   if(!date) return false;
   var todayISO=new Date().toISOString().slice(0,10);
@@ -3981,8 +3948,8 @@ function printPatrolDraft(id){
   var troops=sortTroops((d.troops||[]).map(troopById).filter(Boolean));
   var rows=troops.map(function(t,i){ return '<tr><td>'+(i+1)+'</td><td>'+(t.sn||'')+'</td><td>'+t.rank.toUpperCase()+'</td><td>'+t.name.toUpperCase()+'</td><td>'+(t.unit||'')+'</td></tr>'; }).join('');
   var win=window.open('','_blank','width=900,height=700');
-  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Patrol Draft</title><style>body{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;background:#fff;color:#000;margin:0;padding:20px;font-size:16px;letter-spacing:0.3px;}.hdr{text-align:center;border-bottom:2px solid #2d5a3d;padding-bottom:12px;margin-bottom:20px;}.hdr h2{margin:0 0 4px;font-size:18px;color:#1a3a2a;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-weight:900;letter-spacing:-0.3px;}.hdr p{margin:2px 0;font-size:13px;font-weight:700;color:#555;}table{width:100%;border-collapse:collapse;font-size:14.5px;}th{background:#2d5a3d;color:#fff;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-weight:800;font-size:13px;letter-spacing:0.5px;text-transform:uppercase;padding:8px 10px;text-align:left;}td{padding:7px 10px;border-bottom:1px solid #b8c4b8;font-weight:800;color:#000;}tr:nth-child(even) td{background:#f8f8f8;}tr{page-break-inside:avoid;}.footer{margin-top:16px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}@media print{@page{margin:1.5cm;size:A4;}button{display:none!important;}thead{display:table-header-group;}}</style></head><body>'+
-    '<div class="hdr"><div style="font-size:12px;font-weight:700;color:#999;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">'+(s.classification||'')+(s.classification?' — ':'')+(s.pob||'POB Mobaye')+'</div><h2>PATROL DRAFT — '+(d.type?escHtml(d.type).toUpperCase():'PROPOSED TEAM')+'</h2><p style="font-size:15px;font-weight:900;color:#1a3a2a;">'+(d.plannedDate?('Planned for '+fmtDateLong(d.plannedDate)):'No planned date set')+'</p><p>Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p></div>'+
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Patrol Draft</title><style>body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:14px;}.hdr{text-align:center;border-bottom:2px solid #2d5a3d;padding-bottom:12px;margin-bottom:20px;}.hdr h2{margin:0 0 4px;font-size:18px;color:#1a3a2a;}.hdr p{margin:2px 0;font-size:13px;font-weight:700;color:#555;}table{width:100%;border-collapse:collapse;font-size:13px;}th{background:#2d5a3d;color:#fff;font-family:\'Segoe UI\',Arial,sans-serif;font-weight:700;font-size:12px;letter-spacing:0.5px;text-transform:uppercase;padding:8px 10px;text-align:left;}td{padding:7px 10px;border-bottom:1px solid #e0e8e0;}tr:nth-child(even) td{background:#f8f8f8;}tr{page-break-inside:avoid;}.footer{margin-top:16px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}@media print{@page{margin:1.5cm;size:A4;}button{display:none!important;}thead{display:table-header-group;}}</style></head><body>'+
+    '<div class="hdr"><div style="font-size:12px;font-weight:700;color:#999;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">'+(s.classification||'')+(s.classification?' — ':'')+(s.pob||'POB Mobaye')+'</div><h2>PATROL DRAFT — PROPOSED TEAM</h2><p>'+(d.plannedDate?('Planned for '+fmtDateLong(d.plannedDate)):'No planned date set')+'</p><p>Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p></div>'+
     '<table><thead><tr><th>S.No</th><th>Personal No.</th><th>Rank</th><th>Name</th><th>Unit</th></tr></thead><tbody>'+rows+'</tbody></table>'+
     '<div class="footer">'+(s.pob||'POB Mobaye')+' Troops Management System · Patrol Draft · '+nowStr()+'</div>'+
     '<div style="margin-top:16px;text-align:center;"><button onclick="window.print()" style="padding:10px 24px;background:#2d5a3d;color:#fff;border:none;border-radius:4px;font-size:13px;cursor:pointer;font-weight:700;">🖨 Print</button></div></body></html>');
@@ -4477,9 +4444,7 @@ function saveDuty(){
   if(editingDutyId){
     var ed=D.duties.find(function(x){return x.id===editingDutyId;});
     if(!ed){ editingDutyId=null; showAlert('duty-alert','Duty entry no longer exists.','danger'); return; }
-    var edPeriod=isDayTime(start)?'day':'night';
-    var edRealDate=dutyRecordCalendarDate(date,start,edPeriod);
-    ed.date=edRealDate; ed.logicalDate=dutyLogicalDate(edRealDate,start); ed.type=type.name; ed.postId=post?post.id:null; ed.postName=post?post.name:''; ed.startTime=start; ed.durationHours=dur; ed.troops=dutySelectedTroops.slice(); ed.remarks=remarks; ed.adminOverride=dutyIncludeAdmin; ed.modifiedAt=new Date().toISOString();
+    ed.date=date; ed.logicalDate=dutyLogicalDate(date,start); ed.type=type.name; ed.postId=post?post.id:null; ed.postName=post?post.name:''; ed.startTime=start; ed.durationHours=dur; ed.troops=dutySelectedTroops.slice(); ed.remarks=remarks; ed.adminOverride=dutyIncludeAdmin; ed.modifiedAt=new Date().toISOString();
     var edOrder=shiftOrderForSlot({category:type.name,startTime:start}); var edIdx=edOrder.indexOf(start);
     ed.shiftIdx=edIdx>=0?edIdx:null; ed.shiftIdxCount=edOrder.length||null;
     ed.dutyId=dutyDisplayId(ed);
@@ -4488,9 +4453,7 @@ function saveDuty(){
     showAlert('duty-alert','Duty '+ed.dutyId+' updated.','success');
   } else {
     var ndOrder=shiftOrderForSlot({category:type.name,startTime:start}); var ndIdx=ndOrder.indexOf(start);
-    var ndPeriod=isDayTime(start)?'day':'night';
-    var ndRealDate=dutyRecordCalendarDate(date,start,ndPeriod);
-    var nowIso=new Date().toISOString(); var nd={id:uid('duty'),dutySeq:nextDutySeq(),date:ndRealDate,logicalDate:dutyLogicalDate(ndRealDate,start),type:type.name,postId:post?post.id:null,postName:post?post.name:'',startTime:start,durationHours:dur,troops:dutySelectedTroops.slice(),remarks:remarks,adminOverride:dutyIncludeAdmin,replacements:[],createdAt:nowIso,modifiedAt:nowIso,cancelled:false,shiftIdx:(ndIdx>=0?ndIdx:null),shiftIdxCount:(ndOrder.length||null)};
+    var nowIso=new Date().toISOString(); var nd={id:uid('duty'),dutySeq:nextDutySeq(),date:date,logicalDate:dutyLogicalDate(date,start),type:type.name,postId:post?post.id:null,postName:post?post.name:'',startTime:start,durationHours:dur,troops:dutySelectedTroops.slice(),remarks:remarks,adminOverride:dutyIncludeAdmin,replacements:[],createdAt:nowIso,modifiedAt:nowIso,cancelled:false,shiftIdx:(ndIdx>=0?ndIdx:null),shiftIdxCount:(ndOrder.length||null)};
     nd.dutyId=dutyDisplayId(nd);
     D.duties.push(nd);
     remoteSaveConfig();
@@ -5319,23 +5282,20 @@ function printDutyDraft(id){
   if(!d) return;
   var s=D.settings;
   var records=(d.records||[]).slice().sort(function(a,b){
-    var oa=dutyPostSortIndex(a.postName), ob=dutyPostSortIndex(b.postName);
-    if(oa!==ob) return oa-ob;
+    var pa=a.postName?0:1, pb=b.postName?0:1;
+    if(pa!==pb) return pa-pb;
     return nightAwareMin(a.startTime,d.period)-nightAwareMin(b.startTime,d.period);
   });
-  var rows='',lastGrp=null;
-  records.forEach(function(r){
+  var rows=records.map(function(r){
     var troops=sortTroops((r.troops||[]).map(troopById).filter(Boolean));
     var names=troops.map(function(t){return t.rank.toUpperCase()+' '+t.name.toUpperCase();}).join(', ')||'—';
     var endT=shiftEndTime(r.startTime,r.durationHours);
-    var grp=r.postName||r.category||'Roaming / Other';
-    if(grp!==lastGrp){ rows+='<tr class="grp-row"><td colspan="3">'+escHtml(grp)+'</td></tr>'; lastGrp=grp; }
-    rows+='<tr><td>'+escHtml(r.category)+'</td><td>'+r.startTime+'–'+endT+' ('+r.durationHours+'h)</td><td>'+escHtml(names)+'</td></tr>';
-  });
+    return '<tr><td>'+escHtml(r.postName||r.category)+'</td><td>'+escHtml(r.category)+'</td><td>'+r.startTime+'–'+endT+' ('+r.durationHours+'h)</td><td>'+escHtml(names)+'</td></tr>';
+  }).join('');
   var win=window.open('','_blank','width=900,height=700');
-  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Duty Draft</title><style>body{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;background:#fff;color:#000;margin:0;padding:20px;font-size:16px;letter-spacing:0.3px;}.hdr{text-align:center;border-bottom:2px solid #8b1a2b;padding-bottom:12px;margin-bottom:20px;}.hdr h2{margin:0 0 4px;font-size:18px;color:#5a0f1a;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-weight:900;letter-spacing:-0.3px;}.hdr p{margin:2px 0;font-size:13px;font-weight:700;color:#555;}.shift-tag{display:inline-block;font-size:16px;font-weight:800;letter-spacing:0.5px;color:#8b1a2b;}table{width:100%;border-collapse:collapse;font-size:14.5px;}th{background:#8b1a2b;color:#fff;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-weight:800;font-size:13px;letter-spacing:0.5px;text-transform:uppercase;padding:8px 10px;text-align:left;}td{padding:7px 10px;border-bottom:1px solid #d9b8be;vertical-align:top;font-weight:800;color:#000;}tr:nth-child(even) td{background:#faf8f8;}.grp-row td{background:#f2e4e6!important;color:#5a0f1a;font-weight:800;font-size:12px;letter-spacing:0.6px;text-transform:uppercase;padding:7px 10px;border-top:2px solid #8b1a2b;border-bottom:1px solid #8b1a2b;}tr{page-break-inside:avoid;}.footer{margin-top:16px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}@media print{@page{margin:1.5cm;size:A4;}button{display:none!important;}thead{display:table-header-group;}}</style></head><body>'+
-    '<div class="hdr"><div style="font-size:12px;font-weight:700;color:#999;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">'+(s.classification||'')+(s.classification?' — ':'')+(s.pob||'POB Mobaye')+'</div><h2>DUTY DRAFT — '+(d.period==='day'?'☀ DAY SHIFT':'🌙 NIGHT SHIFT')+'</h2><p style="font-size:15px;font-weight:900;color:#5a0f1a;">Planned for '+fmtDateLong(d.plannedDate)+'</p><p>Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p></div>'+
-    '<table><thead><tr><th>Type</th><th>Time</th><th>Troops</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Duty Draft</title><style>body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:14px;}.hdr{text-align:center;border-bottom:2px solid #8b1a2b;padding-bottom:12px;margin-bottom:20px;}.hdr h2{margin:0 0 4px;font-size:18px;color:#5a0f1a;}.hdr p{margin:2px 0;font-size:13px;font-weight:700;color:#555;}table{width:100%;border-collapse:collapse;font-size:13px;}th{background:#8b1a2b;color:#fff;font-family:\'Segoe UI\',Arial,sans-serif;font-weight:700;font-size:12px;letter-spacing:0.5px;text-transform:uppercase;padding:8px 10px;text-align:left;}td{padding:7px 10px;border-bottom:1px solid #f0e0e0;vertical-align:top;}tr:nth-child(even) td{background:#faf8f8;}tr{page-break-inside:avoid;}.footer{margin-top:16px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}@media print{@page{margin:1.5cm;size:A4;}button{display:none!important;}thead{display:table-header-group;}}</style></head><body>'+
+    '<div class="hdr"><div style="font-size:12px;font-weight:700;color:#999;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">'+(s.classification||'')+(s.classification?' — ':'')+(s.pob||'POB Mobaye')+'</div><h2>DUTY DRAFT — '+(d.period==='day'?'DAY':'NIGHT')+' ROSTER</h2><p>Planned for '+fmtDateLong(d.plannedDate)+'</p><p>Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p></div>'+
+    '<table><thead><tr><th>Post</th><th>Type</th><th>Time</th><th>Troops</th></tr></thead><tbody>'+rows+'</tbody></table>'+
     '<div class="footer">'+(s.pob||'POB Mobaye')+' Troops Management System · Duty Draft · '+nowStr()+'</div>'+
     '<div style="margin-top:16px;text-align:center;"><button onclick="window.print()" style="padding:10px 24px;background:#8b1a2b;color:#fff;border:none;border-radius:4px;font-size:13px;cursor:pointer;font-weight:700;">🖨 Print</button></div></body></html>');
   win.document.close(); win.focus();
@@ -5706,10 +5666,9 @@ function printDutyHistory(){
   var w=window.open('','_blank');
   if(!w) return;
   w.document.write('<html><head><title>Duty History</title><style>'+
-    ''+
-    'body{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;padding:24px;color:#000;} h1{font-size:18px;margin-bottom:2px;font-weight:700;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-weight:900;letter-spacing:-0.3px;} '+
+    'body{font-family:Arial,sans-serif;padding:24px;color:#222;} h1{font-size:18px;margin-bottom:2px;} '+
     'p{font-size:12px;color:#666;margin-top:0;} table{width:100%;border-collapse:collapse;margin-top:14px;font-size:11px;} '+
-    'th,td{border:1px solid #ccc;padding:6px 8px;text-align:left;} th{background:#f2f2f2;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;font-size:10.5px;}'+
+    'th,td{border:1px solid #ccc;padding:6px 8px;text-align:left;} th{background:#f2f2f2;}'+
     '</style></head><body>'+
     '<h1>Duty History</h1>'+
     '<p>'+rows.length+' duties · '+totH.toFixed(1)+'h total · Generated '+fmtDateLong(new Date().toISOString().slice(0,10))+'</p>'+
@@ -5903,35 +5862,19 @@ function printSoldierDutyLookup(){
 // every duty entry in it, who's assigned, and which posts are covered.
 function printShiftDetails(dateISO,shiftKey){
   var list=D.duties.filter(function(d){return !d.cancelled&&dutyDisplayDate(d)===dateISO&&(isDayTime(d.startTime)?'day':'night')===shiftKey;}).sort(function(a,b){
-    var oa=dutyPostSortIndex(a.postName), ob=dutyPostSortIndex(b.postName);
-    if(oa!==ob) return oa-ob;
+    var pa=a.postName?0:1, pb=b.postName?0:1;
+    if(pa!==pb) return pa-pb;
     return nightAwareMin(a.startTime,shiftKey)-nightAwareMin(b.startTime,shiftKey);
   });
   var totH=list.reduce(function(s,d){return s+(parseFloat(d.durationHours)||0);},0);
   var allTroops={}; list.forEach(function(d){(d.troops||[]).forEach(function(tid){allTroops[tid]=true;});});
   var posts=[],seenP={}; list.forEach(function(d){ if(d.postName&&!seenP[d.postName]){seenP[d.postName]=1;posts.push(d.postName);} });
-  var rowsHtml='',lastGrp=null;
-  if(list.length===0){ rowsHtml='<tr><td colspan="4" style="text-align:center;color:#888;padding:20px;">No duty entries.</td></tr>'; }
-  else {
-    list.forEach(function(d){
-      var grp=d.postName||'Roaming / Other';
-      if(grp!==lastGrp){ rowsHtml+='<tr class="grp-row"><td colspan="4">'+escHtml(grp)+'</td></tr>'; lastGrp=grp; }
-      rowsHtml+='<tr><td>'+(d.dutyId||'—')+'</td><td>'+escHtml(d.type)+'</td><td>'+(d.startTime||'')+'–'+shiftEndTime(d.startTime,d.durationHours)+' ('+(d.durationHours||'—')+'h)</td><td style="font-size:11px;">'+(sortTroops((d.troops||[]).map(troopById).filter(Boolean)).map(function(t){return upLabel(t.rank,t.name);}).join(', ')||'—')+'</td></tr>';
-    });
-  }
+  var rowsHtml=list.length===0?'<tr><td colspan="5" style="text-align:center;color:#888;padding:20px;">No duty entries.</td></tr>':
+    list.map(function(d){ return '<tr><td>'+(d.dutyId||'—')+'</td><td>'+escHtml(d.type)+'</td><td>'+escHtml(d.postName||'—')+'</td><td>'+(d.startTime||'')+'–'+shiftEndTime(d.startTime,d.durationHours)+' ('+(d.durationHours||'—')+'h)</td><td style="font-size:11px;">'+(sortTroops((d.troops||[]).map(troopById).filter(Boolean)).map(function(t){return upLabel(t.rank,t.name);}).join(', ')||'—')+'</td></tr>'; }).join('');
   var body='<div class="info-grid"><div class="info-box"><div class="info-num">'+list.length+'</div><div class="info-lbl">Duty Entries</div></div><div class="info-box"><div class="info-num">'+totH.toFixed(1)+'</div><div class="info-lbl">Total Hours</div></div><div class="info-box"><div class="info-num">'+Object.keys(allTroops).length+'</div><div class="info-lbl">Troops Assigned</div></div><div class="info-box"><div class="info-num">'+posts.length+'</div><div class="info-lbl">Posts Covered</div></div></div>'+
-    '<div class="sub-hdr">Entries — Grouped by Post</div><table><thead><tr><th>Duty ID</th><th>Type</th><th>Timing</th><th>Troops</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>';
-  var subtitle='<p style="font-size:15px;font-weight:900;color:#5a0f1a;">'+fmtDateLong(dateISO)+'</p>';
-  dutyReportWindow('SHIFT DETAILS — '+(shiftKey==='day'?'☀ DAY SHIFT':'🌙 NIGHT SHIFT'),subtitle,body);
-}
-// Returns a sort rank for a duty/draft entry's post, following the order
-// posts are configured in (Sentry Posts settings) so printed rosters group
-// "Main Gate, Main Gate, Main Gate, UNPOL Corner, ..." instead of interleaving
-// by time. Entries with no post (Roaming/Line Duty etc.) always sort last.
-function dutyPostSortIndex(postName){
-  if(!postName) return 99999;
-  var idx=(D.config.dutyPosts||[]).findIndex(function(p){return p.name===postName;});
-  return idx===-1?9998:idx;
+    '<div class="sub-hdr">Entries</div><table><thead><tr><th>Duty ID</th><th>Type</th><th>Post</th><th>Timing</th><th>Troops</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>';
+  var subtitle='<p>'+fmtDateLong(dateISO)+' · '+(shiftKey==='day'?'☀ Day Shift':'🌙 Night Shift')+'</p>';
+  dutyReportWindow('SHIFT DETAILS',subtitle,body);
 }
 // Shared print-window shell for the duty reports below (item 7) — keeps
 // every one of them looking consistent without repeating the same HTML
@@ -5941,19 +5884,16 @@ function dutyReportWindow(title,subtitleHtml,bodyHtml){
   var w=window.open('','_blank','width=980,height=760');
   if(!w) return;
   w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+title+'</title><style>'+
-    ''+
-    'body{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;background:#fff;color:#000;margin:0;padding:20px;font-size:16px;letter-spacing:0.3px;}'+
+    'body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:14px;}'+
     '.hdr{text-align:center;border-bottom:2px solid #8b1a2b;padding-bottom:12px;margin-bottom:20px;}'+
-    '.hdr h2{margin:0 0 4px;font-size:19px;color:#5a0f1a;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-weight:900;letter-spacing:-0.3px;}.hdr p{margin:2px 0;font-size:13px;font-weight:700;color:#555;}'+
-    '.shift-tag{display:inline-block;font-size:16px;font-weight:800;letter-spacing:0.5px;color:#8b1a2b;}'+
-    '.sub-hdr{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-weight:700;font-size:12px;color:#5a0f1a;letter-spacing:1px;text-transform:uppercase;margin:16px 0 8px;padding-bottom:5px;border-bottom:1px solid #ccc;}'+
+    '.hdr h2{margin:0 0 4px;font-size:19px;color:#5a0f1a;}.hdr p{margin:2px 0;font-size:13px;font-weight:700;color:#555;}'+
+    '.sub-hdr{font-family:\'Segoe UI\',Arial,sans-serif;font-weight:700;font-size:12px;color:#5a0f1a;letter-spacing:1px;text-transform:uppercase;margin:16px 0 8px;padding-bottom:5px;border-bottom:1px solid #ccc;}'+
     'table{width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:8px;}'+
-    'th{background:#8b1a2b;color:#fff;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-weight:800;font-size:13px;letter-spacing:0.5px;text-transform:uppercase;padding:7px 9px;text-align:left;}'+
-    'td{padding:6px 9px;border-bottom:1px solid #d9b8be;vertical-align:top;font-weight:800;color:#000;}tr:nth-child(even) td{background:#faf8f8;}tr{page-break-inside:avoid;}'+
-    '.grp-row td{background:#f2e4e6!important;color:#5a0f1a;font-weight:800;font-size:12px;letter-spacing:0.6px;text-transform:uppercase;padding:7px 9px;border-top:2px solid #8b1a2b;border-bottom:1px solid #8b1a2b;}'+
+    'th{background:#8b1a2b;color:#fff;font-family:\'Segoe UI\',Arial,sans-serif;font-weight:700;font-size:12px;letter-spacing:0.5px;text-transform:uppercase;padding:7px 9px;text-align:left;}'+
+    'td{padding:6px 9px;border-bottom:1px solid #f0e0e0;vertical-align:top;}tr:nth-child(even) td{background:#faf8f8;}tr{page-break-inside:avoid;}'+
     '.info-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:10px;}'+
     '.info-box{background:#f5f5f5;border:1px solid #ccc;border-radius:4px;padding:10px;text-align:center;}'+
-    '.info-num{font-size:20px;font-weight:700;color:#8b1a2b;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;}'+
+    '.info-num{font-size:20px;font-weight:700;color:#8b1a2b;font-family:\'Courier New\',monospace;}'+
     '.info-lbl{font-size:11.5px;font-weight:700;color:#666;letter-spacing:0.5px;text-transform:uppercase;margin-top:3px;}'+
     '.footer{margin-top:16px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}'+
     '@media print{@page{margin:1.5cm;size:A4;}.no-print{display:none!important;}thead{display:table-header-group;}}'+
@@ -5994,7 +5934,7 @@ function printDutyRoster(){
   var rowsHtml=list.length===0?'<tr><td colspan="7" style="text-align:center;color:#888;padding:20px;">No duty entries match the current filters.</td></tr>':
     dutyGroupByShift(list).map(function(grp){
       var posts=[],seenP={}; grp.duties.forEach(function(d){ if(d.postName&&!seenP[d.postName]){seenP[d.postName]=1;posts.push(d.postName);} });
-      return '<tr style="background:#f4eeee;"><td colspan="7" style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-size:11px;font-weight:700;color:#5a0f1a;letter-spacing:1px;text-transform:uppercase;">'+fmtDate(grp.date)+' · '+(grp.shift==='day'?'Day Shift':'Night Shift')+'</td></tr>'+
+      return '<tr style="background:#f4eeee;"><td colspan="7" style="font-family:\'Courier New\',monospace;font-size:11px;font-weight:700;color:#5a0f1a;letter-spacing:1px;text-transform:uppercase;">'+fmtDate(grp.date)+' · '+(grp.shift==='day'?'Day Shift':'Night Shift')+'</td></tr>'+
         grp.duties.map(function(d){ return '<tr><td>'+(d.dutyId||'—')+'</td><td></td><td>'+escHtml(d.type)+'</td><td>'+escHtml(d.postName||'—')+'</td><td>'+(d.startTime||'')+'–'+shiftEndTime(d.startTime,d.durationHours)+'</td><td>'+(d.durationHours||'—')+'h</td><td style="font-size:11px;">'+(sortTroops((d.troops||[]).map(troopById).filter(Boolean)).map(function(t){return upLabel(t.rank,t.name);}).join(', ')||'—')+'</td></tr>'; }).join('');
     }).join('');
   var subtitle='<p>'+list.length+' duty entries · '+totH.toFixed(1)+'h total'+(q||typeF||postF||shiftF||rangeF!=='upcoming'?' (filtered)':'')+'</p>';
@@ -6014,7 +5954,7 @@ function printDailyDutyList(dateISO){
   var totH=list.reduce(function(s,d){return s+(parseFloat(d.durationHours)||0);},0);
   var rowsHtml=list.length===0?'<tr><td colspan="6" style="text-align:center;color:#888;padding:20px;">No duty entries on this date.</td></tr>':
     list.map(function(d){ return '<tr><td>'+(d.dutyId||'—')+'</td><td>'+(isDayTime(d.startTime)?'☀ Day':'🌙 Night')+'</td><td>'+escHtml(d.type)+'</td><td>'+escHtml(d.postName||'—')+'</td><td>'+(d.startTime||'')+'–'+shiftEndTime(d.startTime,d.durationHours)+' ('+(d.durationHours||'—')+'h)</td><td style="font-size:11px;">'+(sortTroops((d.troops||[]).map(troopById).filter(Boolean)).map(function(t){return upLabel(t.rank,t.name);}).join(', ')||'—')+'</td></tr>'; }).join('');
-  var subtitle='<p style="font-size:15px;font-weight:900;color:#5a0f1a;">'+fmtDateLong(dateISO)+'</p><p>'+list.length+' duty entries · '+totH.toFixed(1)+'h total</p>';
+  var subtitle='<p>'+fmtDateLong(dateISO)+' · '+list.length+' duty entries · '+totH.toFixed(1)+'h total</p>';
   dutyReportWindow('DAILY DUTY LIST',subtitle,'<table><thead><tr><th>Duty ID</th><th>Shift</th><th>Type</th><th>Post</th><th>Timing</th><th>Troops</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>');
 }
 // Sentry Assignments (item 7) — who's covering which post, grouped by
@@ -6064,7 +6004,7 @@ function printMonthlyDutySummary(mo,yr){
     '<div class="sub-hdr">By Type</div><p style="font-size:13px;color:#444;margin-bottom:10px;">'+typeHtml+'</p>'+
     '<div class="sub-hdr">By Post</div><p style="font-size:13px;color:#444;margin-bottom:10px;">'+postHtml+'</p>'+
     '<div class="sub-hdr">Full Listing ('+list.length+')</div><table><thead><tr><th>Duty ID</th><th>Date</th><th>Shift</th><th>Type</th><th>Post</th><th>Duration</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>';
-  var subtitle='<p style="font-size:15px;font-weight:900;color:#5a0f1a;">'+moNames[mo-1]+' '+yr+'</p>';
+  var subtitle='<p>'+moNames[mo-1]+' '+yr+'</p>';
   dutyReportWindow('MONTHLY DUTY SUMMARY',subtitle,body);
 }
 // Duty Statistics (item 7) — all-time overview: totals, by type, by
@@ -7013,7 +6953,7 @@ function mostActiveBlockHTML(patrols,historyMode){
   if(res.officerRecord){
     var o=res.officerRecord;
     html+='<div style="margin-top:8px;padding:10px;background:rgba(120,150,220,0.08);border:1px solid rgba(120,150,220,0.2);border-radius:8px;font-size:13px;">'+
-      '<div style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-size:10px;color:var(--blue);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px;">Officer/JCO Activity Record</div>'+
+      '<div style="font-family:\'Courier New\',monospace;font-size:10px;color:var(--blue);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px;">Officer/JCO Activity Record</div>'+
       '<strong style="color:var(--blue);text-transform:uppercase;letter-spacing:0.3px;">'+upLabel(o.person.rank,o.person.name)+'</strong>'+
       '<span style="color:var(--text-muted);"> | '+o.hours.toFixed(1)+'h | '+o.count+' patrols</span></div>';
   }
@@ -8744,7 +8684,7 @@ function viewFullRecord(){
   var monthKeys=Object.keys(byMonth).sort();
   var rowsHtml='';
   if(tp.length===0){ rowsHtml='<tr><td colspan="6" style="text-align:center;color:#888;padding:20px;">No patrol records.</td></tr>'; }
-  else { monthKeys.forEach(function(mk){var mo=byMonth[mk];var moDate=new Date(mk+'-01T12:00:00');var moLabel=moDate.toLocaleString('default',{month:'long',year:'numeric'});var moH=mo.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0); rowsHtml+='<tr style="background:#e8f0e8;"><td colspan="6" style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-size:11px;font-weight:700;color:#2d5a3d;letter-spacing:1px;text-transform:uppercase;padding:7px 10px;">'+moLabel+' · '+mo.length+' patrols · '+moH.toFixed(1)+'h</td></tr>'; mo.forEach(function(p){ rowsHtml+='<tr><td style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-size:11px;color:#2d5a3d;white-space:nowrap;">'+(p.ptlId||'—')+'</td><td style="font-size:11px;white-space:nowrap;">'+fmtDate(p.date)+'</td><td><span style="display:inline-block;padding:2px 7px;border-radius:2px;font-size:10px;font-weight:700;background:#eef4ee;border:1px solid #9aaa9a;color:#333;">'+p.type+'</span></td><td style="font-size:12px;color:#555;">'+(p.area||'—')+'</td><td style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-size:11px;">'+(p.duration?p.duration+'h':'—')+'</td><td style="font-size:11px;color:#777;">'+escHtml(p.remarks||'—')+'</td></tr>'; }); }); }
+  else { monthKeys.forEach(function(mk){var mo=byMonth[mk];var moDate=new Date(mk+'-01T12:00:00');var moLabel=moDate.toLocaleString('default',{month:'long',year:'numeric'});var moH=mo.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0); rowsHtml+='<tr style="background:#e8f0e8;"><td colspan="6" style="font-family:\'Courier New\',monospace;font-size:11px;font-weight:700;color:#2d5a3d;letter-spacing:1px;text-transform:uppercase;padding:7px 10px;">'+moLabel+' · '+mo.length+' patrols · '+moH.toFixed(1)+'h</td></tr>'; mo.forEach(function(p){ rowsHtml+='<tr><td style="font-family:\'Courier New\',monospace;font-size:11px;color:#2d5a3d;white-space:nowrap;">'+(p.ptlId||'—')+'</td><td style="font-size:11px;white-space:nowrap;">'+fmtDate(p.date)+'</td><td><span style="display:inline-block;padding:2px 7px;border-radius:2px;font-size:10px;font-weight:700;background:#eef4ee;border:1px solid #9aaa9a;color:#333;">'+p.type+'</span></td><td style="font-size:12px;color:#555;">'+(p.area||'—')+'</td><td style="font-family:\'Courier New\',monospace;font-size:11px;">'+(p.duration?p.duration+'h':'—')+'</td><td style="font-size:11px;color:#777;">'+escHtml(p.remarks||'—')+'</td></tr>'; }); }); }
   // Duty side of the combined record (item 6 — "Combined operational
   // history print/PDF"), grouped by month the same way patrols are.
   var td=D.duties.filter(function(d){return !d.cancelled&&(d.troops||[]).indexOf(id)>=0;}).sort(function(a,b){
@@ -8759,7 +8699,7 @@ function viewFullRecord(){
   var dutyMonthKeys=Object.keys(dutyByMonth).sort();
   var dutyRowsHtml='';
   if(td.length===0){ dutyRowsHtml='<tr><td colspan="6" style="text-align:center;color:#888;padding:20px;">No duty records.</td></tr>'; }
-  else { dutyMonthKeys.forEach(function(mk){var mo=dutyByMonth[mk];var moDate=new Date(mk+'-01T12:00:00');var moLabel=moDate.toLocaleString('default',{month:'long',year:'numeric'});var moH=mo.reduce(function(s,d){return s+(parseFloat(d.durationHours)||0);},0); dutyRowsHtml+='<tr style="background:#f0e8e8;"><td colspan="6" style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-size:11px;font-weight:700;color:#5a0f1a;letter-spacing:1px;text-transform:uppercase;padding:7px 10px;">'+moLabel+' · '+mo.length+' duties · '+moH.toFixed(1)+'h</td></tr>'; mo.forEach(function(d){ var endT=shiftEndTime(d.startTime,d.durationHours); dutyRowsHtml+='<tr><td style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-size:11px;color:#5a0f1a;white-space:nowrap;">'+(d.dutyId||'—')+'</td><td style="font-size:11px;white-space:nowrap;">'+fmtDate(dutyDisplayDate(d))+'</td><td><span style="display:inline-block;padding:2px 7px;border-radius:2px;font-size:10px;font-weight:700;background:#f4eeee;border:1px solid #aa9a9a;color:#333;">'+d.type+' · '+(isDayTime(d.startTime)?'Day':'Night')+'</span></td><td style="font-size:12px;color:#555;">'+(d.postName||'—')+'</td><td style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-size:11px;">'+(d.startTime||'')+'–'+endT+' ('+(d.durationHours||'—')+'h)</td><td style="font-size:11px;color:#777;">'+escHtml(d.remarks||'—')+'</td></tr>'; }); }); }
+  else { dutyMonthKeys.forEach(function(mk){var mo=dutyByMonth[mk];var moDate=new Date(mk+'-01T12:00:00');var moLabel=moDate.toLocaleString('default',{month:'long',year:'numeric'});var moH=mo.reduce(function(s,d){return s+(parseFloat(d.durationHours)||0);},0); dutyRowsHtml+='<tr style="background:#f0e8e8;"><td colspan="6" style="font-family:\'Courier New\',monospace;font-size:11px;font-weight:700;color:#5a0f1a;letter-spacing:1px;text-transform:uppercase;padding:7px 10px;">'+moLabel+' · '+mo.length+' duties · '+moH.toFixed(1)+'h</td></tr>'; mo.forEach(function(d){ var endT=shiftEndTime(d.startTime,d.durationHours); dutyRowsHtml+='<tr><td style="font-family:\'Courier New\',monospace;font-size:11px;color:#5a0f1a;white-space:nowrap;">'+(d.dutyId||'—')+'</td><td style="font-size:11px;white-space:nowrap;">'+fmtDate(dutyDisplayDate(d))+'</td><td><span style="display:inline-block;padding:2px 7px;border-radius:2px;font-size:10px;font-weight:700;background:#f4eeee;border:1px solid #aa9a9a;color:#333;">'+d.type+' · '+(isDayTime(d.startTime)?'Day':'Night')+'</span></td><td style="font-size:12px;color:#555;">'+(d.postName||'—')+'</td><td style="font-family:\'Courier New\',monospace;font-size:11px;">'+(d.startTime||'')+'–'+endT+' ('+(d.durationHours||'—')+'h)</td><td style="font-size:11px;color:#777;">'+escHtml(d.remarks||'—')+'</td></tr>'; }); }); }
   // Personal Details block — every field entered on the troop, plus the
   // Leave/Sick/Absence history. Previously this print only had patrol/duty
   // tables and left out personal info and absence records entirely.
@@ -8795,7 +8735,7 @@ function viewFullRecord(){
     absList.map(function(a){ return '<tr><td>'+escHtml(a.type)+'</td><td>'+fmtDate(a.start)+'</td><td>'+fmtDate(a.end)+'</td><td>'+a.days+'d</td></tr>'; }).join('');
   var absenceHtml='<div class="sub-hdr">Leave / Sick / Absence Records ('+absList.length+')</div><table><colgroup><col style="width:25%"><col style="width:25%"><col style="width:25%"><col style="width:25%"></colgroup><thead><tr><th>Type</th><th>From</th><th>To</th><th>Days</th></tr></thead><tbody>'+absenceRowsHtml+'</tbody></table>';
   var win=window.open('','_blank','width=960,height=750');
-  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Combined Operational Record — '+upLabel(t.rank,t.name)+'</title><style>body{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;background:#fff;color:#000;margin:0;padding:20px;font-size:16px;letter-spacing:0.3px;}.hdr{text-align:center;border-bottom:2px solid #2d5a3d;padding-bottom:14px;margin-bottom:20px;}.hdr h2{margin:0 0 4px;font-size:20px;color:#1a3a2a;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-weight:900;letter-spacing:-0.3px;}.hdr p{margin:2px 0;font-size:13px;font-weight:700;color:#555;}.info-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;}.info-box{background:#f5f5f5;border:1px solid #ccc;border-radius:4px;padding:10px;text-align:center;}.info-num{font-size:22px;font-weight:700;color:#2d5a3d;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;}.info-lbl{font-size:12px;font-weight:700;color:#666;letter-spacing:0.5px;text-transform:uppercase;margin-top:3px;}.pd-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 14px;margin-bottom:12px;}.pd-item{border-bottom:1px solid #b8c4b8;padding-bottom:5px;}.pd-lbl{font-size:10px;font-weight:700;color:#888;letter-spacing:0.5px;text-transform:uppercase;}.pd-val{font-size:13px;color:#222;margin-top:1px;}.sub-hdr{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-weight:700;font-size:12px;color:#2d5a3d;letter-spacing:1px;text-transform:uppercase;margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid #ccc;}.sub-hdr.duty{color:#5a0f1a;}table{width:100%;border-collapse:collapse;font-size:14.5px;table-layout:fixed;}th{background:#2d5a3d;color:#fff;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-weight:800;font-size:13px;letter-spacing:0.5px;text-transform:uppercase;padding:8px 10px;text-align:left;}th.duty{background:#8b1a2b;}td{padding:7px 10px;border-bottom:1px solid #b8c4b8;word-wrap:break-word;vertical-align:top;font-weight:800;color:#000;}tr:hover td{background:#f8fff8;}.footer{margin-top:20px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}@media print{@page{margin:1cm;}.no-print{display:none!important;}}</style></head><body>'+
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Combined Operational Record — '+upLabel(t.rank,t.name)+'</title><style>body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:14px;}.hdr{text-align:center;border-bottom:2px solid #2d5a3d;padding-bottom:14px;margin-bottom:20px;}.hdr h2{margin:0 0 4px;font-size:20px;color:#1a3a2a;}.hdr p{margin:2px 0;font-size:13px;font-weight:700;color:#555;}.info-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;}.info-box{background:#f5f5f5;border:1px solid #ccc;border-radius:4px;padding:10px;text-align:center;}.info-num{font-size:22px;font-weight:700;color:#2d5a3d;font-family:\'Courier New\',monospace;}.info-lbl{font-size:12px;font-weight:700;color:#666;letter-spacing:0.5px;text-transform:uppercase;margin-top:3px;}.pd-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 14px;margin-bottom:12px;}.pd-item{border-bottom:1px solid #e0e8e0;padding-bottom:5px;}.pd-lbl{font-size:10px;font-weight:700;color:#888;letter-spacing:0.5px;text-transform:uppercase;}.pd-val{font-size:13px;color:#222;margin-top:1px;}.sub-hdr{font-family:\'Segoe UI\',Arial,sans-serif;font-weight:700;font-size:12px;color:#2d5a3d;letter-spacing:1px;text-transform:uppercase;margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid #ccc;}.sub-hdr.duty{color:#5a0f1a;}table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;}th{background:#2d5a3d;color:#fff;font-family:\'Segoe UI\',Arial,sans-serif;font-weight:700;font-size:12px;letter-spacing:0.5px;text-transform:uppercase;padding:8px 10px;text-align:left;}th.duty{background:#8b1a2b;}td{padding:7px 10px;border-bottom:1px solid #e0e8e0;word-wrap:break-word;vertical-align:top;}tr:hover td{background:#f8fff8;}.footer{margin-top:20px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}@media print{@page{margin:1cm;}.no-print{display:none!important;}}</style></head><body>'+
   '<div class="hdr"><div style="font-size:12px;font-weight:700;color:#999;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">'+(s.classification||'')+(s.classification?' — ':'')+''+(s.pob||'POB Mobaye')+'</div><h2>COMBINED OPERATIONAL RECORD</h2><p style="font-size:14px;font-weight:700;color:#1a3a2a;">'+(t.sn?('Personal No: '+t.sn+' · '):'')+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>'+'</p><p>Unit: '+(t.unit||'—')+'</p><p>Period: <strong>'+(earliest?fmtDateLong(earliest):'N/A')+' — '+fmtDateLong(todayStr)+'</strong></p><p style="color:#888;">Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p></div>'+
   personalHtml+
   absenceHtml+
@@ -8830,7 +8770,7 @@ function printProfileSection(id,kind){
     title='DUTY HISTORY';
     headHtml='<th>Duty ID</th><th>Date</th><th>Type / Shift</th><th>Post</th><th>Timing</th><th>Remarks</th>';
     rowsHtml=td.length===0?'<tr><td colspan="6" style="text-align:center;color:#888;padding:20px;">No duty records.</td></tr>':
-      td.map(function(d){ var endT=shiftEndTime(d.startTime,d.durationHours); return '<tr><td style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-size:11px;white-space:nowrap;">'+(d.dutyId||'—')+'</td><td style="font-size:11px;white-space:nowrap;">'+fmtDate(dutyDisplayDate(d))+'</td><td style="font-size:12px;">'+d.type+' · '+(isDayTime(d.startTime)?'Day':'Night')+'</td><td style="font-size:12px;color:#555;">'+(d.postName||'—')+'</td><td style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-size:11px;">'+(d.startTime||'')+'–'+endT+' ('+(d.durationHours||'—')+'h)</td><td style="font-size:11px;color:#777;">'+escHtml(d.remarks||'—')+'</td></tr>'; }).join('');
+      td.map(function(d){ var endT=shiftEndTime(d.startTime,d.durationHours); return '<tr><td style="font-family:\'Courier New\',monospace;font-size:11px;white-space:nowrap;">'+(d.dutyId||'—')+'</td><td style="font-size:11px;white-space:nowrap;">'+fmtDate(dutyDisplayDate(d))+'</td><td style="font-size:12px;">'+d.type+' · '+(isDayTime(d.startTime)?'Day':'Night')+'</td><td style="font-size:12px;color:#555;">'+(d.postName||'—')+'</td><td style="font-family:\'Courier New\',monospace;font-size:11px;">'+(d.startTime||'')+'–'+endT+' ('+(d.durationHours||'—')+'h)</td><td style="font-size:11px;color:#777;">'+escHtml(d.remarks||'—')+'</td></tr>'; }).join('');
     var summary='<div class="info-box"><div class="info-num">'+td.length+'</div><div class="info-lbl">Total Duties</div></div><div class="info-box"><div class="info-num">'+totalDutyH.toFixed(1)+'</div><div class="info-lbl">Total Hours</div></div>';
   } else {
     accent='#2d5a3d';
@@ -8839,10 +8779,10 @@ function printProfileSection(id,kind){
     title='PATROL HISTORY';
     headHtml='<th>Patrol ID</th><th>Date</th><th>Type</th><th>Sector</th><th>Duration</th><th>Remarks</th>';
     rowsHtml=tp.length===0?'<tr><td colspan="6" style="text-align:center;color:#888;padding:20px;">No patrol records.</td></tr>':
-      tp.map(function(p){ return '<tr><td style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-size:11px;white-space:nowrap;">'+(p.ptlId||'—')+'</td><td style="font-size:11px;white-space:nowrap;">'+fmtDate(p.date)+'</td><td style="font-size:12px;">'+p.type+'</td><td style="font-size:12px;color:#555;">'+(p.area||'—')+'</td><td style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-size:11px;">'+(p.duration?p.duration+'h':'—')+'</td><td style="font-size:11px;color:#777;">'+escHtml(p.remarks||'—')+'</td></tr>'; }).join('');
+      tp.map(function(p){ return '<tr><td style="font-family:\'Courier New\',monospace;font-size:11px;white-space:nowrap;">'+(p.ptlId||'—')+'</td><td style="font-size:11px;white-space:nowrap;">'+fmtDate(p.date)+'</td><td style="font-size:12px;">'+p.type+'</td><td style="font-size:12px;color:#555;">'+(p.area||'—')+'</td><td style="font-family:\'Courier New\',monospace;font-size:11px;">'+(p.duration?p.duration+'h':'—')+'</td><td style="font-size:11px;color:#777;">'+escHtml(p.remarks||'—')+'</td></tr>'; }).join('');
     var summary='<div class="info-box"><div class="info-num">'+tp.length+'</div><div class="info-lbl">Total Patrols</div></div><div class="info-box"><div class="info-num">'+totalH.toFixed(1)+'</div><div class="info-lbl">Total Hours</div></div>';
   }
-  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+title+' — '+upLabel(t.rank,t.name)+'</title><style>body{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;background:#fff;color:#000;margin:0;padding:20px;font-size:16px;letter-spacing:0.3px;}.hdr{text-align:center;border-bottom:2px solid '+accent+';padding-bottom:14px;margin-bottom:20px;}.hdr h2{margin:0 0 4px;font-size:20px;color:'+accent+';font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-weight:900;letter-spacing:-0.3px;}.hdr p{margin:2px 0;font-size:13px;font-weight:700;color:#555;}.info-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:18px;max-width:400px;}.info-box{background:#f5f5f5;border:1px solid #ccc;border-radius:4px;padding:10px;text-align:center;}.info-num{font-size:22px;font-weight:700;color:'+accent+';font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;}.info-lbl{font-size:12px;font-weight:700;color:#666;letter-spacing:0.5px;text-transform:uppercase;margin-top:3px;}table{width:100%;border-collapse:collapse;font-size:14.5px;table-layout:fixed;}th{background:'+accent+';color:#fff;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-weight:800;font-size:13px;letter-spacing:0.5px;text-transform:uppercase;padding:8px 10px;text-align:left;}td{padding:7px 10px;border-bottom:1px solid #b8c4b8;word-wrap:break-word;vertical-align:top;font-weight:800;color:#000;}tr:hover td{background:#f8fff8;}.footer{margin-top:20px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}@media print{@page{margin:1cm;}.no-print{display:none!important;}}</style></head><body>'+
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+title+' — '+upLabel(t.rank,t.name)+'</title><style>body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:14px;}.hdr{text-align:center;border-bottom:2px solid '+accent+';padding-bottom:14px;margin-bottom:20px;}.hdr h2{margin:0 0 4px;font-size:20px;color:'+accent+';}.hdr p{margin:2px 0;font-size:13px;font-weight:700;color:#555;}.info-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:18px;max-width:400px;}.info-box{background:#f5f5f5;border:1px solid #ccc;border-radius:4px;padding:10px;text-align:center;}.info-num{font-size:22px;font-weight:700;color:'+accent+';font-family:\'Courier New\',monospace;}.info-lbl{font-size:12px;font-weight:700;color:#666;letter-spacing:0.5px;text-transform:uppercase;margin-top:3px;}table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;}th{background:'+accent+';color:#fff;font-family:\'Segoe UI\',Arial,sans-serif;font-weight:700;font-size:12px;letter-spacing:0.5px;text-transform:uppercase;padding:8px 10px;text-align:left;}td{padding:7px 10px;border-bottom:1px solid #e0e8e0;word-wrap:break-word;vertical-align:top;}tr:hover td{background:#f8fff8;}.footer{margin-top:20px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}@media print{@page{margin:1cm;}.no-print{display:none!important;}}</style></head><body>'+
   '<div class="hdr"><div style="font-size:12px;font-weight:700;color:#999;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">'+(s.classification||'')+(s.classification?' — ':'')+''+(s.pob||'POB Mobaye')+'</div><h2>'+title+'</h2><p style="font-size:14px;font-weight:700;color:'+accent+';">'+(t.sn?('Personal No: '+t.sn+' · '):'')+'<strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong>'+'</p><p>Unit: '+(t.unit||'—')+'</p><p style="color:#888;">Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p></div>'+
   '<div class="info-grid">'+summary+'</div>'+
   '<table><thead><tr>'+headHtml+'</tr></thead><tbody>'+rowsHtml+'</tbody></table>'+
@@ -8890,7 +8830,7 @@ function renderInactive(days){
       '<div class="ic-meta">Last: '+(lp?fmtDateLong(lp):'Never')+'</div></div>';
   }).join('');
 }
-function printInactive(){ var filterLbl=document.getElementById('inactive-filter-label')?document.getElementById('inactive-filter-label').textContent:''; var cards=document.getElementById('inactive-list').querySelectorAll('.inactive-card'); var s=D.settings; var rows=''; cards.forEach(function(card){var name=card.querySelector('.ic-name')?card.querySelector('.ic-name').textContent:'';var unit=card.querySelector('.ic-unit')?card.querySelector('.ic-unit').textContent:'';var meta=card.querySelector('.ic-meta')?card.querySelector('.ic-meta').textContent:'';var badge=card.querySelector('.badge')?card.querySelector('.badge').textContent:'';rows+='<tr><td>'+name+'</td><td>'+unit+'</td><td>'+meta+'</td><td><strong>'+badge+'</strong></td></tr>';}); var win=window.open('','_blank','width=900,height=700'); win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Inactive Troops Report</title><style>body{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;background:#fff;color:#000;margin:0;padding:20px;font-size:16px;letter-spacing:0.3px;}.hdr{text-align:center;border-bottom:2px solid #2d5a3d;padding-bottom:12px;margin-bottom:20px;}.hdr h2{margin:0 0 4px;font-size:18px;color:#1a3a2a;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-weight:900;letter-spacing:-0.3px;}.hdr p{margin:2px 0;font-size:13px;font-weight:700;color:#555;}table{width:100%;border-collapse:collapse;font-size:14.5px;}th{background:#2d5a3d;color:#fff;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-weight:800;font-size:13px;letter-spacing:0.5px;text-transform:uppercase;padding:8px 10px;text-align:left;}td{padding:7px 10px;border-bottom:1px solid #b8c4b8;font-weight:800;color:#000;}tr:nth-child(even) td{background:#f8f8f8;}tr{page-break-inside:avoid;}.footer{margin-top:16px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}@media print{@page{margin:1.5cm;size:A4;}button{display:none!important;}thead{display:table-header-group;}}</style></head><body><div class="hdr"><div style="font-size:12px;font-weight:700;color:#999;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">'+(s.classification||'')+(s.classification?' — ':'')+''+(s.pob||'POB Mobaye')+'</div><h2>INACTIVE TROOPS REPORT</h2><p>'+filterLbl+'</p><p>Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p></div><table><thead><tr><th>Name &amp; Rank</th><th>Unit / Hours</th><th>Last Patrol</th><th>Inactivity</th></tr></thead><tbody>'+rows+'</tbody></table><div class="footer">'+(s.pob||'POB Mobaye')+' Troops Management System · Inactive Troops Report · '+nowStr()+'</div><div style="margin-top:16px;text-align:center;"><button onclick="window.print()" style="padding:10px 24px;background:#2d5a3d;color:#fff;border:none;border-radius:4px;font-size:13px;cursor:pointer;font-weight:700;">🖨 Print</button></div></body></html>'); win.document.close(); win.focus(); }
+function printInactive(){ var filterLbl=document.getElementById('inactive-filter-label')?document.getElementById('inactive-filter-label').textContent:''; var cards=document.getElementById('inactive-list').querySelectorAll('.inactive-card'); var s=D.settings; var rows=''; cards.forEach(function(card){var name=card.querySelector('.ic-name')?card.querySelector('.ic-name').textContent:'';var unit=card.querySelector('.ic-unit')?card.querySelector('.ic-unit').textContent:'';var meta=card.querySelector('.ic-meta')?card.querySelector('.ic-meta').textContent:'';var badge=card.querySelector('.badge')?card.querySelector('.badge').textContent:'';rows+='<tr><td>'+name+'</td><td>'+unit+'</td><td>'+meta+'</td><td><strong>'+badge+'</strong></td></tr>';}); var win=window.open('','_blank','width=900,height=700'); win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Inactive Troops Report</title><style>body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:14px;}.hdr{text-align:center;border-bottom:2px solid #2d5a3d;padding-bottom:12px;margin-bottom:20px;}.hdr h2{margin:0 0 4px;font-size:18px;color:#1a3a2a;}.hdr p{margin:2px 0;font-size:13px;font-weight:700;color:#555;}table{width:100%;border-collapse:collapse;font-size:13px;}th{background:#2d5a3d;color:#fff;font-family:\'Segoe UI\',Arial,sans-serif;font-weight:700;font-size:12px;letter-spacing:0.5px;text-transform:uppercase;padding:8px 10px;text-align:left;}td{padding:7px 10px;border-bottom:1px solid #e0e8e0;}tr:nth-child(even) td{background:#f8f8f8;}tr{page-break-inside:avoid;}.footer{margin-top:16px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}@media print{@page{margin:1.5cm;size:A4;}button{display:none!important;}thead{display:table-header-group;}}</style></head><body><div class="hdr"><div style="font-size:12px;font-weight:700;color:#999;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">'+(s.classification||'')+(s.classification?' — ':'')+''+(s.pob||'POB Mobaye')+'</div><h2>INACTIVE TROOPS REPORT</h2><p>'+filterLbl+'</p><p>Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p></div><table><thead><tr><th>Name &amp; Rank</th><th>Unit / Hours</th><th>Last Patrol</th><th>Inactivity</th></tr></thead><tbody>'+rows+'</tbody></table><div class="footer">'+(s.pob||'POB Mobaye')+' Troops Management System · Inactive Troops Report · '+nowStr()+'</div><div style="margin-top:16px;text-align:center;"><button onclick="window.print()" style="padding:10px 24px;background:#2d5a3d;color:#fff;border:none;border-radius:4px;font-size:13px;cursor:pointer;font-weight:700;">🖨 Print</button></div></body></html>'); win.document.close(); win.focus(); }
 
 // =====================================================================
 // PATROL PARTICIPATION STATUS (analytical tool — independent of Inactive
@@ -8949,7 +8889,7 @@ function printParticipation(){
   var s=D.settings;
   var rows=data.rows.map(function(r){var t=r.t;var flagLbl=r.flag==='b-green'?'GREEN':(r.flag==='b-orange'?'YELLOW':'RED');return '<tr><td>'+(t.sn||'')+'</td><td>'+(t.rank||'').toUpperCase()+'</td><td>'+(t.name||'').toUpperCase()+'</td><td style="text-align:center;">'+r.pct.toFixed(1)+'%</td><td style="text-align:center;">'+flagLbl+'</td></tr>';}).join('');
   var win=window.open('','_blank','width=900,height=700');
-  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Patrol Participation Status</title><style>body{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;background:#fff;color:#000;margin:0;padding:20px;font-size:15px;letter-spacing:0.3px;}.hdr{text-align:center;border-bottom:2px solid #2d5a3d;padding-bottom:12px;margin-bottom:20px;}.hdr h2{margin:0 0 4px;font-size:18px;color:#1a3a2a;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-weight:900;letter-spacing:-0.3px;}.hdr p{margin:2px 0;font-size:13px;font-weight:700;color:#555;}table{width:100%;border-collapse:collapse;font-size:13.5px;}th{background:#2d5a3d;color:#fff;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-weight:800;font-size:13px;letter-spacing:0.5px;text-transform:uppercase;padding:7px 8px;text-align:left;}td{padding:6px 8px;border-bottom:1px solid #b8c4b8;font-weight:800;color:#000;}tr:nth-child(even) td{background:#f8f8f8;}tr{page-break-inside:avoid;}.footer{margin-top:16px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}@media print{@page{margin:1.5cm;size:A4;}button{display:none!important;}thead{display:table-header-group;}}</style></head><body><div class="hdr"><div style="font-size:12px;font-weight:700;color:#999;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">'+(s.classification||'')+(s.classification?' — ':'')+(s.pob||'POB Mobaye')+'</div><h2>PATROL PARTICIPATION STATUS</h2><p>Each troop\'s share of unit patrol hours since their own deployment date</p><p>Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p></div><table><thead><tr><th>Personal No.</th><th>Rank</th><th>Name</th><th>Participation %</th><th>Status</th></tr></thead><tbody>'+rows+'</tbody></table><div class="footer">'+(s.pob||'POB Mobaye')+' Troops Management System · Participation Status · '+nowStr()+'</div><div style="margin-top:16px;text-align:center;"><button onclick="window.print()" style="padding:10px 24px;background:#2d5a3d;color:#fff;border:none;border-radius:4px;font-size:13px;cursor:pointer;font-weight:700;">🖨 Print</button></div></body></html>');
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Patrol Participation Status</title><style>body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:13px;}.hdr{text-align:center;border-bottom:2px solid #2d5a3d;padding-bottom:12px;margin-bottom:20px;}.hdr h2{margin:0 0 4px;font-size:18px;color:#1a3a2a;}.hdr p{margin:2px 0;font-size:13px;font-weight:700;color:#555;}table{width:100%;border-collapse:collapse;font-size:12px;}th{background:#2d5a3d;color:#fff;font-family:\'Segoe UI\',Arial,sans-serif;font-weight:700;font-size:12px;letter-spacing:0.5px;text-transform:uppercase;padding:7px 8px;text-align:left;}td{padding:6px 8px;border-bottom:1px solid #e0e8e0;}tr:nth-child(even) td{background:#f8f8f8;}tr{page-break-inside:avoid;}.footer{margin-top:16px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}@media print{@page{margin:1.5cm;size:A4;}button{display:none!important;}thead{display:table-header-group;}}</style></head><body><div class="hdr"><div style="font-size:12px;font-weight:700;color:#999;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">'+(s.classification||'')+(s.classification?' — ':'')+(s.pob||'POB Mobaye')+'</div><h2>PATROL PARTICIPATION STATUS</h2><p>Each troop\'s share of unit patrol hours since their own deployment date</p><p>Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p></div><table><thead><tr><th>Personal No.</th><th>Rank</th><th>Name</th><th>Participation %</th><th>Status</th></tr></thead><tbody>'+rows+'</tbody></table><div class="footer">'+(s.pob||'POB Mobaye')+' Troops Management System · Participation Status · '+nowStr()+'</div><div style="margin-top:16px;text-align:center;"><button onclick="window.print()" style="padding:10px 24px;background:#2d5a3d;color:#fff;border:none;border-radius:4px;font-size:13px;cursor:pointer;font-weight:700;">🖨 Print</button></div></body></html>');
   win.document.close(); win.focus();
 }
 
@@ -8982,7 +8922,7 @@ function genReport(){
     (s.commander?'<span>Commanding: <strong style="color:var(--text);">'+s.commander+'</strong></span><br>':'')+
     (s.classification?'<span class="badge b-red">'+s.classification+'</span>':'')+
     '</div>'+
-    (cmdR?'<div style="margin-top:10px;padding:8px;background:rgba(230,179,74,0.08);border-left:3px solid var(--tan);font-size:13px;"><div style="font-size:9px;color:var(--tan);font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;letter-spacing:1px;margin-bottom:3px;">COMMANDER\'S REMARKS</div>'+cmdR+'</div>':'')+
+    (cmdR?'<div style="margin-top:10px;padding:8px;background:rgba(230,179,74,0.08);border-left:3px solid var(--tan);font-size:13px;"><div style="font-size:9px;color:var(--tan);font-family:\'Courier New\',monospace;letter-spacing:1px;margin-bottom:3px;">COMMANDER\'S REMARKS</div>'+cmdR+'</div>':'')+
     '</div>';
   var allT=sortTroops(D.troops);
   var activeT=allT.filter(function(t){return deployed.has(t.id);});
@@ -9004,13 +8944,13 @@ function genReport(){
       (tH>0?'<span class="pc-chip">⏱ <strong>'+tH.toFixed(1)+'h</strong></span>':'')+
       (tp.length>0?'<span class="pc-chip">📍 '+Array.from(new Set(tp.map(function(p){return p.area;}).filter(Boolean))).join(', ')+'</span>':'')+
       '</div>'+
-      '<div style="font-size:9px;color:var(--text-muted);margin-bottom:2px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;">PARTICIPATION: '+pct+'%</div>'+
+      '<div style="font-size:9px;color:var(--text-muted);margin-bottom:2px;font-family:\'Courier New\',monospace;">PARTICIPATION: '+pct+'%</div>'+
       '<div class="pbar"><div class="pbar-fill" style="width:'+pct+'%;background:'+(part?'var(--green-light)':'var(--red)')+'"></div></div>'+
-      (tp.length>0?'<div style="margin-top:8px;">'+tp.map(function(p){return '<div style="padding:4px 0;border-bottom:1px solid rgba(100,130,100,0.15);font-size:11px;"><span style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;color:var(--tan);font-size:9px;">'+(p.ptlId||'')+'</span> '+fmtDate(p.date)+' <span class="'+typeBadge(p.type)+'" style="font-size:9px;">'+p.type+'</span>'+(p.area?' · '+p.area:'')+' '+(p.duration?'<span style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;color:var(--text-muted);font-size:10px;">'+p.duration+'h</span>':'')+'</div>';}).join('')+'</div>':'')+'</div>';
+      (tp.length>0?'<div style="margin-top:8px;">'+tp.map(function(p){return '<div style="padding:4px 0;border-bottom:1px solid rgba(100,130,100,0.15);font-size:11px;"><span style="font-family:\'Courier New\',monospace;color:var(--tan);font-size:9px;">'+(p.ptlId||'')+'</span> '+fmtDate(p.date)+' <span class="'+typeBadge(p.type)+'" style="font-size:9px;">'+p.type+'</span>'+(p.area?' · '+p.area:'')+' '+(p.duration?'<span style="font-family:\'Courier New\',monospace;color:var(--text-muted);font-size:10px;">'+p.duration+'h</span>':'')+'</div>';}).join('')+'</div>':'')+'</div>';
   }
   html+='<div class="rep-grid">'+activeT.map(troopBlock).join('')+'</div>';
   if(inactiveT.length>0){
-    html+='<div style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-size:10px;color:var(--red-light);letter-spacing:1px;text-transform:uppercase;margin:12px 0 8px;padding:8px;background:rgba(139,26,26,0.15);border:1px solid rgba(200,50,50,0.3);border-radius:6px;">'+notDepLabel+' ('+inactiveT.length+')</div>';
+    html+='<div style="font-family:\'Courier New\',monospace;font-size:10px;color:var(--red-light);letter-spacing:1px;text-transform:uppercase;margin:12px 0 8px;padding:8px;background:rgba(139,26,26,0.15);border:1px solid rgba(200,50,50,0.3);border-radius:6px;">'+notDepLabel+' ('+inactiveT.length+')</div>';
     html+='<div class="rep-grid">'+inactiveT.map(troopBlock).join('')+'</div>';
   }
   rc.innerHTML=html;
@@ -9047,20 +8987,19 @@ function printReport(){
 
   var win=window.open('','_blank','width=980,height=760');
   win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Patrol Report</title><style>'+
-    ''+
-    'body{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;background:#fff;color:#000;margin:0;padding:20px;font-size:15px;letter-spacing:0.3px;}'+
+    'body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:13px;}'+
     '.hdr{text-align:center;border-bottom:2px solid #2d5a3d;padding-bottom:14px;margin-bottom:18px;}'+
-    '.hdr h2{margin:0 0 4px;font-size:20px;color:#1a3a2a;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-weight:900;letter-spacing:-0.3px;}'+
+    '.hdr h2{margin:0 0 4px;font-size:20px;color:#1a3a2a;}'+
     '.hdr p{margin:2px 0;font-size:13px;font-weight:700;color:#555;}'+
     '.info-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;}'+
     '.info-box{background:#f5f5f5;border:1px solid #ccc;border-radius:4px;padding:10px;text-align:center;}'+
-    '.info-num{font-size:22px;font-weight:700;color:#2d5a3d;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;}'+
+    '.info-num{font-size:22px;font-weight:700;color:#2d5a3d;font-family:\'Courier New\',monospace;}'+
     '.info-lbl{font-size:12px;font-weight:700;color:#666;letter-spacing:0.5px;text-transform:uppercase;margin-top:3px;}'+
-    '.sub-hdr{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-weight:700;font-size:12px;color:#2d5a3d;letter-spacing:1px;text-transform:uppercase;margin:16px 0 8px;padding-bottom:5px;border-bottom:1px solid #ccc;}'+
+    '.sub-hdr{font-family:\'Segoe UI\',Arial,sans-serif;font-weight:700;font-size:12px;color:#2d5a3d;letter-spacing:1px;text-transform:uppercase;margin:16px 0 8px;padding-bottom:5px;border-bottom:1px solid #ccc;}'+
     '.remarks-box{margin-top:10px;padding:8px 10px;background:#fbf8ee;border-left:3px solid #c8b87a;font-size:12px;}'+
-    'table{width:100%;border-collapse:collapse;font-size:13.5px;table-layout:fixed;}'+
-    'th{background:#2d5a3d;color:#fff;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-weight:800;font-size:12.5px;letter-spacing:0.4px;text-transform:uppercase;padding:8px 8px;text-align:left;}'+
-    'td{padding:6px 8px;border-bottom:1px solid #b8c4b8;word-wrap:break-word;vertical-align:top;font-weight:800;color:#000;}'+
+    'table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;}'+
+    'th{background:#2d5a3d;color:#fff;font-family:\'Segoe UI\',Arial,sans-serif;font-weight:700;font-size:11.5px;letter-spacing:0.4px;text-transform:uppercase;padding:8px 8px;text-align:left;}'+
+    'td{padding:6px 8px;border-bottom:1px solid #e0e8e0;word-wrap:break-word;vertical-align:top;}'+
     'tr:nth-child(even) td{background:#f8fff8;}'+
     'tr{page-break-inside:avoid;}'+
     '.footer{margin-top:20px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}'+
@@ -9070,7 +9009,7 @@ function printReport(){
     '<div class="hdr">'+
     (s.classification?'<div style="font-size:12px;font-weight:700;color:#999;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">'+s.classification+' — '+(s.pob||'POB Mobaye')+'</div>':'')+
     '<h2>PATROL REPORT</h2>'+
-    '<p style="font-size:15px;font-weight:900;color:#1a3a2a;">'+periodLabel+' · '+periodStart+(periodEnd&&periodEnd!==periodStart?' — '+periodEnd:'')+'</p>'+
+    '<p>'+periodLabel+' · '+periodStart+(periodEnd&&periodEnd!==periodStart?' — '+periodEnd:'')+'</p>'+
     '<p>Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p>'+
     '</div>'+
     '<div class="info-grid">'+
@@ -9079,7 +9018,7 @@ function printReport(){
     '<div class="info-box"><div class="info-num">'+(totalH>0?totalH.toFixed(1):'—')+'</div><div class="info-lbl">Hours</div></div>'+
     '<div class="info-box"><div class="info-num">'+notDep.length+'</div><div class="info-lbl">Not Deployed</div></div>'+
     '</div>'+
-    (cmdR?'<div class="remarks-box"><div style="font-size:9px;color:#8a6d1f;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;letter-spacing:1px;margin-bottom:3px;">COMMANDER\'S REMARKS</div>'+cmdR+'</div>':'')+
+    (cmdR?'<div class="remarks-box"><div style="font-size:9px;color:#8a6d1f;font-family:\'Courier New\',monospace;letter-spacing:1px;margin-bottom:3px;">COMMANDER\'S REMARKS</div>'+cmdR+'</div>':'')+
     '<div class="sub-hdr">Patrol Detail</div>'+
     (patrolRows?'<table><colgroup><col style="width:12%"><col style="width:11%"><col style="width:12%"><col style="width:17%"><col style="width:18%"><col style="width:9%"><col style="width:21%"></colgroup>'+
     '<thead><tr><th>Ptl ID</th><th>Date</th><th>Type</th><th>Sector</th><th>Commander</th><th>Hrs</th><th>Remarks / Route</th></tr></thead><tbody>'+patrolRows+'</tbody></table>':'<div style="color:#888;font-size:12px;">No patrols in this period.</div>')+
@@ -9132,19 +9071,18 @@ function printPatrolSummary(){
 
   var win=window.open('','_blank','width=960,height=750');
   win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Patrol Log Summary</title><style>'+
-    ''+
-    'body{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;background:#fff;color:#000;margin:0;padding:20px;font-size:15px;letter-spacing:0.3px;}'+
+    'body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:13px;}'+
     '.hdr{text-align:center;border-bottom:2px solid #2d5a3d;padding-bottom:14px;margin-bottom:18px;}'+
-    '.hdr h2{margin:0 0 4px;font-size:20px;color:#1a3a2a;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-weight:900;letter-spacing:-0.3px;}'+
+    '.hdr h2{margin:0 0 4px;font-size:20px;color:#1a3a2a;}'+
     '.hdr p{margin:2px 0;font-size:13px;font-weight:700;color:#555;}'+
     '.info-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;}'+
     '.info-box{background:#f5f5f5;border:1px solid #ccc;border-radius:4px;padding:10px;text-align:center;}'+
-    '.info-num{font-size:22px;font-weight:700;color:#2d5a3d;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;}'+
+    '.info-num{font-size:22px;font-weight:700;color:#2d5a3d;font-family:\'Courier New\',monospace;}'+
     '.info-lbl{font-size:12px;font-weight:700;color:#666;letter-spacing:0.5px;text-transform:uppercase;margin-top:3px;}'+
-    '.sub-hdr{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-weight:700;font-size:12px;color:#2d5a3d;letter-spacing:1px;text-transform:uppercase;margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid #ccc;}'+
-    'table{width:100%;border-collapse:collapse;font-size:13.5px;table-layout:fixed;}'+
-    'th{background:#2d5a3d;color:#fff;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-weight:800;font-size:12.5px;letter-spacing:0.4px;text-transform:uppercase;padding:8px 8px;text-align:left;}'+
-    'td{padding:7px 8px;border-bottom:1px solid #b8c4b8;word-wrap:break-word;vertical-align:top;font-weight:800;color:#000;}'+
+    '.sub-hdr{font-family:\'Segoe UI\',Arial,sans-serif;font-weight:700;font-size:12px;color:#2d5a3d;letter-spacing:1px;text-transform:uppercase;margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid #ccc;}'+
+    'table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;}'+
+    'th{background:#2d5a3d;color:#fff;font-family:\'Segoe UI\',Arial,sans-serif;font-weight:700;font-size:11.5px;letter-spacing:0.4px;text-transform:uppercase;padding:8px 8px;text-align:left;}'+
+    'td{padding:7px 8px;border-bottom:1px solid #e0e8e0;word-wrap:break-word;vertical-align:top;}'+
     'tr:nth-child(even) td{background:#f8fff8;}'+
     'tr{page-break-inside:avoid;}'+
     '.footer{margin-top:20px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}'+
@@ -9154,7 +9092,7 @@ function printPatrolSummary(){
     '<div class="hdr">'+
     (s.classification?'<div style="font-size:12px;font-weight:700;color:#999;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">'+s.classification+' — '+(s.pob||'POB Mobaye')+'</div>':'')+
     '<h2>PATROL LOG SUMMARY</h2>'+
-    '<p style="font-size:15px;font-weight:900;color:#1a3a2a;">'+rows.length+' patrol'+(rows.length===1?'':'s')+' · '+dateRange+'</p>'+
+    '<p>'+rows.length+' patrol'+(rows.length===1?'':'s')+' · '+dateRange+'</p>'+
     '<p>Generated: '+nowStr()+(s.commander?' · Commanding: '+s.commander:'')+'</p>'+
     '</div>'+
     '<div class="info-grid">'+
@@ -9216,7 +9154,7 @@ function renderHandover(){
     (function(){var inn=sortTroops(D.troops.filter(function(t){return isAvailable(t)&&daysSince(lastPatrol(t.id))>7;}));if(inn.length===0) return '<div style="color:var(--text-muted);font-size:13px;">All available troops patrolled within 7 days.</div>';return '<div class="lh-person-grid">'+inn.map(function(t){var ds=daysSince(lastPatrol(t.id));return '<div class="lh-person-card" data-accent="'+(ds>14?'b-red':'b-orange')+'"><strong>'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</strong><div style="font-size:12.5px;color:'+(ds>14?'var(--red-light)':'var(--orange)')+';margin-top:3px;font-weight:600;">'+(ds===9999?'Never patrolled':ds+' days inactive')+'</div></div>';}).join('')+'</div>';})()+
     '</div>'+
     '<div class="lh-block"><div class="lh-title">Commander\'s Handover Notes</div>'+
-    '<textarea style="width:100%;min-height:80px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:10px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,Helvetica,Arial,sans-serif;font-size:14px;" placeholder="Enter handover remarks, pending tasks, outstanding issues..."></textarea></div>';
+    '<textarea style="width:100%;min-height:80px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:10px;border-radius:8px;font-family:\'Segoe UI\',Arial,sans-serif;font-size:14px;" placeholder="Enter handover remarks, pending tasks, outstanding issues..."></textarea></div>';
   document.getElementById('handover-content').innerHTML=html;
 }
 // Clean popup print for Command Handover — same pattern as printPatrolSummary()/printReport(),
@@ -9242,20 +9180,19 @@ function printHandover(){
 
   var win=window.open('','_blank','width=980,height=760');
   win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Command Handover</title><style>'+
-    ''+
-    'body{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;background:#fff;color:#000;margin:0;padding:20px;font-size:15px;letter-spacing:0.3px;}'+
+    'body{font-family:\'Segoe UI\',Arial,sans-serif;background:#fff;color:#111;margin:0;padding:20px;font-size:13px;}'+
     '.hdr{text-align:center;border-bottom:2px solid #2d5a3d;padding-bottom:14px;margin-bottom:18px;}'+
-    '.hdr h2{margin:0 0 4px;font-size:20px;color:#1a3a2a;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-weight:900;letter-spacing:-0.3px;}'+
+    '.hdr h2{margin:0 0 4px;font-size:20px;color:#1a3a2a;}'+
     '.hdr p{margin:2px 0;font-size:13px;font-weight:700;color:#555;}'+
     '.info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;}'+
     '.info-box{background:#f5f5f5;border:1px solid #ccc;border-radius:4px;padding:10px;text-align:center;}'+
-    '.info-num{font-size:20px;font-weight:700;color:#2d5a3d;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;}'+
+    '.info-num{font-size:20px;font-weight:700;color:#2d5a3d;font-family:\'Courier New\',monospace;}'+
     '.info-lbl{font-size:12px;font-weight:700;color:#666;letter-spacing:0.5px;text-transform:uppercase;margin-top:3px;}'+
-    '.sub-hdr{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-weight:700;font-size:12px;color:#2d5a3d;letter-spacing:1px;text-transform:uppercase;margin:16px 0 8px;padding-bottom:5px;border-bottom:1px solid #ccc;}'+
+    '.sub-hdr{font-family:\'Segoe UI\',Arial,sans-serif;font-weight:700;font-size:12px;color:#2d5a3d;letter-spacing:1px;text-transform:uppercase;margin:16px 0 8px;padding-bottom:5px;border-bottom:1px solid #ccc;}'+
     '.remarks-box{margin-top:6px;padding:8px 10px;background:#fbf8ee;border-left:3px solid #c8b87a;font-size:12px;white-space:pre-wrap;}'+
-    'table{width:100%;border-collapse:collapse;font-size:13.5px;table-layout:fixed;}'+
-    'th{background:#2d5a3d;color:#fff;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-weight:800;font-size:12.5px;letter-spacing:0.4px;text-transform:uppercase;padding:8px 8px;text-align:left;}'+
-    'td{padding:6px 8px;border-bottom:1px solid #b8c4b8;word-wrap:break-word;vertical-align:top;font-weight:800;color:#000;}'+
+    'table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;}'+
+    'th{background:#2d5a3d;color:#fff;font-family:\'Segoe UI\',Arial,sans-serif;font-weight:700;font-size:11.5px;letter-spacing:0.4px;text-transform:uppercase;padding:8px 8px;text-align:left;}'+
+    'td{padding:6px 8px;border-bottom:1px solid #e0e8e0;word-wrap:break-word;vertical-align:top;}'+
     'tr:nth-child(even) td{background:#f8fff8;}'+
     'tr{page-break-inside:avoid;}'+
     '.footer{margin-top:20px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;}'+
