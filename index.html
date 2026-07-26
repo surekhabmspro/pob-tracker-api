@@ -2646,7 +2646,7 @@ function openDevicesModal(){
     var claimBtn=document.getElementById('devices-claim-main-btn');
     if(claimBtn) claimBtn.style.display=(!iAmMain&&noActiveMain)?'':'none';
     if(rows.length===0){ document.getElementById('devices-list').innerHTML='<div class="empty">No devices found.</div>'; return; }
-    document.getElementById('devices-list').innerHTML=rows.map(function(r){
+    function rowHtml(r){
       var actions='';
       if(iAmMain&&!r.revoked){
         if(!r.isMain) actions+='<button class="rb-btn rb-info" onclick="makeMainDevice(\''+r.id+'\')">Make Main</button>';
@@ -2659,7 +2659,21 @@ function openDevicesModal(){
         '</div>'+
         (actions?'<div style="display:flex;gap:6px;flex-shrink:0;">'+actions+'</div>':'')+
         '</div>';
-    }).join('');
+    }
+    // Deactivated devices pile up over time and aren't actionable day-to-day
+    // (they're already signed out), so keep the visible list to active
+    // devices only and tuck the deactivated ones behind a collapsed toggle.
+    var activeRows=rows.filter(function(r){ return !r.revoked; });
+    var revokedRows=rows.filter(function(r){ return r.revoked; });
+    var html=activeRows.map(rowHtml).join('');
+    if(activeRows.length===0){ html='<div class="empty">No active devices.</div>'; }
+    if(revokedRows.length>0){
+      html+='<div style="padding:10px 0;">'+
+        '<button class="btn btn-ghost btn-full" onclick="var d=document.getElementById(\'devices-revoked-list\'); var v=d.style.display!==\'none\'; d.style.display=v?\'none\':\'block\'; this.textContent=(v?\'▸ Show \':\'▾ Hide \')+'+revokedRows.length+'+\' deactivated device'+(revokedRows.length===1?'':'s')+'\';">▸ Show '+revokedRows.length+' deactivated device'+(revokedRows.length===1?'':'s')+'</button>'+
+        '<div id="devices-revoked-list" style="display:none;">'+revokedRows.map(rowHtml).join('')+'</div>'+
+        '</div>';
+    }
+    document.getElementById('devices-list').innerHTML=html;
   }).catch(function(){ document.getElementById('devices-list').innerHTML='<div class="empty">Could not load devices. Check your connection.</div>'; });
 }
 function revokeDevice(id){
