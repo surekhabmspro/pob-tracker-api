@@ -2472,8 +2472,8 @@ body.light-mode ::-webkit-scrollbar-thumb{background:#a8c4ad;}
     <div class="modal-handle"></div>
     <div class="card-title modal-hdr-sticky"><span>🔑 Device Sign-In</span></div>
     <div style="padding:4px 2px 12px;font-size:12.5px;color:var(--text-muted);">This device isn't signed in to the server yet. Enter a name for this device and the shared master key to continue syncing. You can keep viewing locally saved data in the meantime.</div>
-    <div class="fg"><label class="field-label">Device Name</label><input type="text" id="login-device-label" placeholder="e.g. Rekha's Phone"></div>
-    <div class="fg"><label class="field-label">Master Key</label><input type="password" id="login-master-key" placeholder="Shared master key"></div>
+    <div class="fg"><label class="field-label">Device Name</label><input type="text" id="login-device-label" placeholder="e.g. Rekha's Phone" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></div>
+    <div class="fg"><label class="field-label">Master Key</label><input type="password" id="login-master-key" placeholder="Shared master key" autocomplete="new-password" autocorrect="off" autocapitalize="off" spellcheck="false"></div>
     <div id="login-error" style="color:var(--red-light);font-size:12.5px;margin:4px 0 8px;"></div>
     <button class="btn btn-primary btn-full" id="login-submit-btn" onclick="submitLogin()">Sign In</button>
     <button class="btn btn-ghost btn-full" style="margin-top:8px;" onclick="hideLoginGate()">Continue Offline</button>
@@ -2863,15 +2863,24 @@ function flushOutbox(){
     var q2=loadOutbox(); q2.shift(); saveOutbox(q2);
     return flushOutbox();
   }).catch(function(e){
-    if(e && e.status>=400 && e.status<500){
-      // A genuine rejection (bad data, auth mismatch) — retrying the exact
-      // same payload forever would never succeed and would block every
-      // future sync. Drop just this one item and keep going.
+    // 401 means "you're not signed in right now" (missing/invalid session
+    // token) -- NOT "this data is permanently invalid". It is exactly as
+    // recoverable as being offline: sign back in and the exact same payload
+    // will go through fine. Treating it as a genuine rejection used to
+    // silently DELETE the queued change (e.g. a just-logged duty) from the
+    // outbox the moment a background sync ran while signed out, right
+    // before pulling the server's copy over local state -- which is what
+    // made logged duties vanish on sync. Only a true 4xx data/validation
+    // rejection (400, 404, 413, 422, etc.) should ever drop an item.
+    if(e && e.status && e.status!==401 && e.status>=400 && e.status<500){
+      // A genuine rejection (bad data) — retrying the exact same payload
+      // forever would never succeed and would block every future sync.
+      // Drop just this one item and keep going.
       console.error('Server rejected a queued change — dropping it so sync can continue:',op,e);
       var q2=loadOutbox(); q2.shift(); saveOutbox(q2);
       return flushOutbox();
     }
-    console.warn('Outbox flush paused (offline?)',e);
+    console.warn('Outbox flush paused (offline, or signed out — will retry once reconnected/signed in)',e);
     return false;
   });
 }
