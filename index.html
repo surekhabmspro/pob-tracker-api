@@ -3125,12 +3125,29 @@ function migrateCommanders(){
 }
 function remoteDeletePatrol(id){ saveData(); return _trackWrite(apiFetch('/patrols/'+id,{method:'DELETE'}).catch(function(e){console.error(e); queueOp('deletePatrol',{id:id});})); }
 function remoteSaveAudit(entry){ return _trackWrite(apiFetch('/audit',{method:'POST',body:JSON.stringify(entry)}).catch(function(e){console.error(e); queueOp('saveAudit',entry);})); }
+// remoteSaveConfig used to fire all 9 key/value writes to /config in parallel.
+// If the server stores config as one document and does read-modify-write per
+// request, concurrent requests can race: one reads the doc before another's
+// write lands, then writes back its own change on top of the older copy,
+// silently reverting the other's update (e.g. a just-logged duty disappearing
+// the moment it "syncs"). Serializing every /config write — one at a time,
+// across ALL calls to remoteSaveConfig, not just within a single call — removes
+// that race regardless of how the backend persists the document.
+var _configSaveChain = Promise.resolve();
 function remoteSaveConfig(){
   saveData();
   var jobs=[{key:'settings',value:D.settings},{key:'config',value:D.config},{key:'counter',value:D.counter},{key:'security',value:D.security},{key:'drafts',value:D.drafts},{key:'duties',value:D.duties},{key:'dutyCounter',value:D.dutyCounter},{key:'dutyContingency',value:D.dutyContingency},{key:'dutyDrafts',value:D.dutyDrafts}];
-  return _trackWrite(Promise.all(jobs.map(function(j){
-    return apiFetch('/config',{method:'POST',body:JSON.stringify(j)}).catch(function(e){console.error(e); queueOp('saveConfig',j);});
-  })));
+  var runP = _configSaveChain.then(function(){
+    return jobs.reduce(function(chain,j){
+      return chain.then(function(){
+        return apiFetch('/config',{method:'POST',body:JSON.stringify(j)}).catch(function(e){console.error(e); queueOp('saveConfig',j);});
+      });
+    }, Promise.resolve());
+  });
+  // Keep the chain alive for the next caller even if this batch errors, and
+  // never let it reject (a rejection would wedge every future config save).
+  _configSaveChain = runP.catch(function(){});
+  return _trackWrite(runP);
 }
 
 // =====================================================================
