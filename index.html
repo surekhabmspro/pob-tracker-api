@@ -2848,6 +2848,8 @@ function replayOp(op){
     case 'archiveTroop': return apiFetch('/troops/'+op.payload.id+'/archive',{method:'PATCH',body:JSON.stringify({archived:op.payload.archived})});
     case 'savePatrol': return apiFetch('/patrols',{method:'POST',body:JSON.stringify(op.payload)});
     case 'deletePatrol': return apiFetch('/patrols/'+op.payload.id,{method:'DELETE'});
+    case 'saveDuty': return apiFetch('/duties',{method:'POST',body:JSON.stringify(op.payload)});
+    case 'deleteDuty': return apiFetch('/duties/'+op.payload.id,{method:'DELETE'});
     case 'saveConfig': return apiFetch('/config',{method:'POST',body:JSON.stringify(op.payload)});
     case 'saveAudit': return apiFetch('/audit',{method:'POST',body:JSON.stringify(op.payload)});
     default: return Promise.resolve();
@@ -2940,6 +2942,13 @@ function dbToPatrol(r) {
   return {id:r.id,ptlId:r.ptl_id,ptlSeq:(r.ptl_seq!=null?r.ptl_seq:null),date:(r.date||'').slice(0,10),type:r.type,
     troops:r.troops||[],area:r.area||'',duration:r.duration||'',route:r.route||'',remarks:r.remarks||'',commander:r.commander||null,commanderAuto:r.commander_auto===false?false:(r.commander_auto===true?true:null)};
 }
+function dbToDuty(r) {
+  return {id:r.id,dutySeq:(r.duty_seq!=null?r.duty_seq:null),date:(r.date||'').slice(0,10),logicalDate:(r.logical_date||r.date||'').slice(0,10),
+    type:r.type||'',postId:r.post_id||null,postName:r.post_name||'',startTime:r.start_time||'',durationHours:(r.duration_hours!=null?parseFloat(r.duration_hours):null),
+    troops:r.troops||[],remarks:r.remarks||'',adminOverride:!!r.admin_override,replacements:r.replacements||[],
+    createdAt:r.created_at||null,modifiedAt:r.modified_at||null,cancelled:!!r.cancelled,cancelledAt:r.cancelled_at||null,
+    shiftIdx:(r.shift_idx!=null?r.shift_idx:null),shiftIdxCount:(r.shift_idx_count!=null?r.shift_idx_count:null),dutyId:r.duty_id||''};
+}
 function loadLocalFallback() {
   try {
     var r = localStorage.getItem(SK);
@@ -3021,13 +3030,14 @@ function startCountdown() {
 // clobber a local edit that hasn't been confirmed by the server yet.
 function pullFromServer(){
   return Promise.all([
-    apiFetch('/troops'),apiFetch('/archived'),apiFetch('/patrols'),apiFetch('/audit'),apiFetch('/config')
+    apiFetch('/troops'),apiFetch('/archived'),apiFetch('/patrols'),apiFetch('/audit'),apiFetch('/config'),apiFetch('/duties')
   ]).then(function(results){
     D.troops=results[0].map(dbToTroop);
     D.archived=results[1].map(dbToTroop);
     D.patrols=results[2].map(dbToPatrol);
     D.audit=results[3].map(function(a){return{ts:a.ts,msg:a.msg};});
     var config=results[4];
+    D.duties=results[5].map(dbToDuty);
     if(config.settings) D.settings=config.settings;
     if(config.config) D.config=config.config;
     if(config.counter) D.counter=parseInt(config.counter)||1;
@@ -3035,8 +3045,6 @@ function pullFromServer(){
     if(!D.security) D.security={pinHash:'',securityQ:'',securityAHash:''};
     if(config.drafts) D.drafts=config.drafts;
     if(!D.drafts) D.drafts=[];
-    if(config.duties) D.duties=config.duties;
-    if(!D.duties) D.duties=[];
     if(config.dutyCounter) D.dutyCounter=parseInt(config.dutyCounter)||1;
     if(!D.dutyCounter) D.dutyCounter=D.duties.length+1;
     if(config.dutyContingency) D.dutyContingency=config.dutyContingency;
@@ -3151,19 +3159,39 @@ function migrateCommanders(){
   }
 }
 function remoteDeletePatrol(id){ saveData(); return _trackWrite(apiFetch('/patrols/'+id,{method:'DELETE'}).catch(function(e){console.error(e); queueOp('deletePatrol',{id:id});})); }
+// Duties now save one record at a time to their own endpoint instead of
+// riding along inside remoteSaveConfig's whole-array 'duties' blob — see
+// the comment on remoteSaveConfig below for why that was silently
+// erasing duties logged from other devices. Same shape as
+// remoteSaveTroop/remoteSavePatrol: write local first, push to the
+// server, and queue it for retry if that fails/is offline.
+function remoteSaveDuty(d){ saveData(); var body={id:d.id,dutySeq:d.dutySeq,date:d.date,logicalDate:d.logicalDate,type:d.type,postId:d.postId,postName:d.postName,startTime:d.startTime,durationHours:d.durationHours,troops:d.troops,remarks:d.remarks,adminOverride:d.adminOverride,replacements:d.replacements,createdAt:d.createdAt,modifiedAt:d.modifiedAt,cancelled:d.cancelled,cancelledAt:d.cancelledAt||null,shiftIdx:d.shiftIdx,shiftIdxCount:d.shiftIdxCount,dutyId:d.dutyId}; return _trackWrite(apiFetch('/duties',{method:'POST',body:JSON.stringify(body)}).catch(function(e){console.error('saveDuty failed',e); queueOp('saveDuty',body);})); }
+function remoteSaveDuties(list){ return Promise.all((list||[]).map(function(d){ return remoteSaveDuty(d); })); }
+function remoteDeleteDuty(id){ saveData(); return _trackWrite(apiFetch('/duties/'+id,{method:'DELETE'}).catch(function(e){console.error(e); queueOp('deleteDuty',{id:id});})); }
 function remoteSaveAudit(entry){ return _trackWrite(apiFetch('/audit',{method:'POST',body:JSON.stringify(entry)}).catch(function(e){console.error(e); queueOp('saveAudit',entry);})); }
 // remoteSaveConfig used to fire all 9 key/value writes to /config in parallel.
 // If the server stores config as one document and does read-modify-write per
 // request, concurrent requests can race: one reads the doc before another's
 // write lands, then writes back its own change on top of the older copy,
-// silently reverting the other's update (e.g. a just-logged duty disappearing
-// the moment it "syncs"). Serializing every /config write — one at a time,
-// across ALL calls to remoteSaveConfig, not just within a single call — removes
-// that race regardless of how the backend persists the document.
+// silently reverting the other's update. Serializing every /config write —
+// one at a time, across ALL calls to remoteSaveConfig, not just within a
+// single call — removes that race regardless of how the backend persists
+// the document.
+//
+// 'duties' used to be one of these 9 keys, which was the actual cause of
+// logged duties vanishing: EVERY call to remoteSaveConfig (for literally
+// any reason — renaming a rank, editing a setting) resent that device's
+// whole in-memory D.duties array, so a save on Device B could overwrite a
+// duty Device A had just logged, even with the serialization above,
+// because the race was ACROSS devices, not within one tab. Duties now
+// have their own per-record endpoint (see remoteSaveDuty/remoteDeleteDuty)
+// so they're no longer part of this shared blob. drafts/dutyDrafts/
+// dutyContingency still are — lower risk since they're edited far less
+// concurrently, but the same race theoretically applies to them too.
 var _configSaveChain = Promise.resolve();
 function remoteSaveConfig(){
   saveData();
-  var jobs=[{key:'settings',value:D.settings},{key:'config',value:D.config},{key:'counter',value:D.counter},{key:'security',value:D.security},{key:'drafts',value:D.drafts},{key:'duties',value:D.duties},{key:'dutyCounter',value:D.dutyCounter},{key:'dutyContingency',value:D.dutyContingency},{key:'dutyDrafts',value:D.dutyDrafts}];
+  var jobs=[{key:'settings',value:D.settings},{key:'config',value:D.config},{key:'counter',value:D.counter},{key:'security',value:D.security},{key:'drafts',value:D.drafts},{key:'dutyCounter',value:D.dutyCounter},{key:'dutyContingency',value:D.dutyContingency},{key:'dutyDrafts',value:D.dutyDrafts}];
   var runP = _configSaveChain.then(function(){
     return jobs.reduce(function(chain,j){
       return chain.then(function(){
@@ -4432,7 +4460,8 @@ function openReplaceFlow(outTroopId){
     ed.troops=dutySelectedTroops.slice();
     if(!ed.replacements) ed.replacements=[];
     ed.replacements.push({ts:new Date().toISOString(),outTroopId:outTroopId,inTroopId:inT.id,reason:reason});
-    remoteSaveConfig();
+    ed.modifiedAt=new Date().toISOString();
+    remoteSaveDuty(ed);
     audit('Duty reassignment: '+(ed.dutyId||'')+' — '+upLabel(outT.rank,outT.name)+' replaced by '+upLabel(inT.rank,inT.name)+' ('+reason+')');
     renderDutySelectedTroops();
     renderDutyReplaceList(ed);
@@ -4510,7 +4539,7 @@ function saveDuty(){
     var edOrder=shiftOrderForSlot({category:type.name,startTime:start}); var edIdx=edOrder.indexOf(start);
     ed.shiftIdx=edIdx>=0?edIdx:null; ed.shiftIdxCount=edOrder.length||null;
     ed.dutyId=dutyDisplayId(ed);
-    remoteSaveConfig();
+    remoteSaveDuty(ed);
     audit('Duty edited: '+ed.dutyId+' | '+ed.type+(post?(' | '+post.name):''));
     showAlert('duty-alert','Duty '+ed.dutyId+' updated.','success');
   } else {
@@ -4520,6 +4549,7 @@ function saveDuty(){
     var nowIso=new Date().toISOString(); var nd={id:uid('duty'),dutySeq:nextDutySeq(),date:ndRealDate,logicalDate:dutyLogicalDate(ndRealDate,start),type:type.name,postId:post?post.id:null,postName:post?post.name:'',startTime:start,durationHours:dur,troops:dutySelectedTroops.slice(),remarks:remarks,adminOverride:dutyIncludeAdmin,replacements:[],createdAt:nowIso,modifiedAt:nowIso,cancelled:false,shiftIdx:(ndIdx>=0?ndIdx:null),shiftIdxCount:(ndOrder.length||null)};
     nd.dutyId=dutyDisplayId(nd);
     D.duties.push(nd);
+    remoteSaveDuty(nd);
     remoteSaveConfig();
     audit('Duty logged: '+nd.dutyId+' | '+nd.type+(post?(' | '+post.name):'')+' | '+dutySelectedTroops.length+' troops');
     showAlert('duty-alert','Duty '+nd.dutyId+' saved.','success');
@@ -4542,7 +4572,7 @@ function deleteDutyFromModal(){
   if(!confirm('Delete this duty entry? This cannot be undone.')) return;
   var ed=D.duties.find(function(x){return x.id===editingDutyId;});
   D.duties=D.duties.filter(function(d){return d.id!==editingDutyId;});
-  remoteSaveConfig();
+  remoteDeleteDuty(editingDutyId);
   audit('Duty deleted: '+(ed?ed.dutyId:''));
   editingDutyId=null; dutySelectedTroops=[];
   closeDutyModal();
@@ -4558,7 +4588,7 @@ function cancelDutyRecord(id){
   if(d.cancelled){ showAlert('duty-history-alert','Already cancelled.','warn'); return; }
   if(!confirm('Cancel duty '+(d.dutyId||'')+' on '+fmtDate(dutyDisplayDate(d))+'? The record stays in Duty History for the audit trail — it just stops counting as an active/completed duty.')) return;
   d.cancelled=true; d.cancelledAt=new Date().toISOString(); d.modifiedAt=d.cancelledAt;
-  remoteSaveConfig();
+  remoteSaveDuty(d);
   audit('Duty cancelled: '+(d.dutyId||'')+' | '+d.type+(d.postName?(' | '+d.postName):''));
   renderDutyHistoryList();
   renderDutyPage(); renderDutyDashboard(); updateTodayDutyWidget();
@@ -4569,7 +4599,7 @@ function restoreDutyRecord(id){
   if(!d.cancelled) return;
   if(!confirm('Restore duty '+(d.dutyId||'')+' on '+fmtDate(dutyDisplayDate(d))+'? It will count as active/completed again.')) return;
   d.cancelled=false; d.modifiedAt=new Date().toISOString();
-  remoteSaveConfig();
+  remoteSaveDuty(d);
   audit('Duty restored: '+(d.dutyId||'')+' | '+d.type+(d.postName?(' | '+d.postName):''));
   renderDutyHistoryList();
   renderDutyPage(); renderDutyDashboard(); updateTodayDutyWidget();
@@ -5299,11 +5329,13 @@ function logDutySuggestNow(){
     nd.dutyId=dutyDisplayId(nd);
     D.duties.push(nd);
   });
+  var _newlyLogged=D.duties.slice(-records.length);
   if(_editingDutyDraftId){ D.dutyDrafts=D.dutyDrafts.filter(function(d){return d.id!==_editingDutyDraftId;}); }
   // Advance the Officer/JCO roaming rotation only now that the roster is
   // actually being logged — a preview that's regenerated or discarded
   // never moves the rotation forward.
   if(_dsPeriod==='night'&&_dsRoamingRotationPreview) D.config.roamingRotation=_dsRoamingRotationPreview;
+  remoteSaveDuties(_newlyLogged);
   remoteSaveConfig();
   audit('Duty roster logged: '+_dsPeriod+' · '+_dsDate+' · '+records.length+' entries');
   updateDutyDraftsBadge();
@@ -5432,8 +5464,10 @@ function logDutyDraftNow(id){
     nd.dutyId=dutyDisplayId(nd);
     D.duties.push(nd);
   });
+  var _newlyLogged2=D.duties.slice(-(d.records||[]).length);
   if(d.period==='night'&&d.roamingRotationPreview) D.config.roamingRotation=d.roamingRotationPreview;
   D.dutyDrafts=D.dutyDrafts.filter(function(x){return x.id!==id;});
+  remoteSaveDuties(_newlyLogged2);
   remoteSaveConfig();
   audit('Duty draft logged: '+d.period+' · '+d.plannedDate);
   updateDutyDraftsBadge();
@@ -9329,7 +9363,7 @@ function doExport(){ var backup={version:4,exportDate:new Date().toISOString(),e
 function dlFile(content,type,filename){ var blob=new Blob([content],{type:type}); var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a);a.click(); document.body.removeChild(a);URL.revokeObjectURL(a.href); }
 var pendingRestore=null;
 function previewRestore(input){ var file=input.files[0]; if(!file) return; var reader=new FileReader(); reader.onload=function(e){ try{var backup=JSON.parse(e.target.result);if(!backup.data) throw new Error('Invalid');pendingRestore=backup;var d=backup.data;var prev=document.getElementById('restore-preview');prev.style.display='';prev.className='alert al-info';prev.innerHTML='Valid backup: <strong>'+(backup.exportDate?backup.exportDate.slice(0,10):'?')+'</strong><br>Troops: <strong>'+(d.troops||[]).length+'</strong> · Archived: <strong>'+(d.archived||[]).length+'</strong> · Patrols: <strong>'+(d.patrols||[]).length+'</strong><br><strong style="color:#ff9999;">This will overwrite all current data.</strong>';document.getElementById('restore-btn').style.display='';document.getElementById('restore-cancel').style.display='';}catch(err){var prev=document.getElementById('restore-preview');prev.style.display='';prev.className='alert al-danger';prev.innerHTML='Invalid backup file.';document.getElementById('restore-btn').style.display='none';document.getElementById('restore-cancel').style.display='none';} }; reader.readAsText(file); }
-function doRestore(){ if(!pendingRestore||!pendingRestore.data){alert('No valid backup.');return;} D=pendingRestore.data; if(!D.archived) D.archived=[]; if(!D.counter) D.counter=D.patrols.length+1; if(!D.audit) D.audit=[]; if(!D.settings) D.settings={pob:'POB Mobaye',mission:'',commander:'',classification:'CONFIDENTIAL'}; if(!D.config) D.config={types:DEFAULT_TYPES.slice(),sectors:DEFAULT_SECTORS.slice(),routes:DEFAULT_ROUTES.slice(),ranks:DEFAULT_RANKS.slice()}; if(!D.config.ranks) D.config.ranks=DEFAULT_RANKS.slice(); if(!D.drafts) D.drafts=[]; migrateDutySystem(); RANKS=D.config.ranks; D.troops.forEach(function(t){if(!t.status)t.status='available';if(!t.notes)t.notes='';}); migratePatrolSeq(); saveData(); var allTroops=D.troops.concat(D.archived); Promise.all(allTroops.map(function(t){return apiFetch('/troops',{method:'POST',body:JSON.stringify(t)}).catch(function(){});}).concat(D.patrols.map(function(p){return remoteSavePatrol(p);}))).then(function(){return remoteSaveConfig();}); D.archived.forEach(function(t){apiFetch('/troops/'+t.id+'/archive',{method:'PATCH',body:JSON.stringify({archived:true})}).catch(function(){});}); document.getElementById('restore-alert').innerHTML='<div class="alert al-success">Restore successful!</div>'; cancelRestore(); applySettings(); populateDropdowns(); populateRankDropdowns(); renderDash(); renderSysInfo(); updateDraftsBadge(); updateDutyDraftsBadge(); audit('Data restored from backup'); setTimeout(function(){document.getElementById('restore-alert').innerHTML='';},5000); }
+function doRestore(){ if(!pendingRestore||!pendingRestore.data){alert('No valid backup.');return;} D=pendingRestore.data; if(!D.archived) D.archived=[]; if(!D.counter) D.counter=D.patrols.length+1; if(!D.audit) D.audit=[]; if(!D.settings) D.settings={pob:'POB Mobaye',mission:'',commander:'',classification:'CONFIDENTIAL'}; if(!D.config) D.config={types:DEFAULT_TYPES.slice(),sectors:DEFAULT_SECTORS.slice(),routes:DEFAULT_ROUTES.slice(),ranks:DEFAULT_RANKS.slice()}; if(!D.config.ranks) D.config.ranks=DEFAULT_RANKS.slice(); if(!D.drafts) D.drafts=[]; migrateDutySystem(); RANKS=D.config.ranks; D.troops.forEach(function(t){if(!t.status)t.status='available';if(!t.notes)t.notes='';}); migratePatrolSeq(); saveData(); var allTroops=D.troops.concat(D.archived); Promise.all(allTroops.map(function(t){return apiFetch('/troops',{method:'POST',body:JSON.stringify(t)}).catch(function(){});}).concat(D.patrols.map(function(p){return remoteSavePatrol(p);})).concat((D.duties||[]).map(function(d){return remoteSaveDuty(d);}))).then(function(){return remoteSaveConfig();}); D.archived.forEach(function(t){apiFetch('/troops/'+t.id+'/archive',{method:'PATCH',body:JSON.stringify({archived:true})}).catch(function(){});}); document.getElementById('restore-alert').innerHTML='<div class="alert al-success">Restore successful!</div>'; cancelRestore(); applySettings(); populateDropdowns(); populateRankDropdowns(); renderDash(); renderSysInfo(); updateDraftsBadge(); updateDutyDraftsBadge(); audit('Data restored from backup'); setTimeout(function(){document.getElementById('restore-alert').innerHTML='';},5000); }
 function cancelRestore(){ pendingRestore=null; document.getElementById('restore-file').value=''; document.getElementById('restore-preview').style.display='none'; document.getElementById('restore-btn').style.display='none'; document.getElementById('restore-cancel').style.display='none'; }
 function renderSysInfo(){ var sz=JSON.stringify(D).length; document.getElementById('sys-info').innerHTML='Version: v4 (Mobile)<br>Active Troops: '+D.troops.length+'<br>Archived Troops: '+(D.archived||[]).length+'<br>Total Patrols: '+D.patrols.length+'<br>Total Hours: '+D.patrols.reduce(function(s,p){return s+(parseFloat(p.duration)||0);},0).toFixed(1)+'h<br>Patrol Types: '+D.config.types.length+'<br>Sectors: '+D.config.sectors.length+'<br>Audit Entries: '+D.audit.length+'<br>Next Patrol ID: PTL-'+new Date().getFullYear()+'-'+String(D.counter).padStart(3,'0')+'<br>Storage Used: ~'+(sz/1024).toFixed(1)+' KB<br>API: '+API_URL; }
 

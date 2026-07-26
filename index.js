@@ -328,6 +328,64 @@ async function migrateSchema() {
     // participation-% window, not just tracked going forward via status.
     await pool.query("ALTER TABLE troops ADD COLUMN IF NOT EXISTS absences JSONB DEFAULT '[]'");
     await pool.query('ALTER TABLE patrols ADD COLUMN IF NOT EXISTS ptl_seq INTEGER');
+    // Duties used to live as one big JSON array under app_config.key='duties',
+    // overwritten wholesale on every save. That meant ANY unrelated save on
+    // ANY device (renaming a rank, editing a setting, etc.) resent that
+    // device's own possibly-stale in-memory copy of the whole duties array,
+    // silently erasing duties logged moments earlier from a different
+    // device — this was the actual cause of "logged duty vanishes on
+    // sync". Moving duties to their own table with one row per duty (same
+    // pattern as troops/patrols, upserted by id via ON CONFLICT) makes each
+    // duty an independent write, so two devices saving different duties at
+    // the same time can never clobber each other again.
+    await pool.query(`CREATE TABLE IF NOT EXISTS duties (
+      id TEXT PRIMARY KEY,
+      duty_seq INTEGER,
+      date DATE,
+      logical_date DATE,
+      type TEXT,
+      post_id TEXT,
+      post_name TEXT,
+      start_time TEXT,
+      duration_hours NUMERIC,
+      troops JSONB DEFAULT '[]',
+      remarks TEXT,
+      admin_override BOOLEAN DEFAULT FALSE,
+      replacements JSONB DEFAULT '[]',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      modified_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      cancelled BOOLEAN DEFAULT FALSE,
+      cancelled_at TIMESTAMPTZ,
+      shift_idx INTEGER,
+      shift_idx_count INTEGER,
+      duty_id TEXT
+    )`);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_duties_date ON duties(date)');
+    // One-time cutover: if duties were previously stored in app_config
+    // (old format) and the new table is still empty, copy them across so
+    // nobody's existing duty history is lost when this upgrade deploys.
+    const { rows: dutyCountRows } = await pool.query('SELECT COUNT(*)::int AS c FROM duties');
+    if (dutyCountRows[0].c === 0) {
+      const { rows: oldDutyRows } = await pool.query(`SELECT value FROM app_config WHERE key = 'duties'`);
+      if (oldDutyRows.length > 0) {
+        let oldDuties = oldDutyRows[0].value;
+        if (typeof oldDuties === 'string') { try { oldDuties = JSON.parse(oldDuties); } catch (e) { oldDuties = []; } }
+        if (Array.isArray(oldDuties) && oldDuties.length > 0) {
+          for (const d of oldDuties) {
+            if (!d || !d.id) continue;
+            await pool.query(
+              `INSERT INTO duties (id,duty_seq,date,logical_date,type,post_id,post_name,start_time,duration_hours,troops,remarks,admin_override,replacements,created_at,modified_at,cancelled,cancelled_at,shift_idx,shift_idx_count,duty_id)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+               ON CONFLICT (id) DO NOTHING`,
+              [d.id, d.dutySeq || null, d.date || null, d.logicalDate || d.date || null, d.type || '', d.postId || null, d.postName || '', d.startTime || null,
+               d.durationHours || null, d.troops || [], d.remarks || '', !!d.adminOverride, d.replacements || [], d.createdAt || new Date().toISOString(),
+               d.modifiedAt || new Date().toISOString(), !!d.cancelled, d.cancelledAt || null, d.shiftIdx != null ? d.shiftIdx : null, d.shiftIdxCount != null ? d.shiftIdxCount : null, d.dutyId || '']
+            );
+          }
+          console.log('Migrated', oldDuties.length, 'duties from app_config into the new duties table.');
+        }
+      }
+    }
     // Device sessions (multi-device sign-in/sign-out) — each device that
     // logs in with the shared master key gets its own row here and its own
     // token, so any device can be individually or collectively signed out
@@ -568,6 +626,50 @@ app.delete('/patrols/:id', async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
 });
 
+// ── DUTIES ────────────────────────────────────────────────────────────
+// One row per duty, upserted by id — same pattern as /troops and
+// /patrols. This replaces the old app_config 'duties' key, which stored
+// the entire duty list as one JSON blob that got overwritten wholesale
+// on every unrelated save from any device (see migrateSchema comment).
+// Per-record writes mean two devices logging different duties at the
+// same time can never wipe each other out.
+app.get('/duties', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM duties ORDER BY date DESC, start_time DESC');
+    res.json(rows);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
+});
+
+app.post('/duties', async (req, res) => {
+  try {
+    const { id, dutySeq, date, logicalDate, type, postId, postName, startTime, durationHours, troops, remarks, adminOverride, replacements, createdAt, modifiedAt, cancelled, cancelledAt, shiftIdx, shiftIdxCount, dutyId } = req.body;
+    if (!isValidId(id)) return res.status(400).json({ error: 'Invalid duty id.' });
+    if (!Array.isArray(troops) || !troops.every(t => typeof t === 'string' && t.length <= 100)) {
+      return res.status(400).json({ error: 'Invalid troops list.' });
+    }
+    await pool.query(
+      `INSERT INTO duties (id, duty_seq, date, logical_date, type, post_id, post_name, start_time, duration_hours, troops, remarks, admin_override, replacements, created_at, modified_at, cancelled, cancelled_at, shift_idx, shift_idx_count, duty_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+       ON CONFLICT (id) DO UPDATE
+         SET duty_seq=$2, date=$3, logical_date=$4, type=$5, post_id=$6, post_name=$7, start_time=$8,
+             duration_hours=$9, troops=$10, remarks=$11, admin_override=$12, replacements=$13,
+             modified_at=$15, cancelled=$16, cancelled_at=$17, shift_idx=$18, shift_idx_count=$19, duty_id=$20`,
+      [id, (Number.isFinite(parseInt(dutySeq)) ? parseInt(dutySeq) : null), date || null, logicalDate || date || null, clip(type || '', 50),
+       postId || null, clip(postName || '', 100), startTime || null, parseFloat(durationHours) || null, troops || [], clip(remarks || '', 5000),
+       !!adminOverride, replacements || [], createdAt || new Date().toISOString(), modifiedAt || new Date().toISOString(), !!cancelled,
+       cancelledAt || null, (Number.isFinite(parseInt(shiftIdx)) ? parseInt(shiftIdx) : null), (Number.isFinite(parseInt(shiftIdxCount)) ? parseInt(shiftIdxCount) : null), clip(dutyId || '', 50)]
+    );
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
+});
+
+app.delete('/duties/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM duties WHERE id = $1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
+});
+
 // ── AUDIT LOG ─────────────────────────────────────────────────────────
 app.get('/audit', async (req, res) => {
   try {
@@ -664,7 +766,8 @@ app.post('/factory-reset', async (req, res) => {
     const scope = (req.body && req.body.scope === 'full') ? 'full' : 'data';
     await pool.query('DELETE FROM patrols');
     await pool.query('DELETE FROM troops');
-    await pool.query(`DELETE FROM app_config WHERE key IN ('drafts','duties','dutyContingency','dutyDrafts')`);
+    await pool.query(`DELETE FROM app_config WHERE key IN ('drafts','dutyContingency','dutyDrafts')`);
+    await pool.query('DELETE FROM duties');
     await pool.query(`INSERT INTO app_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2`, ['counter', JSON.stringify(1)]);
     await pool.query(`INSERT INTO app_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2`, ['dutyCounter', JSON.stringify(1)]);
     if (scope === 'full') {
