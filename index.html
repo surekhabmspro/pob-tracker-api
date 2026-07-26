@@ -4438,7 +4438,9 @@ function saveDuty(){
   if(editingDutyId){
     var ed=D.duties.find(function(x){return x.id===editingDutyId;});
     if(!ed){ editingDutyId=null; showAlert('duty-alert','Duty entry no longer exists.','danger'); return; }
-    ed.date=date; ed.logicalDate=dutyLogicalDate(date,start); ed.type=type.name; ed.postId=post?post.id:null; ed.postName=post?post.name:''; ed.startTime=start; ed.durationHours=dur; ed.troops=dutySelectedTroops.slice(); ed.remarks=remarks; ed.adminOverride=dutyIncludeAdmin; ed.modifiedAt=new Date().toISOString();
+    var edPeriod=isDayTime(start)?'day':'night';
+    var edRealDate=dutyRecordCalendarDate(date,start,edPeriod);
+    ed.date=edRealDate; ed.logicalDate=dutyLogicalDate(edRealDate,start); ed.type=type.name; ed.postId=post?post.id:null; ed.postName=post?post.name:''; ed.startTime=start; ed.durationHours=dur; ed.troops=dutySelectedTroops.slice(); ed.remarks=remarks; ed.adminOverride=dutyIncludeAdmin; ed.modifiedAt=new Date().toISOString();
     var edOrder=shiftOrderForSlot({category:type.name,startTime:start}); var edIdx=edOrder.indexOf(start);
     ed.shiftIdx=edIdx>=0?edIdx:null; ed.shiftIdxCount=edOrder.length||null;
     ed.dutyId=dutyDisplayId(ed);
@@ -4447,7 +4449,9 @@ function saveDuty(){
     showAlert('duty-alert','Duty '+ed.dutyId+' updated.','success');
   } else {
     var ndOrder=shiftOrderForSlot({category:type.name,startTime:start}); var ndIdx=ndOrder.indexOf(start);
-    var nowIso=new Date().toISOString(); var nd={id:uid('duty'),dutySeq:nextDutySeq(),date:date,logicalDate:dutyLogicalDate(date,start),type:type.name,postId:post?post.id:null,postName:post?post.name:'',startTime:start,durationHours:dur,troops:dutySelectedTroops.slice(),remarks:remarks,adminOverride:dutyIncludeAdmin,replacements:[],createdAt:nowIso,modifiedAt:nowIso,cancelled:false,shiftIdx:(ndIdx>=0?ndIdx:null),shiftIdxCount:(ndOrder.length||null)};
+    var ndPeriod=isDayTime(start)?'day':'night';
+    var ndRealDate=dutyRecordCalendarDate(date,start,ndPeriod);
+    var nowIso=new Date().toISOString(); var nd={id:uid('duty'),dutySeq:nextDutySeq(),date:ndRealDate,logicalDate:dutyLogicalDate(ndRealDate,start),type:type.name,postId:post?post.id:null,postName:post?post.name:'',startTime:start,durationHours:dur,troops:dutySelectedTroops.slice(),remarks:remarks,adminOverride:dutyIncludeAdmin,replacements:[],createdAt:nowIso,modifiedAt:nowIso,cancelled:false,shiftIdx:(ndIdx>=0?ndIdx:null),shiftIdxCount:(ndOrder.length||null)};
     nd.dutyId=dutyDisplayId(nd);
     D.duties.push(nd);
     remoteSaveConfig();
