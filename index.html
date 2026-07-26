@@ -2989,7 +2989,9 @@ function startCountdown() {
 }
 
 // Pulls fresh data from the server and replaces local state with it.
-// Only ever called once the outbox is confirmed empty, so a pull can never clobber unsent local edits.
+// Only ever called once the outbox is confirmed empty AND no write is still in
+// flight (_pendingWrites===0, checked in backgroundSync), so a pull can never
+// clobber a local edit that hasn't been confirmed by the server yet.
 function pullFromServer(){
   return Promise.all([
     apiFetch('/troops'),apiFetch('/archived'),apiFetch('/patrols'),apiFetch('/audit'),apiFetch('/config')
@@ -3051,9 +3053,16 @@ function pullFromServer(){
 function backgroundSync() {
   if (_syncState==='syncing') return Promise.resolve(false);
   if (typeof navigator!=='undefined' && navigator.onLine===false) { setSyncState('offline'); return Promise.resolve(false); }
+  // A save (e.g. logging a duty) may still be in flight — sent but not yet
+  // confirmed. Pulling now would fetch the server's pre-save snapshot and
+  // overwrite local state with it, silently erasing what's being saved. Skip
+  // this cycle; the next tick will catch it once the write has settled.
+  if (_pendingWrites>0) { _syncCountdown=_autoSyncSeconds; return Promise.resolve(false); }
   setSyncState('syncing');
   return flushOutbox().then(function(){
     if (loadOutbox().length>0) { setSyncState('offline'); _syncCountdown=_autoSyncSeconds; return false; }
+    // Re-check: a new write could have started while flushOutbox was running.
+    if (_pendingWrites>0) { setSyncState('online'); _syncCountdown=_autoSyncSeconds; return false; }
     return pullFromServer();
   }).catch(function(err){
     console.warn('Sync failed:',err); setSyncState('offline'); _syncCountdown=_autoSyncSeconds; return false;
@@ -3069,10 +3078,23 @@ function loadData(){
 function saveData(){ localStorage.setItem(SK,JSON.stringify(D)); }
 
 // ── Remote write helpers ───────────────────────────────────────────────
-function remoteSaveTroop(t){ saveData(); return apiFetch('/troops',{method:'POST',body:JSON.stringify(t)}).catch(function(e){console.error('saveTroop failed',e); queueOp('saveTroop',t);}); }
-function remoteDeleteTroop(id){ saveData(); return apiFetch('/troops/'+id,{method:'DELETE'}).catch(function(e){console.error(e); queueOp('deleteTroop',{id:id});}); }
-function remoteArchiveTroop(id,archived){ saveData(); return apiFetch('/troops/'+id+'/archive',{method:'PATCH',body:JSON.stringify({archived:archived})}).catch(function(e){console.error(e); queueOp('archiveTroop',{id:id,archived:archived});}); }
-function remoteSavePatrol(p){ saveData(); var body={id:p.id,ptl_id:p.ptlId,ptl_seq:(p.ptlSeq!=null?p.ptlSeq:null),date:p.date,type:p.type,troops:p.troops,area:p.area,duration:p.duration,route:p.route,remarks:p.remarks,commander:p.commander||null,commander_auto:p.commanderAuto===false?false:(p.commanderAuto===true?true:null)}; return apiFetch('/patrols',{method:'POST',body:JSON.stringify(body)}).catch(function(e){console.error(e); queueOp('savePatrol',body);}); }
+// _pendingWrites counts remote saves that have been SENT but not yet confirmed
+// (success or failure). backgroundSync's pull must never run while this is >0 —
+// otherwise a pull can land on the server's stale/pre-save snapshot and overwrite
+// local state with data that's already out of date, silently erasing whatever the
+// in-flight save was writing (e.g. a just-logged duty) even though that save may
+// go on to succeed a moment later. Outbox-based retry logic already covers writes
+// that have FAILED; this covers the gap for writes that are simply still in flight,
+// which matters most on slow/unreliable connections.
+var _pendingWrites = 0;
+function _trackWrite(promise){
+  _pendingWrites++;
+  return promise.then(function(r){ _pendingWrites--; return r; }, function(e){ _pendingWrites--; throw e; });
+}
+function remoteSaveTroop(t){ saveData(); return _trackWrite(apiFetch('/troops',{method:'POST',body:JSON.stringify(t)}).catch(function(e){console.error('saveTroop failed',e); queueOp('saveTroop',t);})); }
+function remoteDeleteTroop(id){ saveData(); return _trackWrite(apiFetch('/troops/'+id,{method:'DELETE'}).catch(function(e){console.error(e); queueOp('deleteTroop',{id:id});})); }
+function remoteArchiveTroop(id,archived){ saveData(); return _trackWrite(apiFetch('/troops/'+id+'/archive',{method:'PATCH',body:JSON.stringify({archived:archived})}).catch(function(e){console.error(e); queueOp('archiveTroop',{id:id,archived:archived});})); }
+function remoteSavePatrol(p){ saveData(); var body={id:p.id,ptl_id:p.ptlId,ptl_seq:(p.ptlSeq!=null?p.ptlSeq:null),date:p.date,type:p.type,troops:p.troops,area:p.area,duration:p.duration,route:p.route,remarks:p.remarks,commander:p.commander||null,commander_auto:p.commanderAuto===false?false:(p.commanderAuto===true?true:null)}; return _trackWrite(apiFetch('/patrols',{method:'POST',body:JSON.stringify(body)}).catch(function(e){console.error(e); queueOp('savePatrol',body);})); }
 // POB Commander is now a Role (set in Add/Edit Troop), not a Rank — this
 // quietly removes it from anyone's saved Rank list if it's still there
 // from before, so it doesn't show up twice in two different fields.
@@ -3101,14 +3123,14 @@ function migrateCommanders(){
     changed.forEach(function(p){ remoteSavePatrol(p); });
   }
 }
-function remoteDeletePatrol(id){ saveData(); return apiFetch('/patrols/'+id,{method:'DELETE'}).catch(function(e){console.error(e); queueOp('deletePatrol',{id:id});}); }
-function remoteSaveAudit(entry){ return apiFetch('/audit',{method:'POST',body:JSON.stringify(entry)}).catch(function(e){console.error(e); queueOp('saveAudit',entry);}); }
+function remoteDeletePatrol(id){ saveData(); return _trackWrite(apiFetch('/patrols/'+id,{method:'DELETE'}).catch(function(e){console.error(e); queueOp('deletePatrol',{id:id});})); }
+function remoteSaveAudit(entry){ return _trackWrite(apiFetch('/audit',{method:'POST',body:JSON.stringify(entry)}).catch(function(e){console.error(e); queueOp('saveAudit',entry);})); }
 function remoteSaveConfig(){
   saveData();
   var jobs=[{key:'settings',value:D.settings},{key:'config',value:D.config},{key:'counter',value:D.counter},{key:'security',value:D.security},{key:'drafts',value:D.drafts},{key:'duties',value:D.duties},{key:'dutyCounter',value:D.dutyCounter},{key:'dutyContingency',value:D.dutyContingency},{key:'dutyDrafts',value:D.dutyDrafts}];
-  return Promise.all(jobs.map(function(j){
+  return _trackWrite(Promise.all(jobs.map(function(j){
     return apiFetch('/config',{method:'POST',body:JSON.stringify(j)}).catch(function(e){console.error(e); queueOp('saveConfig',j);});
-  }));
+  })));
 }
 
 // =====================================================================
