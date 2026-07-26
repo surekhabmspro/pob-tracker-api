@@ -2668,10 +2668,11 @@ function openDevicesModal(){
     var html=activeRows.map(rowHtml).join('');
     if(activeRows.length===0){ html='<div class="empty">No active devices.</div>'; }
     if(revokedRows.length>0){
-      html+='<div style="padding:10px 0;">'+
-        '<button class="btn btn-ghost btn-full" onclick="var d=document.getElementById(\'devices-revoked-list\'); var v=d.style.display!==\'none\'; d.style.display=v?\'none\':\'block\'; this.textContent=(v?\'▸ Show \':\'▾ Hide \')+'+revokedRows.length+'+\' deactivated device'+(revokedRows.length===1?'':'s')+'\';">▸ Show '+revokedRows.length+' deactivated device'+(revokedRows.length===1?'':'s')+'</button>'+
-        '<div id="devices-revoked-list" style="display:none;">'+revokedRows.map(rowHtml).join('')+'</div>'+
-        '</div>';
+      html+='<div style="padding:10px 0;display:flex;gap:8px;align-items:center;">'+
+        '<button class="btn btn-ghost" style="flex:1;" onclick="var d=document.getElementById(\'devices-revoked-list\'); var v=d.style.display!==\'none\'; d.style.display=v?\'none\':\'block\'; this.textContent=(v?\'▸ Show \':\'▾ Hide \')+'+revokedRows.length+'+\' deactivated device'+(revokedRows.length===1?'':'s')+'\';">▸ Show '+revokedRows.length+' deactivated device'+(revokedRows.length===1?'':'s')+'</button>'+
+        (iAmMain?'<button class="btn btn-danger" onclick="clearDeactivatedDevices()">Clear</button>':'')+
+        '</div>'+
+        '<div id="devices-revoked-list" style="display:none;">'+revokedRows.map(rowHtml).join('')+'</div>';
     }
     document.getElementById('devices-list').innerHTML=html;
   }).catch(function(){ document.getElementById('devices-list').innerHTML='<div class="empty">Could not load devices. Check your connection.</div>'; });
@@ -2692,6 +2693,10 @@ function claimMainDevice(){
     var s=getSession(); if(s){ s.isMain=true; localStorage.setItem(SESS_KEY,JSON.stringify(s)); }
     openDevicesModal();
   }).catch(function(e){ alert((e&&e.data&&e.data.error)||'Could not claim main device. A main device may already be active — refresh and try again.'); });
+}
+function clearDeactivatedDevices(){
+  if(!confirm('Permanently remove all deactivated devices from this list? This cannot be undone, but none of them can sign back in without the master key anyway.')) return;
+  apiFetch('/sessions/revoked',{method:'DELETE'}).then(function(){ openDevicesModal(); }).catch(function(e){ alert((e&&e.data&&e.data.error)||'Could not clear deactivated devices. Try again.'); });
 }
 var APP_VERSION = '2026.07.03.1';
 var SK = 'pob_v4';

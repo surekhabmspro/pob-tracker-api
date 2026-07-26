@@ -476,6 +476,21 @@ app.post('/sessions/revoke-others', async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
 });
 
+// Permanently deletes deactivated device rows (they're already signed
+// out and can't sign back in without the master key, so nothing is lost
+// by removing them — this just clears clutter from the Manage Devices
+// list). Only the main device can do this, and it never touches active
+// sessions regardless of what's passed in.
+app.delete('/sessions/revoked', async (req, res) => {
+  try {
+    if (!req.isMain) {
+      return res.status(403).json({ error: 'Only the main device can clear deactivated devices.' });
+    }
+    const { rowCount } = await pool.query('DELETE FROM sessions WHERE revoked = TRUE');
+    res.json({ ok: true, deleted: rowCount });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error. Please try again.' }); }
+});
+
 // Lets the current main device hand main status to another
 // already-signed-in device — e.g. when deliberately switching your
 // primary phone.
