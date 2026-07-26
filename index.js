@@ -413,7 +413,7 @@ async function migrateSchema() {
 
 // ── VERSION (bump this string on every backend deploy) ─────────────────
 // Left open — reveals nothing about your data.
-const API_VERSION = '2026.07.17.2';
+const API_VERSION = '2026.07.26.1-duties-fix';
 app.get('/version', (_, res) => res.json({ version: API_VERSION }));
 
 // ── HEALTH ────────────────────────────────────────────────────────────
