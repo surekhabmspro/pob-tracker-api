@@ -2892,9 +2892,27 @@ function apiFetch(path, opts) {
         if(!r.ok){
           var err=new Error((data&&data.error)||('Request failed with status '+r.status));
           err.status=r.status; err.data=data;
-          if(data&&(data.code==='invalid_session'||data.code==='no_session')){
+          // 'invalid_session' means the SERVER actively revoked this device's
+          // token (Manage Devices -> Deactivate) -- a genuine "this device was
+          // signed out remotely" event, so wiping cached data here is the
+          // right, intentional security behavior (see wipeLocalData above).
+          //
+          // 'no_session' just means this request went out with NO token at
+          // all. That is NOT the same thing -- it happens whenever the
+          // browser has lost/never persisted the session (storage cleared on
+          // restart, private browsing, low-storage cleanup, etc.), which is
+          // exactly why work that had only been saved locally (e.g. a
+          // just-logged duty, still mid-sync) was being deleted the instant a
+          // background sync ran with an empty token -- before it ever got a
+          // chance to reach the server. Treat it as "please sign back in",
+          // not "erase everything": keep D/localStorage/outbox intact so
+          // that once the person re-enters the master key, whatever hadn't
+          // synced yet still syncs normally instead of having vanished.
+          if(data&&data.code==='invalid_session'){
             wipeLocalData();
             showLoginGate('This device was signed out remotely and its locally stored data has been cleared. Enter the master key to sign back in.');
+          } else if(data&&data.code==='no_session'){
+            showLoginGate('This device needs to sign in again. Your locally saved data is untouched and will sync once you sign back in.');
           }
           throw err;
         }
@@ -9463,8 +9481,24 @@ function resetSearchFields(){
 window.addEventListener('pageshow',resetSearchFields);
 document.addEventListener('DOMContentLoaded',resetSearchFields);
 
+// Asks the browser to treat this site's storage (localStorage — the session
+// token, the offline outbox, all cached duty/patrol data) as "persistent",
+// i.e. not eligible for automatic clearing under storage pressure or
+// inactivity heuristics. This is exactly the kind of thing that causes a
+// device to silently lose its session token between restarts and have to
+// sign in again with the master key. Supported in Chrome/Edge/Firefox; a
+// harmless no-op where it isn't (e.g. some Safari versions) — best-effort
+// only, never blocks anything if it's unavailable or the browser says no.
+function requestPersistentStorage(){
+  try{
+    if(navigator.storage && navigator.storage.persist){
+      navigator.storage.persist().catch(function(){});
+    }
+  }catch(e){}
+}
 (function initApp(){
   document.getElementById('logo-img').src=LOGO_DATA_URI;
+  requestPersistentStorage();
   resetSearchFields();
   wirePinInputs();
   relocateCalendarsToBody();
