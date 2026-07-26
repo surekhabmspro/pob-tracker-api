@@ -3905,7 +3905,14 @@ function stmManualSearch(i,val){
   var q=val.toLowerCase();
   var usedElsewhere={};
   _stmSlots.forEach(function(s,idx){ if(idx!==i&&s.chosenId) usedElsewhere[s.chosenId]=true; });
-  var matches=sortTroops(D.troops.filter(isAvailable)).filter(function(t){return !usedElsewhere[t.id]&&(t.rank+' '+t.name+' '+t.unit).toLowerCase().indexOf(q)>=0;});
+  var patrolDate=parseDate(document.getElementById('stm-patrol-date').value)||null;
+  var matches=sortTroops(D.troops.filter(isAvailable)).filter(function(t){
+    if(usedElsewhere[t.id]) return false;
+    if((t.rank+' '+t.name+' '+t.unit).toLowerCase().indexOf(q)<0) return false;
+    if(isTroopReserved(t.id,{date:patrolDate})) return false;
+    if(patrolDate&&stmDateConflict(t.id,patrolDate)) return false;
+    return true;
+  });
   if(matches.length===0){ box.style.display='none'; return; }
   box.style.display='block';
   box.innerHTML=matches.slice(0,8).map(function(t){
@@ -4317,8 +4324,20 @@ function renderRemainingDutyTroops(){
   if(!el) return;
   var remaining=sortTroops(D.troops.filter(function(t){return isAvailable(t)&&dutySelectedTroops.indexOf(t.id)<0;}));
   if(cnt) cnt.textContent=remaining.length;
+  var date=parseDate(document.getElementById('duty-date').value);
+  var start=document.getElementById('duty-start').value;
+  var dur=parseFloat(document.getElementById('duty-duration').value)||0;
+  var patrolReserved=draftReservedTroopIds();
   el.innerHTML=remaining.length?remaining.map(function(t){
-    return '<span class="badge b-tan" style="margin:2px 3px 2px 0;display:inline-block;cursor:pointer;" title="Click to add" onclick="addTroopToDuty(\''+t.id+'\')">'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+'</span>';
+    // Same reservation flags as the search box above (dutyTroopSuggest) —
+    // shown here too so a reserved troop doesn't look identical to a free
+    // one just because this list is reached by scrolling instead of typing.
+    var onDraft=!!patrolReserved[t.id];
+    var onDutyDraft=!onDraft&&date&&dutyConflict(t.id,date,start,dur,editingDutyId,null).draftDuty;
+    var warn=onDraft?' title="🚫 reserved — ongoing patrol draft" style="margin:2px 3px 2px 0;display:inline-block;cursor:pointer;border-color:var(--red-light);color:var(--red-light);"'
+      :(onDutyDraft?' title="🚫 reserved — unlogged duty draft" style="margin:2px 3px 2px 0;display:inline-block;cursor:pointer;border-color:var(--red-light);color:var(--red-light);"'
+      :' style="margin:2px 3px 2px 0;display:inline-block;cursor:pointer;"');
+    return '<span class="badge b-tan"'+warn+' onclick="addTroopToDuty(\''+t.id+'\')">'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+((onDraft||onDutyDraft)?' 🚫':'')+'</span>';
   }).join(''):'<div class="empty" style="padding:6px 0;">No remaining troops available.</div>';
 }
 function dutyRefreshConflicts(){
@@ -4467,7 +4486,13 @@ function openReplaceFlow(outTroopId){
     if(t.neverDuty&&ed0.type==='Sentry') return false;
     if(dutySelectedTroops.indexOf(t.id)>=0) return false;
     if((t.rank+' '+t.name).toLowerCase().indexOf(q)<0) return false;
-    if(date&&(D.drafts||[]).some(function(d){return d.plannedDate===date&&(d.troops||[]).indexOf(t.id)>=0;})) return false;
+    // Patrol drafts reserve their troops regardless of the draft's own
+    // date (same rule as everywhere else — draftReservedTroopIds), not
+    // just when the draft's plannedDate happens to match this duty's date.
+    if(draftReservedTroopIds()[t.id]) return false;
+    // Also check other unlogged duty drafts for this exact shift, same as
+    // the search box above (dutyTroopSuggest) and the suggestion engine.
+    if(date&&dutyConflict(t.id,date,ed0.startTime,ed0.durationHours,editingDutyId,null).draftDuty) return false;
     return true;
   });
   if(matches.length===0){ alert('No matching, available, non-patrolling troop found for this date.'); return; }
