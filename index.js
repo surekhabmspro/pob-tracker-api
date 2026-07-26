@@ -378,7 +378,7 @@ async function migrateSchema() {
                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
                ON CONFLICT (id) DO NOTHING`,
               [d.id, d.dutySeq || null, d.date || null, d.logicalDate || d.date || null, d.type || '', d.postId || null, d.postName || '', d.startTime || null,
-               d.durationHours || null, d.troops || [], d.remarks || '', !!d.adminOverride, d.replacements || [], d.createdAt || new Date().toISOString(),
+               d.durationHours || null, JSON.stringify(d.troops || []), d.remarks || '', !!d.adminOverride, JSON.stringify(d.replacements || []), d.createdAt || new Date().toISOString(),
                d.modifiedAt || new Date().toISOString(), !!d.cancelled, d.cancelledAt || null, d.shiftIdx != null ? d.shiftIdx : null, d.shiftIdxCount != null ? d.shiftIdxCount : null, d.dutyId || '']
             );
           }
@@ -655,8 +655,8 @@ app.post('/duties', async (req, res) => {
              duration_hours=$9, troops=$10, remarks=$11, admin_override=$12, replacements=$13,
              modified_at=$15, cancelled=$16, cancelled_at=$17, shift_idx=$18, shift_idx_count=$19, duty_id=$20`,
       [id, (Number.isFinite(parseInt(dutySeq)) ? parseInt(dutySeq) : null), date || null, logicalDate || date || null, clip(type || '', 50),
-       postId || null, clip(postName || '', 100), startTime || null, parseFloat(durationHours) || null, troops || [], clip(remarks || '', 5000),
-       !!adminOverride, replacements || [], createdAt || new Date().toISOString(), modifiedAt || new Date().toISOString(), !!cancelled,
+       postId || null, clip(postName || '', 100), startTime || null, parseFloat(durationHours) || null, JSON.stringify(troops || []), clip(remarks || '', 5000),
+       !!adminOverride, JSON.stringify(replacements || []), createdAt || new Date().toISOString(), modifiedAt || new Date().toISOString(), !!cancelled,
        cancelledAt || null, (Number.isFinite(parseInt(shiftIdx)) ? parseInt(shiftIdx) : null), (Number.isFinite(parseInt(shiftIdxCount)) ? parseInt(shiftIdxCount) : null), clip(dutyId || '', 50)]
     );
     res.json({ ok: true });
