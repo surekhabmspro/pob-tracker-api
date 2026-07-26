@@ -5197,7 +5197,7 @@ function renderDsResults(){
 // works too). Tap a slot's 🔍 to open its picker, then tap a name here.
 function dsUpdateRemainingCount(){
   var usedIds={}; _dsSlots.forEach(function(s){ if(s.chosenId) usedIds[s.chosenId]=true; });
-  var n=D.troops.filter(function(t){return isAvailable(t)&&!usedIds[t.id];}).length;
+  var n=D.troops.filter(function(t){return isAvailable(t)&&!usedIds[t.id]&&!isTroopReserved(t.id,{date:_dsDate,excludeDutyDraftId:_editingDutyDraftId});}).length;
   var el=document.getElementById('ds-remaining-count');
   if(el) el.textContent=n;
 }
@@ -5212,7 +5212,7 @@ function renderDsRemainingTroops(){
   var el=document.getElementById('ds-remaining-troops');
   if(!el) return;
   var usedIds={}; _dsSlots.forEach(function(s){ if(s.chosenId) usedIds[s.chosenId]=true; });
-  var remaining=sortTroops(D.troops.filter(function(t){return isAvailable(t)&&!usedIds[t.id];}));
+  var remaining=sortTroops(D.troops.filter(function(t){return isAvailable(t)&&!usedIds[t.id]&&!isTroopReserved(t.id,{date:_dsDate,excludeDutyDraftId:_editingDutyDraftId});}));
   dsUpdateRemainingCount();
   if(remaining.length===0){ el.innerHTML='<div class="empty" style="padding:6px 0;">No remaining troops available.</div>'; return; }
   var hint=(_dsManualPickSlot>=0)
@@ -5246,7 +5246,13 @@ function dsManualSearch(i,val){
   var slot=_dsSlots[i];
   var usedElsewhere={};
   _dsSlots.forEach(function(s,idx){ if(idx!==i&&s.chosenId) usedElsewhere[s.chosenId]=true; });
-  var matches=sortTroops(D.troops.filter(isAvailable)).filter(function(t){return !usedElsewhere[t.id]&&(t.rank+' '+t.name+' '+t.unit).toLowerCase().indexOf(q)>=0;});
+  var matches=sortTroops(D.troops.filter(isAvailable)).filter(function(t){
+    if(usedElsewhere[t.id]) return false;
+    if((t.rank+' '+t.name+' '+t.unit).toLowerCase().indexOf(q)<0) return false;
+    var c=dutyConflict(t.id,_dsDate,slot.startTime,slot.durationHours,null,_editingDutyDraftId);
+    if(c.duty||c.patrol||c.draftDuty) return false;
+    return true;
+  });
   if(matches.length===0){ box.style.display='none'; return; }
   box.style.display='block';
   var post=slot.postId?dutyPostById(slot.postId):null;
@@ -6771,19 +6777,24 @@ function dutyConflict(tid,date,startStr,durHours,excludeDutyId,excludeDutyDraftI
     if((d.troops||[]).indexOf(tid)<0) return false;
     return shiftsOverlap(d.startTime,d.durationHours,startStr,durHours);
   });
-  // A saved DUTY DRAFT is also a conflict, in full — it isn't logged yet,
-  // so its actual end time isn't confirmed (same reasoning as patrol
-  // drafts below: we don't know for certain when it'll actually finish).
-  // This is a full reservation regardless of this check's own date/time,
-  // not a time-window overlap check — that only applies once the duty is
-  // actually LOGGED (the 'duty' check above), at which point its real
-  // start/end become the source of truth and the troop is free outside
-  // that window. Excludes the draft currently being edited so editing its
-  // own suggestion doesn't conflict with itself.
-  var draftDuty=(D.dutyDrafts||[]).some(function(dd){
-    if(excludeDutyDraftId&&dd.id===excludeDutyDraftId) return false;
-    return (dd.records||[]).some(function(r){ return (r.troops||[]).indexOf(tid)>=0; });
-  });
+  // A saved DUTY DRAFT reserves its troops only for the real window of the
+  // shift(s) it actually covers — the same time/shift-aware reservation
+  // logic used everywhere else (isTroopReserved / dutyDraftReservedTroopIds),
+  // not a blanket "in this draft at all → blocked forever" check. This
+  // matters because the two suggestion engines (Patrol and Duty) share the
+  // same troop pool and must agree on availability regardless of which
+  // order drafts were created in: a troop in tonight's Night Duty draft
+  // must not be wrongly excluded from tomorrow's Day Duty suggestion once
+  // tonight's shift will have finished by the time tomorrow's day starts,
+  // and — per the Night Duty rule — only the currently-active night shift
+  // reserves its troops right now, with later shifts still free until their
+  // own shift begins. Excludes the draft currently being edited so editing
+  // its own suggestion doesn't conflict with itself. Uses the same
+  // "explicit today = live right-now check" convention as isTroopReserved:
+  // picking today's date behaves like an open/no-date query.
+  var todayISO=new Date().toISOString().slice(0,10);
+  var shiftCheckDate=(date&&date===todayISO)?null:(date||null);
+  var draftDuty=!!dutyDraftReservedTroopIds(excludeDutyDraftId||null,shiftCheckDate)[tid];
   // A LOGGED patrol means it's over — the troop is free again and can be
   // put on duty. It's kept here only as an informational note (fairness
   // context), never a hard block.
