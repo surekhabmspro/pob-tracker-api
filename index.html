@@ -3393,6 +3393,15 @@ function contingencyExcludedTroopIds(date,shift){
 // functions instead of the date string, giving the same now>=start&&
 // now<end check as a blank-date query. Only a genuine future date keeps
 // its own whole-day-window planning check.
+//
+// CONTINGENCY SHIFT SCOPING: a Contingency Mode group can be scoped to a
+// single shift ('day' or 'night') rather than the whole day. Callers who
+// know which shift they're actually checking (e.g. Duty Suggestion, which
+// knows whether it's generating for day or night) should pass opts.shift
+// so a day-only or night-only exclusion group only blocks its own shift —
+// otherwise it defaults to blocking regardless of shift, which is the
+// correct conservative behavior for callers with no shift concept at all
+// (e.g. patrols, which aren't scheduled to a specific shift).
 function isTroopReserved(tid,opts){
   opts=opts||{};
   var todayISO=new Date().toISOString().slice(0,10);
@@ -3411,7 +3420,7 @@ function isTroopReserved(tid,opts){
   if(loggedDutyReservedTroopIds(opts.excludeDutyId||null,shiftCheckDate)[tid]) return true;
   if(dutyDraftReservedTroopIds(opts.excludeDutyDraftId||null,shiftCheckDate)[tid]) return true;
   if(draftReservedTroopIds(opts.excludePatrolDraftId||null)[tid]) return true;
-  if(contingencyExcludedTroopIds(opts.date||null)[tid]) return true;
+  if(contingencyExcludedTroopIds(opts.date||null,opts.shift||null)[tid]) return true;
   return false;
 }
 // A troop has a date conflict for a prospective patrol date if they're
@@ -4334,10 +4343,11 @@ function renderRemainingDutyTroops(){
     // one just because this list is reached by scrolling instead of typing.
     var onDraft=!!patrolReserved[t.id];
     var onDutyDraft=!onDraft&&date&&dutyConflict(t.id,date,start,dur,editingDutyId,null).draftDuty;
-    var warn=onDraft?' title="🚫 reserved — ongoing patrol draft" style="margin:2px 3px 2px 0;display:inline-block;cursor:pointer;border-color:var(--red-light);color:var(--red-light);"'
-      :(onDutyDraft?' title="🚫 reserved — unlogged duty draft" style="margin:2px 3px 2px 0;display:inline-block;cursor:pointer;border-color:var(--red-light);color:var(--red-light);"'
+    var onContingency=!onDraft&&!onDutyDraft&&date&&isContingencyExcluded(t.id,date,start?(isDayTime(start)?'day':'night'):null);
+    var warn=(onDraft||onDutyDraft)?' title="🚫 reserved — '+(onDraft?'ongoing patrol draft':'unlogged duty draft')+'" style="margin:2px 3px 2px 0;display:inline-block;cursor:pointer;border-color:var(--red-light);color:var(--red-light);"'
+      :(onContingency?' title="⚠ Contingency Mode active for this date/shift" style="margin:2px 3px 2px 0;display:inline-block;cursor:pointer;border-color:var(--orange);color:var(--orange);"'
       :' style="margin:2px 3px 2px 0;display:inline-block;cursor:pointer;"');
-    return '<span class="badge b-tan"'+warn+' onclick="addTroopToDuty(\''+t.id+'\')">'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+((onDraft||onDutyDraft)?' 🚫':'')+'</span>';
+    return '<span class="badge b-tan"'+warn+' onclick="addTroopToDuty(\''+t.id+'\')">'+t.rank.toUpperCase()+' '+t.name.toUpperCase()+((onDraft||onDutyDraft)?' 🚫':(onContingency?' ⚠':''))+'</span>';
   }).join(''):'<div class="empty" style="padding:6px 0;">No remaining troops available.</div>';
 }
 function dutyRefreshConflicts(){
@@ -4493,6 +4503,10 @@ function openReplaceFlow(outTroopId){
     // Also check other unlogged duty drafts for this exact shift, same as
     // the search box above (dutyTroopSuggest) and the suggestion engine.
     if(date&&dutyConflict(t.id,date,ed0.startTime,ed0.durationHours,editingDutyId,null).draftDuty) return false;
+    // This picks the first match automatically with no review step, so
+    // a Contingency-Mode-restricted troop must be excluded outright here
+    // rather than just flagged (as the search box above does).
+    if(date&&isContingencyExcluded(t.id,date,ed0.startTime?(isDayTime(ed0.startTime)?'day':'night'):null)) return false;
     return true;
   });
   if(matches.length===0){ alert('No matching, available, non-patrolling troop found for this date.'); return; }
@@ -5222,7 +5236,7 @@ function renderDsResults(){
 // works too). Tap a slot's 🔍 to open its picker, then tap a name here.
 function dsUpdateRemainingCount(){
   var usedIds={}; _dsSlots.forEach(function(s){ if(s.chosenId) usedIds[s.chosenId]=true; });
-  var n=D.troops.filter(function(t){return isAvailable(t)&&!usedIds[t.id]&&!isTroopReserved(t.id,{date:_dsDate,excludeDutyDraftId:_editingDutyDraftId});}).length;
+  var n=D.troops.filter(function(t){return isAvailable(t)&&!usedIds[t.id]&&!isTroopReserved(t.id,{date:_dsDate,excludeDutyDraftId:_editingDutyDraftId,shift:_dsPeriod});}).length;
   var el=document.getElementById('ds-remaining-count');
   if(el) el.textContent=n;
 }
@@ -5237,7 +5251,7 @@ function renderDsRemainingTroops(){
   var el=document.getElementById('ds-remaining-troops');
   if(!el) return;
   var usedIds={}; _dsSlots.forEach(function(s){ if(s.chosenId) usedIds[s.chosenId]=true; });
-  var remaining=sortTroops(D.troops.filter(function(t){return isAvailable(t)&&!usedIds[t.id]&&!isTroopReserved(t.id,{date:_dsDate,excludeDutyDraftId:_editingDutyDraftId});}));
+  var remaining=sortTroops(D.troops.filter(function(t){return isAvailable(t)&&!usedIds[t.id]&&!isTroopReserved(t.id,{date:_dsDate,excludeDutyDraftId:_editingDutyDraftId,shift:_dsPeriod});}));
   dsUpdateRemainingCount();
   if(remaining.length===0){ el.innerHTML='<div class="empty" style="padding:6px 0;">No remaining troops available.</div>'; return; }
   var hint=(_dsManualPickSlot>=0)
@@ -5276,6 +5290,11 @@ function dsManualSearch(i,val){
     if((t.rank+' '+t.name+' '+t.unit).toLowerCase().indexOf(q)<0) return false;
     var c=dutyConflict(t.id,_dsDate,slot.startTime,slot.durationHours,null,_editingDutyDraftId);
     if(c.duty||c.patrol||c.draftDuty) return false;
+    // Contingency Mode is a hard block everywhere else this slot's
+    // candidates are computed (dsFillPass, dsAssignDriverQuota,
+    // sgtFallback) — manual search must agree, not just show it as a
+    // soft warning tag below.
+    if(isContingencyExcluded(t.id,_dsDate,isDayTime(slot.startTime)?'day':'night')) return false;
     return true;
   });
   if(matches.length===0){ box.style.display='none'; return; }
@@ -7721,6 +7740,21 @@ document.addEventListener('visibilitychange',function(){
       if(active && active.id!=='dashboard'){ showTab('dashboard'); }
     }
   }
+});
+// ── RESYNC ON RETURN TO FOREGROUND ───────────────────────────────────
+// Mobile browsers commonly throttle or fully suspend JS timers (including
+// the periodic _countdownTimer that normally drives backgroundSync every
+// _autoSyncSeconds) while the app/tab is backgrounded — phone locked,
+// switched to another app, etc. That means a change made on another
+// device (e.g. a patrol draft saved on the PC) while this device was
+// backgrounded could sit unseen well past the normal ~60s window, because
+// nothing forces an immediate resync the moment the app is looked at
+// again — it just resumes wherever its (possibly stalled/drifted) timer
+// left off. Forcing a sync right on return to foreground closes that gap;
+// manualSync() already no-ops safely if a sync is already in progress or
+// the device is offline, so this is safe to call unconditionally.
+document.addEventListener('visibilitychange',function(){
+  if(!document.hidden) manualSync();
 });
 // ── PIN LOCKOUT ──────────────────────────────────────────────────────
 // Without this, someone holding the phone could just keep guessing a
