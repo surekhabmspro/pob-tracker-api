@@ -3047,28 +3047,41 @@ function startCountdown() {
 // Only ever called once the outbox is confirmed empty AND no write is still in
 // flight (_pendingWrites===0, checked in backgroundSync), so a pull can never
 // clobber a local edit that hasn't been confirmed by the server yet.
-function pullFromServer(){
+function pullFromServer(pendingOutbox){
+  // Which resource types still have a genuinely unsent local edit queued
+  // (post-flush-attempt). Only those specific D properties are protected
+  // from being overwritten by this pull -- everything else still gets the
+  // server's latest copy, including drafts, even while something unrelated
+  // is stuck. See backgroundSync() for why this matters.
+  var pendingKinds={};
+  (pendingOutbox||[]).forEach(function(op){ pendingKinds[op.kind]=true; });
+  var skipTroops=pendingKinds.saveTroop||pendingKinds.deleteTroop||pendingKinds.archiveTroop;
+  var skipPatrols=pendingKinds.savePatrol||pendingKinds.deletePatrol;
+  var skipDuties=pendingKinds.saveDuty||pendingKinds.deleteDuty;
+  var skipAudit=pendingKinds.saveAudit;
+  var skipConfig=pendingKinds.saveConfig;
   return Promise.all([
     apiFetch('/troops'),apiFetch('/archived'),apiFetch('/patrols'),apiFetch('/audit'),apiFetch('/config'),apiFetch('/duties')
   ]).then(function(results){
-    D.troops=results[0].map(dbToTroop);
-    D.archived=results[1].map(dbToTroop);
-    D.patrols=results[2].map(dbToPatrol);
-    D.audit=results[3].map(function(a){return{ts:a.ts,msg:a.msg};});
+    if(!skipTroops){ D.troops=results[0].map(dbToTroop); D.archived=results[1].map(dbToTroop); }
+    if(!skipPatrols){ D.patrols=results[2].map(dbToPatrol); }
+    if(!skipAudit){ D.audit=results[3].map(function(a){return{ts:a.ts,msg:a.msg};}); }
     var config=results[4];
-    D.duties=results[5].map(dbToDuty);
-    if(config.settings) D.settings=config.settings;
-    if(config.config) D.config=config.config;
-    if(config.counter) D.counter=parseInt(config.counter)||1;
-    if(config.security) D.security=config.security;
+    if(!skipDuties){ D.duties=results[5].map(dbToDuty); }
+    if(!skipConfig){
+      if(config.settings) D.settings=config.settings;
+      if(config.config) D.config=config.config;
+      if(config.counter) D.counter=parseInt(config.counter)||1;
+      if(config.security) D.security=config.security;
+      if(config.drafts) D.drafts=config.drafts;
+      if(config.dutyCounter) D.dutyCounter=parseInt(config.dutyCounter)||1;
+      if(config.dutyContingency) D.dutyContingency=config.dutyContingency;
+      if(config.dutyDrafts) D.dutyDrafts=config.dutyDrafts;
+    }
     if(!D.security) D.security={pinHash:'',securityQ:'',securityAHash:''};
-    if(config.drafts) D.drafts=config.drafts;
     if(!D.drafts) D.drafts=[];
-    if(config.dutyCounter) D.dutyCounter=parseInt(config.dutyCounter)||1;
     if(!D.dutyCounter) D.dutyCounter=D.duties.length+1;
-    if(config.dutyContingency) D.dutyContingency=config.dutyContingency;
     if(!D.dutyContingency) D.dutyContingency=[];
-    if(config.dutyDrafts) D.dutyDrafts=config.dutyDrafts;
     if(!D.dutyDrafts) D.dutyDrafts=[];
     if(!D.config.ranks) D.config.ranks=DEFAULT_RANKS.slice();
     migrateDutySystem();
@@ -3102,8 +3115,11 @@ function pullFromServer(){
 }
 
 // Full sync cycle: (1) skip entirely if the device reports no connection at all — no point waiting
-// on a fetch that can't succeed; (2) push any queued offline edits first; (3) only pull fresh server
-// data once nothing is left unsent, so offline work is never silently overwritten.
+// on a fetch that can't succeed; (2) push any queued offline edits first; (3) pull fresh server data
+// regardless of whether anything is still stuck in the outbox — pullFromServer() itself now protects
+// only the specific resource type(s) that still have a genuinely unsent local edit queued, so a stuck
+// item of one kind (e.g. a troop save that keeps failing) can no longer silently block every other
+// device's changes (e.g. a new patrol draft) from ever being pulled, even across a full app restart.
 function backgroundSync() {
   if (_syncState==='syncing') return Promise.resolve(false);
   if (typeof navigator!=='undefined' && navigator.onLine===false) { setSyncState('offline'); return Promise.resolve(false); }
@@ -3114,10 +3130,13 @@ function backgroundSync() {
   if (_pendingWrites>0) { _syncCountdown=_autoSyncSeconds; return Promise.resolve(false); }
   setSyncState('syncing');
   return flushOutbox().then(function(){
-    if (loadOutbox().length>0) { setSyncState('offline'); _syncCountdown=_autoSyncSeconds; return false; }
     // Re-check: a new write could have started while flushOutbox was running.
     if (_pendingWrites>0) { setSyncState('online'); _syncCountdown=_autoSyncSeconds; return false; }
-    return pullFromServer();
+    var stillQueued=loadOutbox();
+    return pullFromServer(stillQueued).then(function(ok){
+      if (stillQueued.length>0) { setSyncState('offline'); _syncCountdown=_autoSyncSeconds; }
+      return ok;
+    });
   }).catch(function(err){
     console.warn('Sync failed:',err); setSyncState('offline'); _syncCountdown=_autoSyncSeconds; return false;
   });
@@ -4752,6 +4771,26 @@ function dsBuildSlots(period){
   }
   return slots;
 }
+// Where a given shift position (shiftIdx, e.g. 0=1st night shift, 1=2nd,
+// etc.) falls within TODAY's female-priority rotation window, out of
+// shiftCount total shifts for this post tonight. 0 = highest priority
+// (first pick), shiftCount-1 = lowest. The window's start position is a
+// pure function of the calendar date (days since a fixed epoch, mod
+// shiftCount) — NOT a stored counter — so it advances by exactly one
+// shift position every calendar day, deterministically and reproducibly
+// (regenerating the same date's draft always gives the same window; no
+// state to get out of sync between devices). With shiftCount=4 and enough
+// females for 3 shifts, this produces exactly the requested rotation:
+// {1,2,3} -> {2,3,4} -> {3,4,1} -> {4,1,2} -> repeat (1-indexed), so
+// scarcity cycles evenly through every shift over time instead of always
+// settling on the same one or two.
+var FEMALE_ROTATION_EPOCH_MS=Date.UTC(2000,0,1);
+function femaleRotationRank(date,shiftIdx,shiftCount){
+  if(!date||shiftIdx==null||!shiftCount) return 0;
+  var days=Math.floor((Date.UTC(parseInt(date.slice(0,4)),parseInt(date.slice(5,7))-1,parseInt(date.slice(8,10)))-FEMALE_ROTATION_EPOCH_MS)/86400000);
+  var start=((days%shiftCount)+shiftCount)%shiftCount;
+  return ((shiftIdx-start)+shiftCount)%shiftCount;
+}
 // Fills every slot belonging to a Female Preferred shift as a unit
 // (item 2 & 3): either the whole shift goes to eligible females, or —
 // if not enough are available to fill it — the whole shift goes to
@@ -4827,6 +4866,7 @@ function dsAssignFemalePreferredGroups(date,slots,used,warnings){
         label:label, slots:groupSlots, needed:groupSlots.length,
         startTime:groupSlots[0].startTime, dur:groupSlots[0].durationHours,
         isDay:isDayTime(groupSlots[0].startTime),
+        postId:postId, shiftIdx:(groupSlots[0].shiftIdx!=null?groupSlots[0].shiftIdx:null),
         resolved:false
       };
     });
@@ -4839,14 +4879,25 @@ function dsAssignFemalePreferredGroups(date,slots,used,warnings){
     // one with the fewest currently-eligible unused females — so a shift
     // that can only ever be paired one way gets first claim on its
     // candidates, before a less-constrained shift's processing order
-    // could otherwise steal them and leave it unpairable.
+    // could otherwise steal them and leave it unpairable. Ties (equally-
+    // constrained shifts, the common case) go to whichever shift falls
+    // earliest in TODAY's rotation window (femaleRotationRank) — a pure
+    // function of the date, so the set of shifts favored for females
+    // advances by exactly one shift position each calendar day and cycles
+    // through every shift evenly over time, rather than always landing on
+    // the same one or two.
+    var shiftCount=groups.length;
     var progress=true;
     while(progress){
       progress=false;
       var open=groups.filter(function(g){return !g.resolved;});
       if(!open.length) break;
-      var withCounts=open.map(function(g){return {g:g,pool:eligibleFemalesFor(g)};});
-      withCounts.sort(function(a,b){return a.pool.length-b.pool.length;});
+      var withCounts=open.map(function(g){return {g:g,pool:eligibleFemalesFor(g),rank:femaleRotationRank(date,g.shiftIdx,shiftCount)};});
+      withCounts.sort(function(a,b){
+        var d=a.pool.length-b.pool.length;
+        if(d!==0) return d;
+        return a.rank-b.rank; // lower rank -> earlier in today's rotation window -> goes first
+      });
       var best=withCounts[0];
       if(best.pool.length>=best.g.needed){
         var picked=sortPool(best.pool,best.g.slots[0]).slice(0,best.g.needed);
